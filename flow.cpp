@@ -5,6 +5,11 @@ WaitForSignal(i32 DebugeePID)
     i32 Options = 0;
     waitpid(DebugeePID, &WaitStatus, Options);
     
+    if(WIFEXITED(WaitStatus))
+    {
+        Debuger.Flags |= DBG_FLAG_CHILD_PROCESS_EXITED;
+    }
+    
     siginfo_t SigInfo;
     ptrace(PTRACE_GETSIGINFO, DebugeePID, nullptr, &SigInfo);
     

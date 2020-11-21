@@ -843,6 +843,26 @@ UpdateInfo()
 }
 
 static void
+DebugeeStart()
+{
+    i32 ProcessID = fork();
+    
+    // Child process
+    if(ProcessID == 0)
+    {
+        personality(ADDR_NO_RANDOMIZE);
+        ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
+        execl(Debuger.DebugeeProgramPath, Debuger.DebugeeProgramPath, 0x0);
+    }
+    else
+    {
+        Debuger.DebugeePID = ProcessID;
+        Debuger.Flags &= ~DBG_FLAG_CHILD_PROCESS_EXITED;
+        WaitForSignal(Debuger.DebugeePID);
+    }
+}
+
+static void
 DebugStart()
 {
     glfwInit();
@@ -860,10 +880,15 @@ DebugStart()
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
-    WaitForSignal(Debuger.DebugeePID);
-    
     char TextBuff[64] = {};
     char TextBuff2[64] = {};
+    char TextBuff3[64] = {};
+    strcpy(TextBuff3, Debuger.DebugeeProgramPath);
+    
+    if(Debuger.DebugeeProgramPath)
+    {
+        DebugeeStart();
+    }
     
     Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -893,12 +918,7 @@ DebugStart()
         
         ImGui::Begin("Control window");
         
-        if(ImGui::Button("Continue"))
-        {
-            ContinueProgram(Debuger.DebugeePID);
-            
-            UpdateInfo();
-        }
+        ImGui::InputText("Program path", TextBuff3, 64, ITFlags);
         
         ImGui::InputText("", TextBuff, 64, ITFlags);
         ImGui::SameLine();
@@ -942,6 +962,12 @@ DebugStart()
             UpdateInfo();
         }
         
+        if(ImGui::Button("Continue"))
+        {
+            ContinueProgram(Debuger.DebugeePID);
+            
+            UpdateInfo();
+        }
         
         if(ImGui::Button("Single Step"))
         {
@@ -1058,6 +1084,22 @@ DebugStart()
             UpdateInfo();
         }
         
+        if((Debuger.Flags & DBG_FLAG_CHILD_PROCESS_EXITED) && ImGui::Button("Restart process"))
+        {
+            DebugeeStart();
+            
+            // NOTE(mateusz): For debug purpouses
+            size_t EntryPointAddress = FindEntryPointAddress();
+            assert(EntryPointAddress);
+            
+            breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+            BreakpointEnable(&BP);
+            Breakpoints[BreakpointCount++] = BP;
+            
+            ReadDwarf();
+            ReadDwarfFunctions();
+        }
+        
         ImGui::End();
         
         ImGui::Begin("x64 Registers");
@@ -1151,21 +1193,7 @@ main(i32 ArgCount, char **Args)
     }
     
     Debuger.DebugeeProgramPath = Args[1];
-    
-    i32 ProcessID = fork();
-    
-    // Child process
-    if(ProcessID == 0)
-    {
-        personality(ADDR_NO_RANDOMIZE);
-        ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
-        execl(Debuger.DebugeeProgramPath, Debuger.DebugeeProgramPath, 0x0);
-    }
-    else
-    {
-        Debuger.DebugeePID = ProcessID;
-        DebugStart();
-    }
+    DebugStart();
     
     return 0;
 }

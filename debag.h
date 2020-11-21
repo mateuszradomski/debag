@@ -74,8 +74,17 @@ struct dwarf_function
     size_t HighPC;
 };
 
+enum
+{
+    DBG_FLAG_NULL = 0x0,
+    DBG_FLAG_CHILD_PROCESS_EXITED = 0x1,
+};
+
+typedef i32 dbg_flags;
+
 struct dbg
 {
+    dbg_flags Flags;
     i32 DebugeePID;
     char *DebugeeProgramPath;
 };
