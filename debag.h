@@ -18,6 +18,8 @@ typedef double f64;
 
 #define TO_LOWERCASE(C) ((C) | (1 << 5))
 
+#define DWARF_CALL(x) assert((x) == DW_DLV_OK)
+
 struct breakpoint
 {
     u64 Address;
@@ -62,16 +64,57 @@ struct di_src_line
 {
     size_t Address;
     u32 LineNum;
-    char *Path;
+    i32 SrcFileIndex;
 };
+
+struct di_variable
+{
+    char Name[64];
+    
+    size_t TypeOffset;
+    bool UsesFBReg;
+    ssize_t Offset;
+};
+
+struct di_frame_info
+{
+    Dwarf_Cie *CIEs;
+    Dwarf_Signed CIECount;
+    Dwarf_Fde *FDEs;
+    Dwarf_Signed FDECount;
+};
+
+#define MAX_DI_VARIABLES 16
 
 struct dwarf_function
 {
-    char *Name;
-    char *FilePath;
+    char Name[64];
+    char FilePath[64];
     
     size_t LowPC;
     size_t HighPC;
+    bool FrameBaseIsCFA;
+    di_variable DIVariables[MAX_DI_VARIABLES];
+    u32 DIVariablesCount = 0;
+};
+
+enum
+{
+    DI_COMP_UNIT_NULL = 0x0,
+    DI_COMP_UNIT_HAS_RANGES = 0x1,
+};
+
+typedef i32 di_comp_unit_flags;
+
+struct di_comp_unit
+{
+    char Name[128];
+    
+    size_t LowPC;
+    size_t HighPC;
+    address_range AddressRanges[8];
+    
+    di_comp_unit_flags Flags;
 };
 
 enum
@@ -91,15 +134,15 @@ struct dbg
 
 #define MAX_BREAKPOINT_COUNT 8
 breakpoint Breakpoints[MAX_BREAKPOINT_COUNT];
-int BreakpointCount = 0;
+u32 BreakpointCount = 0;
 
 #define MAX_DISASM_INSTRUCTIONS 31
 disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS];
-int DisasmInstCount = 0;
+u32 DisasmInstCount = 0;
 
-#define MAX_SOURCE_FILES_FUNCTIONS 8
-src_file SourceFiles[MAX_SOURCE_FILES_FUNCTIONS];
-int SourceFilesCount = 0;
+#define MAX_SOURCE_FILES 8
+src_file SourceFiles[MAX_SOURCE_FILES];
+u32 SourceFilesCount = 0;
 
 csh DisAsmHandle;
 user_regs_struct Regs;
@@ -112,11 +155,11 @@ u32 DWLineEntriesCount = 0;
 dwarf_function DWFunctions[MAX_DW_FUNCTIONS];
 u32 DWFunctionsCount = 0;
 
-#if 0
-#define MAX_DISASM_INST_AT_STEP 32
-disasm_inst DisasmInstStep[MAX_DISASM_INST_AT_STEP] = {};
-u32 DisasmInstStepCount = 0;
-#endif
+#define MAX_DW_COMP_UNITS 16
+di_comp_unit DICompUnits[MAX_DW_COMP_UNITS];
+u32 DICompUnitsCount = 0;
+
+di_frame_info DIFrameInfo = {};
 
 dbg Debuger;
 
@@ -141,13 +184,10 @@ static void BreakpointDisable(breakpoint *BP);
 
 static di_src_line *LineTableFindByAddress(size_t Address);
 static di_src_line *LineTableFindByLineNum(u32 LineNum);
+static address_range AddressRangeCurrentAndNextLine();
 static void ImGuiShowRegisters(user_regs_struct Regs);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
 static void DisassembleAroundAddress(size_t Address, i32 DebugeePID);
-static void ParseForLineTable(Dwarf_Debug Debug, Dwarf_Die DIE);
-static void RecurForEachDIE(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel);
-static void ReadDwarf();
-static size_t SearchDIEsForEntryPoint(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel);
 static size_t FindEntryPointAddress();
 static void DebugStart();
 

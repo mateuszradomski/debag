@@ -69,6 +69,19 @@ StringCountChar(char *String, char C)
     return Result;
 }
 
+static void
+StringCopy(char *Dest, char *Src)
+{
+    while(Dest && Src && Src[0])
+    {
+        Dest[0] = Src[0];
+        
+        Dest++;
+        Src++;
+    }
+    Dest[0] = '\0';
+}
+
 static bool
 StringsMatch(char *Str0, char *Str1)
 {
@@ -137,20 +150,54 @@ SetRegisters(user_regs_struct Regs, i32 DebugeePID)
     ptrace(PTRACE_SETREGS, DebugeePID, 0x0, &Regs);
 }
 
-static inline bool
-AddressBetween(size_t Address, size_t Lower, size_t Upper)
+static u64
+GetRegisterByABINumber(u32 Number)
 {
-    bool Result = false;
-    
-    Result = (Address >= Lower) && (Address <= Upper);
-    
-    return Result;
+    switch(Number)
+    {
+        case 0:
+        return Regs.rax;
+        case 1:
+        return Regs.rdx;
+        case 2:
+        return Regs.rcx;
+        case 3:
+        return Regs.rbx;
+        case 4:
+        return Regs.rsi;
+        case 5:
+        return Regs.rdi;
+        case 6:
+        return Regs.rbp;
+        case 7:
+        return Regs.rsp;
+        case 8:
+        return Regs.r8;
+        case 9:
+        return Regs.r9;
+        case 10:
+        return Regs.r10;
+        case 11:
+        return Regs.r11;
+        case 12:
+        return Regs.r12;
+        case 13:
+        return Regs.r13;
+        case 14:
+        return Regs.r14;
+        case 15:
+        return Regs.r15;
+        default:
+        {
+            assert(false);
+        }break;
+    }
 }
 
 static di_src_line *
 LineTableFindByAddress(size_t Address)
 {
-    for(i32 I = 0; I < DWLineEntriesCount; I++)
+    for(u32 I = 0; I < DWLineEntriesCount; I++)
     {
         if(DWLineTable[I].Address == Address)
         {
@@ -170,7 +217,7 @@ LineTableFindByAddress(size_t Address)
 static di_src_line *
 LineTableFindByLineNum(u32 LineNum)
 {
-    for(i32 I = 0; I < DWLineEntriesCount; I++)
+    for(u32 I = 0; I < DWLineEntriesCount; I++)
     {
         if(DWLineTable[I].LineNum == LineNum)
         {
@@ -214,59 +261,59 @@ ImGuiShowRegisters(user_regs_struct Regs)
 {
     ImGui::Columns(4, 0x0, true);
     
-    ImGui::Text("r15: %X", Regs.r15);
+    ImGui::Text("r15: %lX", (u64)Regs.r15);
     ImGui::NextColumn();
-    ImGui::Text("r14: %X", Regs.r14);
+    ImGui::Text("r14: %lX", (u64)Regs.r14);
     ImGui::NextColumn();
-    ImGui::Text("r13: %X", Regs.r13);
+    ImGui::Text("r13: %lX", (u64)Regs.r13);
     ImGui::NextColumn();
-    ImGui::Text("r12: %X", Regs.r12);
+    ImGui::Text("r12: %lX", (u64)Regs.r12);
     ImGui::NextColumn();
-    ImGui::Text("rbp: %X", Regs.rbp);
+    ImGui::Text("rbp: %lX", (u64)Regs.rbp);
     ImGui::NextColumn();
-    ImGui::Text("rbx: %X", Regs.rbx);
+    ImGui::Text("rbx: %lX", (u64)Regs.rbx);
     ImGui::NextColumn();
-    ImGui::Text("r11: %X", Regs.r11);
+    ImGui::Text("r11: %lX", (u64)Regs.r11);
     ImGui::NextColumn();
-    ImGui::Text("r10: %X", Regs.r10);
+    ImGui::Text("r10: %lX", (u64)Regs.r10);
     ImGui::NextColumn();
-    ImGui::Text("r9: %X", Regs.r9);
+    ImGui::Text("r9: %lX", (u64)Regs.r9);
     ImGui::NextColumn();
-    ImGui::Text("r8: %X", Regs.r8);
+    ImGui::Text("r8: %lX", (u64)Regs.r8);
     ImGui::NextColumn();
-    ImGui::Text("rax: %X", Regs.rax);
+    ImGui::Text("rax: %lX", (u64)Regs.rax);
     ImGui::NextColumn();
-    ImGui::Text("rcx: %X", Regs.rcx);
+    ImGui::Text("rcx: %lX", (u64)Regs.rcx);
     ImGui::NextColumn();
-    ImGui::Text("rdx: %X", Regs.rdx);
+    ImGui::Text("rdx: %lX", (u64)Regs.rdx);
     ImGui::NextColumn();
-    ImGui::Text("rsi: %X", Regs.rsi);
+    ImGui::Text("rsi: %lX", (u64)Regs.rsi);
     ImGui::NextColumn();
-    ImGui::Text("rdi: %X", Regs.rdi);
+    ImGui::Text("rdi: %lX", (u64)Regs.rdi);
     ImGui::NextColumn();
-    ImGui::Text("orig_rax: %X", Regs.orig_rax);
+    ImGui::Text("orig_rax: %lX", (u64)Regs.orig_rax);
     ImGui::NextColumn();
-    ImGui::Text("rip: %X", Regs.rip);
+    ImGui::Text("rip: %lX", (u64)Regs.rip);
     ImGui::NextColumn();
-    ImGui::Text("cs: %X", Regs.cs);
+    ImGui::Text("cs: %lX", (u64)Regs.cs);
     ImGui::NextColumn();
-    ImGui::Text("eflags: %X", Regs.eflags);
+    ImGui::Text("eflags: %lX", (u64)Regs.eflags);
     ImGui::NextColumn();
-    ImGui::Text("rsp: %X", Regs.rsp);
+    ImGui::Text("rsp: %lX", (u64)Regs.rsp);
     ImGui::NextColumn();
-    ImGui::Text("ss: %X", Regs.ss);
+    ImGui::Text("ss: %lX", (u64)Regs.ss);
     ImGui::NextColumn();
-    ImGui::Text("fs_base: %X", Regs.fs_base);
+    ImGui::Text("fs_base: %lX", (u64)Regs.fs_base);
     ImGui::NextColumn();
-    ImGui::Text("gs_base: %X", Regs.gs_base);
+    ImGui::Text("gs_base: %lX", (u64)Regs.gs_base);
     ImGui::NextColumn();
-    ImGui::Text("ds: %X", Regs.ds);
+    ImGui::Text("ds: %lX", (u64)Regs.ds);
     ImGui::NextColumn();
-    ImGui::Text("es: %X", Regs.es);
+    ImGui::Text("es: %lX", (u64)Regs.es);
     ImGui::NextColumn();
-    ImGui::Text("fs: %X", Regs.fs);
+    ImGui::Text("fs: %lX", (u64)Regs.fs);
     ImGui::NextColumn();
-    ImGui::Text("gs: %X", Regs.gs);
+    ImGui::Text("gs: %lX", (u64)Regs.gs);
 }
 
 static size_t
@@ -361,94 +408,6 @@ DisassembleAroundAddress(size_t Address, i32 DebugeePID)
     }
 }
 
-static void
-ParseForLineTable(Dwarf_Debug Debug, Dwarf_Die DIE)
-{
-    Dwarf_Addr LowPC = 0;
-    Dwarf_Addr HighPC = 0;
-    i32 Result = dwarf_lowpc(DIE, &LowPC, 0x0);
-    
-    if(Result == DW_DLV_OK)
-    {
-        Dwarf_Half Form = 0;
-        Dwarf_Form_Class FormType = {};
-        Result = dwarf_highpc_b(DIE, &HighPC, &Form, &FormType, 0x0);
-        if(Result == DW_DLV_OK)
-        {
-            if (FormType == DW_FORM_CLASS_CONSTANT) {
-                HighPC += LowPC;
-            }
-            
-            Dwarf_Unsigned Version = 0;
-            Dwarf_Small TableType = 0;
-            Dwarf_Line_Context LineCtx = 0;
-            
-            Result = dwarf_srclines_b(DIE, &Version, &TableType, &LineCtx, 0x0);
-            if(Result == DW_DLV_OK)
-            {
-                Dwarf_Line *LineBuffer = 0;
-                Dwarf_Signed LineCount = 0;
-                
-                Result = dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, 0x0);
-                assert(Result == DW_DLV_OK);
-                
-                for (i32 I = 0; I < LineCount; ++I) {
-                    Dwarf_Addr LineAddr = 0;
-                    Dwarf_Unsigned FileNum = 0;
-                    Dwarf_Unsigned LineNum = 0;
-                    char *LineSrcFile = 0;
-                    
-                    Result = dwarf_lineno(LineBuffer[I], &LineNum, 0x0);
-                    assert(Result != DW_DLV_ERROR);
-                    Result = dwarf_line_srcfileno(LineBuffer[I], &FileNum, 0x0);
-                    assert(Result != DW_DLV_ERROR);
-                    if (FileNum) {
-                        FileNum -= 1;
-                    }
-                    Result = dwarf_lineaddr(LineBuffer[I], &LineAddr, 0x0);
-                    assert(Result != DW_DLV_ERROR);
-                    Result = dwarf_linesrc(LineBuffer[I], &LineSrcFile, 0x0);
-                    
-                    di_src_line *LTEntry = &DWLineTable[DWLineEntriesCount++];
-                    LTEntry->Address = LineAddr;
-                    LTEntry->LineNum = LineNum;
-                    // TODO(mateusz): THAT'S BAD!
-                    LTEntry->Path = strdup(LineSrcFile);
-                }
-            }
-        }
-    }
-}
-
-static void
-RecurForEachDIE(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel = 0)
-{
-    Dwarf_Die CurrentDIE = DIE;
-	Dwarf_Die SiblingDIE = DIE;
-	Dwarf_Die ChildDIE = 0;
-	Dwarf_Error Error = {};
-    
-    ParseForLineTable(Debug, DIE);
-    
-    /* First son, if any */
-    i32 Result = dwarf_child(CurrentDIE, &ChildDIE, &Error);
-    
-    /* traverse tree depth first */
-    if(Result == DW_DLV_OK)
-    { 
-        RecurForEachDIE(Debug, ChildDIE, RecurLevel + 1); /* recur on the first son */
-        SiblingDIE = ChildDIE;
-        while(Result == DW_DLV_OK)
-        {
-            CurrentDIE = SiblingDIE;
-            Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, &Error);
-            RecurForEachDIE(Debug, SiblingDIE, RecurLevel + 1); /* recur others */
-        };
-    }
-    
-    return;
-}
-
 static char *
 DumpFile(char *Path)
 {
@@ -511,242 +470,28 @@ GetSourceFile(char *Path)
     return Result;
 }
 
-static void
-ReadDwarf()
+static u32
+SrcFileAssociatePath(char *Path)
 {
-    i32 Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
-    assert(Fd != -1);
+    u32 Result = MAX_SOURCE_FILES + 1;
     
-    Dwarf_Debug Debug = 0;
-    Dwarf_Handler ErrorHandle = 0;
-    Dwarf_Ptr ErrorArg = 0;
-    Dwarf_Error *Error  = 0;
-    
-    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &Debug, Error) == DW_DLV_OK);
-    
-    Dwarf_Unsigned CUHeaderLength = 0;
-    Dwarf_Half Version = 0;
-    Dwarf_Unsigned AbbrevOffset = 0;
-    Dwarf_Half AddressSize = 0;
-    Dwarf_Unsigned NextCUHeader = 0;
-    
-    i32 CUCount = 0;
-    
-    for(;;++CUCount) {
-        // NOTE(mateusz): I don't know what it does
-        //Dwarf_Die no_die = 0;
-        Dwarf_Die CurrentDIE = 0;
-        i32 Result = dwarf_next_cu_header(Debug, &CUHeaderLength,
-                                          &Version, &AbbrevOffset, &AddressSize,
-                                          &NextCUHeader, Error);
-        
-        assert(Result != DW_DLV_ERROR);
-        if(Result  == DW_DLV_NO_ENTRY) {
+    assert(Path);
+    for(u32 I = 0; I < SourceFilesCount; I++)
+    {
+        if(StringsMatch(Path, SourceFiles[I].Path))
+        {
+            Result = I;
             break;
         }
-        
-        /* The CU will have a single sibling, a cu_die. */
-        Result = dwarf_siblingof(Debug, 0, &CurrentDIE, Error);
-        assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
-        
-        RecurForEachDIE(Debug, CurrentDIE, 0);
-        
-        dwarf_dealloc(Debug, CurrentDIE, DW_DLA_DIE);
     }
     
-    assert(dwarf_finish(Debug, Error) == DW_DLV_OK);
-}
-
-static size_t
-SearchDIEsForEntryPoint(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel = 0)
-{
-    Dwarf_Die CurrentDIE = DIE;
-	Dwarf_Die SiblingDIE = DIE;
-	Dwarf_Die ChildDIE = 0;
-	Dwarf_Error Error = {};
-    
-    Dwarf_Half Tag = 0;
-    Dwarf_Bool HasAttr = 0;
-    Dwarf_Attribute Attribute = 0;
-    i32 Result = dwarf_tag(CurrentDIE, &Tag, &Error);
-    assert(Result == DW_DLV_OK);
-    if(Tag == DW_TAG_subprogram)
+    if(SourceFilesCount == 0 || Result == MAX_SOURCE_FILES + 1)
     {
-        assert(!dwarf_hasattr(CurrentDIE, DW_AT_name, &HasAttr, &Error));
-        if(HasAttr)
-        {
-            Result = dwarf_attr(CurrentDIE, DW_AT_name, &Attribute, &Error);
-            assert(Result == DW_DLV_OK);
-            
-            char *Name = 0x0;
-            Result = dwarf_formstring(Attribute, &Name, &Error);
-            assert(Result == DW_DLV_OK);
-            
-            if(strcmp(Name, "main") == 0)
-            {
-                assert(!dwarf_hasattr(CurrentDIE, DW_AT_low_pc, &HasAttr, &Error) && HasAttr);
-                Result = dwarf_attr(CurrentDIE, DW_AT_low_pc, &Attribute, &Error);
-                assert(Result == DW_DLV_OK);
-                
-                Dwarf_Addr LowPCAddress = 0;
-                Result = dwarf_formaddr(Attribute, &LowPCAddress, &Error);
-                assert(Result == DW_DLV_OK);
-                
-                return LowPCAddress;
-            }
-        }
-    }
-    else
-    {
-        Result = dwarf_child(CurrentDIE, &ChildDIE, &Error);
-        
-        size_t PossbileResult = 0;
-        
-        if(Result == DW_DLV_OK)
-        { 
-            PossbileResult = SearchDIEsForEntryPoint(Debug, ChildDIE, RecurLevel + 1);
-            
-            if(PossbileResult)
-            {
-                return PossbileResult;
-            }
-            
-            SiblingDIE = ChildDIE;
-            while(Result == DW_DLV_OK)
-            {
-                CurrentDIE = SiblingDIE;
-                Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, &Error);
-                PossbileResult = SearchDIEsForEntryPoint(Debug, SiblingDIE, RecurLevel + 1);
-                
-                if(PossbileResult)
-                {
-                    return PossbileResult;
-                }
-            };
-        }
+        PushSourceFile(Path);
+        Result = SourceFilesCount - 1;
     }
     
-    return 0x0;
-}
-
-static Dwarf_Attribute
-DWARFGetAttrib(Dwarf_Die DIE, Dwarf_Half Tag)
-{
-	Dwarf_Error Error = {};
-    Dwarf_Bool HasAttr = 0;
-    Dwarf_Attribute Attribute = 0;
-    
-    assert(dwarf_hasattr(DIE, Tag, &HasAttr, &Error) == DW_DLV_OK);
-    assert(dwarf_attr(DIE, Tag, &Attribute, &Error) == DW_DLV_OK);
-    
-    return Attribute;
-}
-
-static void
-RecurForEachDIEFunctions(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel = 0)
-{
-    Dwarf_Die CurrentDIE = DIE;
-	Dwarf_Die SiblingDIE = DIE;
-	Dwarf_Die ChildDIE = 0;
-	Dwarf_Error Error = {};
-    
-    Dwarf_Half Tag = 0;
-    Dwarf_Bool HasAttr = 0;
-    i32 Result = dwarf_tag(CurrentDIE, &Tag, &Error);
-    assert(Result == DW_DLV_OK);
-    if(Tag == DW_TAG_subprogram)
-    {
-        dwarf_function *Func = &DWFunctions[DWFunctionsCount++];
-        
-        Dwarf_Attribute Attribute = DWARFGetAttrib(CurrentDIE, DW_AT_name);
-        
-        char *Name = 0x0;
-        assert(dwarf_formstring(Attribute, &Name, &Error) == DW_DLV_OK);
-        Func->Name = strdup(Name);
-        
-        assert(dwarf_hasattr(CurrentDIE, DW_AT_low_pc, &HasAttr, &Error) == DW_DLV_OK);
-        if(HasAttr)
-        {
-            assert(dwarf_lowpc(CurrentDIE, (Dwarf_Addr *)&Func->LowPC, &Error) == DW_DLV_OK);
-            
-            Dwarf_Half Form = 0;
-            Dwarf_Form_Class FormClass = {};
-            assert(dwarf_highpc_b(CurrentDIE, (Dwarf_Addr *)&Func->HighPC,
-                                  &Form, &FormClass, &Error) == DW_DLV_OK);
-            if(FormClass == DW_FORM_CLASS_CONSTANT)
-            {
-                Func->HighPC += Func->LowPC;
-            }
-        }
-    }
-    else
-    {
-        Result = dwarf_child(CurrentDIE, &ChildDIE, &Error);
-        
-        size_t PossbileResult = 0;
-        
-        if(Result == DW_DLV_OK)
-        { 
-            RecurForEachDIEFunctions(Debug, ChildDIE, RecurLevel + 1);
-            
-            SiblingDIE = ChildDIE;
-            while(true)
-            {
-                CurrentDIE = SiblingDIE;
-                Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, &Error);
-                if(Result == DW_DLV_OK)
-                {
-                    RecurForEachDIEFunctions(Debug, SiblingDIE, RecurLevel + 1);
-                }
-                else
-                {
-                    break;
-                }
-            };
-        }
-    }
-}
-
-static void
-ReadDwarfFunctions()
-{
-    i32 Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
-    assert(Fd != -1);
-    
-    Dwarf_Debug Debug = 0;
-    Dwarf_Handler ErrorHandle = 0;
-    Dwarf_Ptr ErrorArg = 0;
-    Dwarf_Error *Error  = 0;
-    
-    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &Debug, Error) == DW_DLV_OK);
-    
-    Dwarf_Unsigned CUHeaderLength = 0;
-    Dwarf_Half Version = 0;
-    Dwarf_Unsigned AbbrevOffset = 0;
-    Dwarf_Half AddressSize = 0;
-    Dwarf_Unsigned NextCUHeader = 0;
-    
-    i32 CUCount = 0;
-    
-    for(;;++CUCount) {
-        // NOTE(mateusz): I don't know what it does
-        i32 Result = dwarf_next_cu_header(Debug, &CUHeaderLength,
-                                          &Version, &AbbrevOffset, &AddressSize,
-                                          &NextCUHeader, Error);
-        
-        assert(Result != DW_DLV_ERROR);
-        if(Result  == DW_DLV_NO_ENTRY) {
-            break;
-        }
-        
-        /* The CU will have a single sibling, a cu_die. */
-        Dwarf_Die CurrentDIE = 0;
-        Result = dwarf_siblingof(Debug, 0, &CurrentDIE, Error);
-        assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
-        RecurForEachDIEFunctions(Debug, CurrentDIE);
-    }
-    
-    assert(dwarf_finish(Debug, Error) == DW_DLV_OK);
+    return Result;
 }
 
 static address_range
@@ -755,7 +500,7 @@ AddressRangeCurrentAndNextLine()
     address_range Result = {};
     
     di_src_line *Current = LineTableFindByAddress(Regs.rip);
-    for(i32 I = 0; I < DWLineEntriesCount; I++)
+    for(u32 I = 0; I < DWLineEntriesCount; I++)
     {
         if(DWLineTable[I].Address == Current->Address)
         {
@@ -789,6 +534,316 @@ AddressRangeCurrentAndNextLine()
 static size_t
 FindEntryPointAddress()
 {
+    size_t Result = 0;
+    
+    for(u32 I = 0; I < DWFunctionsCount; I++)
+    {
+        if(StringsMatch(DWFunctions[I].Name, "main"))
+        {
+            Result = DWFunctions[I].LowPC;
+            break;
+        }
+    }
+    
+    return Result;
+}
+
+static void
+DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
+{
+	Dwarf_Error Error_ = {};
+    Dwarf_Error *Error = &Error_;
+    Dwarf_Die CurrentDIE = DIE;
+    
+    Dwarf_Half Tag = 0;
+    assert(dwarf_tag(CurrentDIE, &Tag, Error) == DW_DLV_OK);
+    
+    switch(Tag)
+    {
+        case DW_TAG_compile_unit:
+        {
+            //printf("CompUnit\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_comp_unit *CompUnit = &DICompUnits[DICompUnitsCount++];
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        StringCopy(CompUnit->Name, Name);
+                    }break;
+                    case DW_AT_low_pc:
+                    {
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->LowPC;
+                        DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
+                    }break;
+                    case DW_AT_high_pc:
+                    {
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->HighPC;
+                        
+                        Dwarf_Half Form = 0;
+                        Dwarf_Form_Class FormType = {};
+                        DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
+                        if (FormType == DW_FORM_CLASS_CONSTANT) {
+                            CompUnit->HighPC += CompUnit->LowPC;
+                        }
+                        
+                    }break;
+                    case DW_AT_ranges:
+                    {
+                        CompUnit->Flags |= DI_COMP_UNIT_HAS_RANGES;
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_producer ||
+                            AttrTag == DW_AT_comp_dir ||
+                            AttrTag == DW_AT_stmt_list || AttrTag == DW_AT_language;
+                        if(!ignored)
+                        {
+                            printf("CompUnit Unhandled Attribute: %d\n", AttrTag);
+                        }
+                    }break;
+                }
+            }
+            
+            Dwarf_Unsigned Version = 0;
+            Dwarf_Small TableType = 0;
+            Dwarf_Line_Context LineCtx = 0;
+            DWARF_CALL(dwarf_srclines_b(DIE, &Version, &TableType, &LineCtx, Error));
+            
+            Dwarf_Line *LineBuffer = 0;
+            Dwarf_Signed LineCount = 0;
+            DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
+            
+            for (i32 I = 0; I < LineCount; ++I) {
+                Dwarf_Addr LineAddr = 0;
+                Dwarf_Unsigned FileNum = 0;
+                Dwarf_Unsigned LineNum = 0;
+                char *LineSrcFile = 0;
+                
+                DWARF_CALL(dwarf_lineno(LineBuffer[I], &LineNum, Error));
+                DWARF_CALL(dwarf_line_srcfileno(LineBuffer[I], &FileNum, Error));
+                if (FileNum) {
+                    FileNum -= 1;
+                }
+                
+                DWARF_CALL(dwarf_lineaddr(LineBuffer[I], &LineAddr, Error));
+                DWARF_CALL(dwarf_linesrc(LineBuffer[I], &LineSrcFile, Error));
+                
+                di_src_line *LTEntry = &DWLineTable[DWLineEntriesCount++];
+                LTEntry->Address = LineAddr;
+                LTEntry->LineNum = LineNum;
+                LTEntry->SrcFileIndex = SrcFileAssociatePath(LineSrcFile);
+            }
+        }break;
+        case DW_TAG_subprogram:
+        {
+            //printf("Subprogram\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            dwarf_function *Func = &DWFunctions[DWFunctionsCount++];
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        
+                        StringCopy(Func->Name, Name);
+                    }break;
+                    case DW_AT_low_pc:
+                    {
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&Func->LowPC;
+                        DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
+                    }break;
+                    case DW_AT_high_pc:
+                    {
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&Func->HighPC;
+                        
+                        Dwarf_Half Form = 0;
+                        Dwarf_Form_Class FormType = {};
+                        DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
+                        if (FormType == DW_FORM_CLASS_CONSTANT) {
+                            Func->HighPC += Func->LowPC;
+                        }
+                    }break;
+                    case DW_AT_frame_base:
+                    {
+                        Dwarf_Loc_Head_c LocListHead = {};
+                        Dwarf_Unsigned LocCount = 0;
+                        DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
+                        
+                        assert(LocCount == 1);
+                        
+                        for(u32 I = 0; I < LocCount; I++)
+                        {
+                            Dwarf_Small LLEOut = 0;
+                            Dwarf_Addr LowPC = 0;
+                            Dwarf_Addr HighPC = 0;
+                            Dwarf_Unsigned LocListCountOut = 0;
+                            Dwarf_Locdesc_c IDK = 0;
+                            Dwarf_Small LocListSourceOut = 0;
+                            Dwarf_Unsigned ExpressionOffsetOut = 0;
+                            Dwarf_Unsigned LocDescOffsetOut = 0;
+                            
+                            DWARF_CALL(dwarf_get_locdesc_entry_c(LocListHead, I, &LLEOut, &LowPC, &HighPC, &LocListCountOut, &IDK, &LocListSourceOut, &ExpressionOffsetOut, 
+                                                                 &LocDescOffsetOut, Error));
+                            
+                            Dwarf_Small AtomOut = 0;
+                            Dwarf_Unsigned Operand1 = 0;
+                            Dwarf_Unsigned Operand2 = 0;
+                            Dwarf_Unsigned Operand3 = 0;
+                            Dwarf_Unsigned OffsetBranch = 0;
+                            DWARF_CALL(dwarf_get_location_op_value_c(IDK, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
+                            
+                            //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                            
+                            assert(AtomOut == DW_OP_call_frame_cfa);
+                            Func->FrameBaseIsCFA = true;
+                        }
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_decl_file ||
+                            AttrTag == DW_AT_decl_line ||
+                            AttrTag == DW_AT_decl_column || AttrTag == DW_AT_prototyped ||
+                            AttrTag == DW_AT_GNU_all_call_sites ||
+                            AttrTag == DW_AT_external ||
+                            AttrTag == DW_AT_GNU_all_tail_call_sites;
+                        if(!ignored)
+                        {
+                            printf("Func Unhandled Attribute: %d\n", AttrTag);
+                        }
+                    }break;
+                }
+            }
+        }break;
+        case DW_TAG_variable:
+        {
+            //printf("Variable\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            assert(DWFunctionsCount);
+            dwarf_function *Func = &DWFunctions[DWFunctionsCount - 1];
+            di_variable *Var = &Func->DIVariables[Func->DIVariablesCount++];
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        
+                        StringCopy(Var->Name, Name);
+                    }break;
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        Var->TypeOffset = Offset;
+                    }break;
+                    case DW_AT_location:
+                    {
+                        Dwarf_Loc_Head_c LocListHead = {};
+                        Dwarf_Unsigned LocCount = 0;
+                        DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
+                        
+                        assert(LocCount == 1);
+                        
+                        for(u32 I = 0; I < LocCount; I++)
+                        {
+                            Dwarf_Small LLEOut = 0;
+                            Dwarf_Addr LowPC = 0;
+                            Dwarf_Addr HighPC = 0;
+                            Dwarf_Unsigned LocListCountOut = 0;
+                            Dwarf_Locdesc_c IDK = 0;
+                            Dwarf_Small LocListSourceOut = 0;
+                            Dwarf_Unsigned ExpressionOffsetOut = 0;
+                            Dwarf_Unsigned LocDescOffsetOut = 0;
+                            
+                            DWARF_CALL(dwarf_get_locdesc_entry_c(LocListHead, I, &LLEOut, &LowPC, &HighPC, &LocListCountOut, &IDK, &LocListSourceOut, &ExpressionOffsetOut, 
+                                                                 &LocDescOffsetOut, Error));
+                            
+                            Dwarf_Small AtomOut = 0;
+                            Dwarf_Unsigned Operand1 = 0;
+                            Dwarf_Unsigned Operand2 = 0;
+                            Dwarf_Unsigned Operand3 = 0;
+                            Dwarf_Unsigned OffsetBranch = 0;
+                            DWARF_CALL(dwarf_get_location_op_value_c(IDK, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
+                            
+                            //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                            
+                            assert(AtomOut == DW_OP_fbreg);
+                            Var->UsesFBReg = true;
+                            Var->Offset = Operand1;
+                        }
+                    }break;
+                }
+            }
+            
+        }break;
+        default:
+        {
+            printf("Unhandled case: %d\n", Tag);
+        }break;
+    }
+    
+    //ParseForLineTable(Debug, DIE);
+    
+    Dwarf_Die ChildDIE = 0;
+    i32 Result = dwarf_child(CurrentDIE, &ChildDIE, Error);
+    
+    if(Result == DW_DLV_OK)
+    { 
+        DWARFReadDIEsDebug(Debug, ChildDIE, RecurLevel + 1);
+        Dwarf_Die SiblingDIE = ChildDIE;
+        while(Result == DW_DLV_OK)
+        {
+            CurrentDIE = SiblingDIE;
+            Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, Error);
+            if(Result == DW_DLV_OK)
+            {
+                DWARFReadDIEsDebug(Debug, SiblingDIE, RecurLevel + 1);
+            }
+            else
+            {
+                break;
+            }
+        };
+    }
+    
+    return;
+}
+
+static void
+DWARFReadDebug()
+{
     i32 Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
     assert(Fd != -1);
     
@@ -799,15 +854,16 @@ FindEntryPointAddress()
     
     assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &Debug, Error) == DW_DLV_OK);
     
+    di_frame_info *Frame = &DIFrameInfo;
+    DWARF_CALL(dwarf_get_fde_list_eh(Debug, &Frame->CIEs, &Frame->CIECount, &Frame->FDEs, &Frame->FDECount, Error));
+    
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
     Dwarf_Unsigned AbbrevOffset = 0;
     Dwarf_Half AddressSize = 0;
     Dwarf_Unsigned NextCUHeader = 0;
     
-    i32 CUCount = 0;
-    
-    for(;;++CUCount) {
+    for(i32 CUCount = 0;;++CUCount) {
         // NOTE(mateusz): I don't know what it does
         i32 Result = dwarf_next_cu_header(Debug, &CUHeaderLength,
                                           &Version, &AbbrevOffset, &AddressSize,
@@ -823,16 +879,45 @@ FindEntryPointAddress()
         Result = dwarf_siblingof(Debug, 0, &CurrentDIE, Error);
         assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
         
-        size_t EntryPointAddress = SearchDIEsForEntryPoint(Debug, CurrentDIE, 0);
-        if(EntryPointAddress)
+        DWARFReadDIEsDebug(Debug, CurrentDIE, 0);
+    }
+    
+    close(Fd);
+    //assert(dwarf_finish(Debug, Error) == DW_DLV_OK);
+}
+
+static size_t
+DWARFGetCFA(size_t PC)
+{
+    di_frame_info *Frame = &DIFrameInfo;
+    for(u32 J = 0; J < Frame->FDECount; J++)
+    {
+        Dwarf_Error *Error  = 0;
+        Dwarf_Addr FDELowPC = 0;
+        Dwarf_Unsigned FDEFunctionLength = 0;
+        DWARF_CALL(dwarf_get_fde_range(Frame->FDEs[J], &FDELowPC, &FDEFunctionLength,
+                                       0x0, 0x0, 0x0, 0x0, 0x0, Error));
+        
+        if(AddressBetween(PC, FDELowPC, FDELowPC + FDEFunctionLength - 1))
         {
-            return EntryPointAddress;
+            Dwarf_Regtable3 Tab3 = {};
+            Dwarf_Addr ActualPC = 0;
+            DWARF_CALL(dwarf_get_fde_info_for_all_regs3(Frame->FDEs[J], PC, &Tab3, &ActualPC, Error));
+            
+            Dwarf_Small OffsetRel = Tab3.rt3_cfa_rule.dw_offset_relevant;
+            Dwarf_Signed OffsetOut = Tab3.rt3_cfa_rule.dw_offset_or_block_len;
+            Dwarf_Half RegnumOut = Tab3.rt3_cfa_rule.dw_regnum;
+            
+            assert(OffsetRel == 1);
+            size_t RegVal = GetRegisterByABINumber(RegnumOut);
+            
+            //printf("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
+            return RegVal + OffsetOut;
         }
     }
     
-    assert(dwarf_finish(Debug, Error) == DW_DLV_OK);
-    
-    return 0x0;
+    assert(false);
+    return PC;
 }
 
 static void
@@ -852,7 +937,7 @@ DebugeeStart()
     {
         personality(ADDR_NO_RANDOMIZE);
         ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
-        execl(Debuger.DebugeeProgramPath, Debuger.DebugeeProgramPath, 0x0);
+        execl(Debuger.DebugeeProgramPath, Debuger.DebugeeProgramPath, NULL);
     }
     else
     {
@@ -899,6 +984,7 @@ DebugStart()
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
     
+    DWARFReadDebug();
     // NOTE(mateusz): For debug purpouses
     size_t EntryPointAddress = FindEntryPointAddress();
     assert(EntryPointAddress);
@@ -906,9 +992,6 @@ DebugStart()
     breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
     BreakpointEnable(&BP);
     Breakpoints[BreakpointCount++] = BP;
-    
-    ReadDwarf();
-    ReadDwarfFunctions();
     
     while(!glfwWindowShouldClose(Window))
     {
@@ -936,7 +1019,7 @@ DebugStart()
                 Address = atol(TextBuff);
             }
             
-            breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+            breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
             BreakpointEnable(&BP);
             Breakpoints[BreakpointCount++] = BP;
             
@@ -948,12 +1031,12 @@ DebugStart()
         
         if(ImGui::Button("BreakFunc"))
         {
-            for(i32 I = 0; I < DWFunctionsCount; I++)
+            for(u32 I = 0; I < DWFunctionsCount; I++)
             {
-                dwarf_function*Func = &DWFunctions[I];
+                dwarf_function *Func = &DWFunctions[I];
                 if(strcmp(TextBuff2, Func->Name) == 0)
                 {
-                    breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+                    breakpoint BP = BreakpointCreate(Func->LowPC, Debuger.DebugeePID);
                     BreakpointEnable(&BP);
                     Breakpoints[BreakpointCount++] = BP;
                 }
@@ -965,21 +1048,18 @@ DebugStart()
         if(ImGui::Button("Continue"))
         {
             ContinueProgram(Debuger.DebugeePID);
-            
             UpdateInfo();
         }
         
         if(ImGui::Button("Single Step"))
         {
             StepInstruction(Debuger.DebugeePID);
-            
             UpdateInfo();
         }
         
         if(ImGui::Button("Step"))
         {
-            StepLine(Debuger.DebugeePID);
-            
+            ToNextLine(Debuger.DebugeePID, true);
             UpdateInfo();
         }
         
@@ -987,100 +1067,7 @@ DebugStart()
         
         if(ImGui::Button("Next"))
         {
-            address_range Range = AddressRangeCurrentAndNextLine();
-            
-            breakpoint TempBreakpoints[8] = {};
-            u32 TempBreakpointsCount = 0;
-            
-            breakpoint BP = BreakpointCreate(Range.End, Debuger.DebugeePID);
-            BreakpointEnable(&BP);
-            TempBreakpoints[TempBreakpointsCount++] = BP;
-            
-            cs_insn *Instruction = 0x0;
-            size_t CurrentAddress = Range.Start;
-            
-            while(CurrentAddress < Range.End)
-            {
-                size_t MachineWord = PeekDebugeeMemory(CurrentAddress, Debuger.DebugeePID);
-                
-                breakpoint *BP = BreakpointFind(CurrentAddress, Debuger.DebugeePID);
-                if(BP)
-                {
-                    MachineWord = (MachineWord & ~0xff) | BP->SavedOpCode;
-                }
-                
-                int Count = cs_disasm(DisAsmHandle, (const u8 *)&MachineWord, sizeof(MachineWord),
-                                      CurrentAddress, 1, &Instruction);
-                
-                if(Count == 0) { break; }
-                
-                CurrentAddress += Instruction->size;
-                
-                inst_type Type = 0;
-                if(Instruction->detail && Instruction->detail->groups_count > 0)
-                {
-                    for(i32 GroupIndex = 0;
-                        GroupIndex < Instruction->detail->groups_count;
-                        GroupIndex++)
-                    {
-                        switch(Instruction->detail->groups[GroupIndex])
-                        {
-                            case X86_GRP_JUMP:
-                            {
-                                Type |= INST_TYPE_JUMP;
-                            }break;
-                            case X86_GRP_CALL:
-                            {
-                                Type |= INST_TYPE_CALL;
-                            }break;
-                            case X86_GRP_RET:
-                            {
-                                Type |= INST_TYPE_RET;
-                            }break;
-                            case X86_GRP_BRANCH_RELATIVE:
-                            {
-                                Type |= INST_TYPE_RELATIVE_BRANCH;
-                            }break;
-                        }
-                    }
-                }
-                
-                if(Type & INST_TYPE_RET)
-                {
-                    size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, Debuger.DebugeePID);
-                    
-                    breakpoint BP = BreakpointCreate(ReturnAddress, Debuger.DebugeePID);
-                    BreakpointEnable(&BP);
-                    TempBreakpoints[TempBreakpointsCount++] = BP;
-                }
-                
-                if((Type & INST_TYPE_RELATIVE_BRANCH) && (Type & INST_TYPE_JUMP))
-                {
-                    // TODO(mateusz): It's a case of I'm not sure but I GUESS and if it blows
-                    // up then I'll learn :+)
-                    assert(Instruction->detail->x86.op_count == 1);
-                    // TODO(mateusz): This is here just for me to remeber to implement jumps
-                    // that are not specified by fixed memory locations but rather register
-                    // values i.e. jump tables
-                    assert(Instruction->detail->x86.operands[0].imm > 0x100);
-                    
-                    size_t OperandAddress = Instruction->detail->x86.operands[0].imm;
-                    
-                    breakpoint BP = BreakpointCreate(OperandAddress, Debuger.DebugeePID);
-                    BreakpointEnable(&BP);
-                    TempBreakpoints[TempBreakpointsCount++] = BP;
-                }
-                
-                cs_free(Instruction, 1);
-            }
-            
-            ContinueProgram(Debuger.DebugeePID);
-            
-            for(u32 I = 0; I < TempBreakpointsCount; I++)
-            {
-                BreakpointDisable(&TempBreakpoints[I]);
-            }
-            
+            ToNextLine(Debuger.DebugeePID, false);
             UpdateInfo();
         }
         
@@ -1096,14 +1083,49 @@ DebugStart()
             BreakpointEnable(&BP);
             Breakpoints[BreakpointCount++] = BP;
             
-            ReadDwarf();
-            ReadDwarfFunctions();
+            DWARFReadDebug();
         }
         
         ImGui::End();
         
-        ImGui::Begin("x64 Registers");
-        ImGuiShowRegisters(Regs);
+        ImGui::Begin("Program variables");
+        
+        if(ImGui::BeginTabBar("Vars", ImGuiTabBarFlags_None))
+        {
+            if(ImGui::BeginTabItem("x64 Registers"))
+            {
+                ImGuiShowRegisters(Regs);
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Locals"))
+            {
+                dwarf_function *Func = FindFunctionConfiningAddress(Regs.rip);
+                if(Func && Func->FrameBaseIsCFA)
+                {
+                    size_t FBReg = DWARFGetCFA(Regs.rip);
+                    for(u32 I = 0; I < Func->DIVariablesCount; I++)
+                    {
+                        di_variable *Var = &Func->DIVariables[I];
+                        
+                        if(Var->UsesFBReg)
+                        {
+                            // TODO(mateusz): Right now only ints
+                            size_t VarAddress = FBReg + Var->Offset;
+                            
+                            size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+                            i32 Value = (i32)MachineWord;
+                            ImGui::Text("%s: %d", Var->Name, Value);
+                        }
+                    }
+                }
+                
+                ImGui::EndTabItem();
+            }
+            
+            ImGui::EndTabBar();
+        }
+        
+        
         ImGui::End();
         
         ImGui::Begin("Listings");
@@ -1116,11 +1138,11 @@ DebugStart()
                 
                 if(Line)
                 {
-                    src_file *Src = GetSourceFile(Line->Path);
+                    src_file *Src = &SourceFiles[Line->SrcFileIndex];
                     
                     char *LinePtr = Src->Content;
                     char *Prev = 0x0;
-                    for(int I = 0; I < Src->LineCount + 1; I++)
+                    for(u32 I = 0; I < Src->LineCount + 1; I++)
                     {
                         Prev = LinePtr;
                         LinePtr = strchr(LinePtr, '\n') + 1;
@@ -1153,7 +1175,7 @@ DebugStart()
             }
             if(ImGui::BeginTabItem("Disassembly"))
             {
-                for(int I = 0; I < DisasmInstCount; I++)
+                for(u32 I = 0; I < DisasmInstCount; I++)
                 {
                     disasm_inst *Inst = &DisasmInst[I];
                     
