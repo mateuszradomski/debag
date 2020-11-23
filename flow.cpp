@@ -232,9 +232,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             
             size_t FunctionAddress = Instruction->detail->x86.operands[0].imm;
             
-            for(u32 I = 0; I < DICompUnitsCount; I++)
+            for(u32 I = 0; I < DICompileUnitsCount; I++)
             {
-                if(AddressBetween(FunctionAddress, DICompUnits[I].LowPC, DICompUnits[I].HighPC))
+                if(AddressBetween(FunctionAddress, DICompileUnits[I].LowPC, DICompileUnits[I].HighPC))
                 {
                     breakpoint BP = BreakpointCreate(FunctionAddress, DebugeePID);
                     BreakpointEnable(&BP);
@@ -248,9 +248,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         {
             size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
             
-            for(u32 I = 0; I < DICompUnitsCount; I++)
+            for(u32 I = 0; I < DICompileUnitsCount; I++)
             {
-                if(AddressBetween(ReturnAddress, DICompUnits[I].LowPC, DICompUnits[I].HighPC))
+                if(AddressBetween(ReturnAddress, DICompileUnits[I].LowPC, DICompileUnits[I].HighPC))
                 {
                     breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
                     BreakpointEnable(&BP);

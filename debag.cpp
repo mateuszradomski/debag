@@ -24,6 +24,54 @@
 #include <flow.cpp>
 
 static void
+KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, int Mods)
+{
+	assert(Key != GLFW_KEY_UNKNOWN);
+    (void)Window; // That is unused.
+    (void)Mods; // NOTE(mateusz): I guess we would use it somewhere??
+    (void)Scancode; // That is unused.
+    
+    if(Action == GLFW_PRESS) {
+        KeyboardButtons[Key].Down = true;
+    } else if(Action == GLFW_RELEASE) {
+        KeyboardButtons[Key].Down = false;
+    }
+    
+    Debuger.InputChange = true;
+}
+
+static void
+MousePositionCallback(GLFWwindow *Window, double X, double Y)
+{
+    (void)Window;
+    (void)X;
+    (void)Y;
+    
+    Debuger.InputChange = true;
+}
+
+static void
+MouseButtonCallback(GLFWwindow *Window, int Key, int Action, int Mods)
+{
+    (void)Window;
+    (void)Key;
+    (void)Action;
+    (void)Mods;
+    
+    Debuger.InputChange = true;
+}
+
+static void
+ButtonsUpdate(button *Buttons, u32 Count)
+{
+    for(u32 I = 0; I < Count; I++)
+    {
+        Buttons[I].Pressed = Buttons[I].Down && !Buttons[I].Last;
+        Buttons[I].Last = Buttons[I].Down;
+    }
+}
+
+static void
 ImGuiStartFrame()
 {
     ImGui_ImplOpenGL3_NewFrame();
@@ -197,17 +245,17 @@ GetRegisterByABINumber(u32 Number)
 static di_src_line *
 LineTableFindByAddress(size_t Address)
 {
-    for(u32 I = 0; I < DWLineEntriesCount; I++)
+    for(u32 I = 0; I < DISourceLinesCount; I++)
     {
-        if(DWLineTable[I].Address == Address)
+        if(DISourceLines[I].Address == Address)
         {
-            return &DWLineTable[I];
+            return &DISourceLines[I];
         }
-        else if(I + 1 < DWLineEntriesCount &&
-                (DWLineTable[I].Address < Address) &&
-                (DWLineTable[I + 1].Address > Address))
+        else if(I + 1 < DISourceLinesCount &&
+                (DISourceLines[I].Address < Address) &&
+                (DISourceLines[I + 1].Address > Address))
         {
-            return &DWLineTable[I];
+            return &DISourceLines[I];
         }
     }
     
@@ -217,11 +265,11 @@ LineTableFindByAddress(size_t Address)
 static di_src_line *
 LineTableFindByLineNum(u32 LineNum)
 {
-    for(u32 I = 0; I < DWLineEntriesCount; I++)
+    for(u32 I = 0; I < DISourceLinesCount; I++)
     {
-        if(DWLineTable[I].LineNum == LineNum)
+        if(DISourceLines[I].LineNum == LineNum)
         {
-            return &DWLineTable[I];
+            return &DISourceLines[I];
         }
     }
     
@@ -239,16 +287,16 @@ LineAddressRangeBetween(di_src_line *StartLine, di_src_line *EndLine)
     return Result;
 }
 
-static dwarf_function *
+static di_function *
 FindFunctionConfiningAddress(size_t Address)
 {
-    dwarf_function *Result = 0x0;
+    di_function *Result = 0x0;
     
-    for(u32 I = 0; I < DWFunctionsCount; I++)
+    for(u32 I = 0; I < DIFuctionsCount; I++)
     {
-        if(AddressBetween(Address, DWFunctions[I].LowPC, DWFunctions[I].HighPC))
+        if(AddressBetween(Address, DIFunctions[I].LowPC, DIFunctions[I].HighPC))
         {
-            Result = &DWFunctions[I];
+            Result = &DIFunctions[I];
             break;
         }
     }
@@ -424,16 +472,16 @@ DumpFile(char *Path)
     return Result;
 }
 
-static src_file *
+static di_src_file *
 FindSourceFile(char *Path)
 {
-    src_file *Result = 0x0;
+    di_src_file *Result = 0x0;
     
-    for(u32 I = 0; I < SourceFilesCount; I++)
+    for(u32 I = 0; I < DISourceFilesCount; I++)
     {
-        if(StringsMatch(Path, SourceFiles[I].Path))
+        if(StringsMatch(Path, DISourceFiles[I].Path))
         {
-            Result = &SourceFiles[I];
+            Result = &DISourceFiles[I];
             break;
         }
     }
@@ -441,12 +489,12 @@ FindSourceFile(char *Path)
     return Result;
 }
 
-static src_file *
+static di_src_file *
 PushSourceFile(char *Path)
 {
-    src_file *Result = 0x0;
+    di_src_file *Result = 0x0;
     
-    Result = &SourceFiles[SourceFilesCount++];
+    Result = &DISourceFiles[DISourceFilesCount++];
     
     Result->Path = strdup(Path);
     Result->Content = DumpFile(Path);
@@ -455,10 +503,10 @@ PushSourceFile(char *Path)
     return Result;
 }
 
-static src_file *
+static di_src_file *
 GetSourceFile(char *Path)
 {
-    src_file *Result = 0x0;
+    di_src_file *Result = 0x0;
     
     Result = FindSourceFile(Path);
     
@@ -473,22 +521,22 @@ GetSourceFile(char *Path)
 static u32
 SrcFileAssociatePath(char *Path)
 {
-    u32 Result = MAX_SOURCE_FILES + 1;
+    u32 Result = MAX_DI_SOURCE_FILES + 1;
     
     assert(Path);
-    for(u32 I = 0; I < SourceFilesCount; I++)
+    for(u32 I = 0; I < DISourceFilesCount; I++)
     {
-        if(StringsMatch(Path, SourceFiles[I].Path))
+        if(StringsMatch(Path, DISourceFiles[I].Path))
         {
             Result = I;
             break;
         }
     }
     
-    if(SourceFilesCount == 0 || Result == MAX_SOURCE_FILES + 1)
+    if(DISourceFilesCount == 0 || Result == MAX_DI_SOURCE_FILES + 1)
     {
         PushSourceFile(Path);
-        Result = SourceFilesCount - 1;
+        Result = DISourceFilesCount - 1;
     }
     
     return Result;
@@ -500,22 +548,22 @@ AddressRangeCurrentAndNextLine()
     address_range Result = {};
     
     di_src_line *Current = LineTableFindByAddress(Regs.rip);
-    for(u32 I = 0; I < DWLineEntriesCount; I++)
+    for(u32 I = 0; I < DISourceLinesCount; I++)
     {
-        if(DWLineTable[I].Address == Current->Address)
+        if(DISourceLines[I].Address == Current->Address)
         {
             for(;;I++)
             {
-                if(DWLineEntriesCount == I + 1)
+                if(DISourceLinesCount == I + 1)
                 {
-                    dwarf_function *Func = FindFunctionConfiningAddress(Current->Address);
+                    di_function *Func = FindFunctionConfiningAddress(Current->Address);
                     Result.Start = Current->Address;
                     Result.End = Func->HighPC;
                     goto end;
                 }
                 else
                 {
-                    di_src_line *Next = &DWLineTable[I];
+                    di_src_line *Next = &DISourceLines[I];
                     if(Next->LineNum != Current->LineNum)
                     {
                         Result = LineAddressRangeBetween(Current, Next);
@@ -536,11 +584,11 @@ FindEntryPointAddress()
 {
     size_t Result = 0;
     
-    for(u32 I = 0; I < DWFunctionsCount; I++)
+    for(u32 I = 0; I < DIFuctionsCount; I++)
     {
-        if(StringsMatch(DWFunctions[I].Name, "main"))
+        if(StringsMatch(DIFunctions[I].Name, "main"))
         {
-            Result = DWFunctions[I].LowPC;
+            Result = DIFunctions[I].LowPC;
             break;
         }
     }
@@ -551,7 +599,7 @@ FindEntryPointAddress()
 static void
 DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
 {
-	Dwarf_Error Error_ = {};
+    Dwarf_Error Error_ = {};
     Dwarf_Error *Error = &Error_;
     Dwarf_Die CurrentDIE = DIE;
     
@@ -567,7 +615,7 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_comp_unit *CompUnit = &DICompUnits[DICompUnitsCount++];
+            di_compile_unit *CompUnit = &DICompileUnits[DICompileUnitsCount++];
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -610,7 +658,9 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                             AttrTag == DW_AT_stmt_list || AttrTag == DW_AT_language;
                         if(!ignored)
                         {
-                            printf("CompUnit Unhandled Attribute: %d\n", AttrTag);
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("CompUnit Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -640,7 +690,7 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                 DWARF_CALL(dwarf_lineaddr(LineBuffer[I], &LineAddr, Error));
                 DWARF_CALL(dwarf_linesrc(LineBuffer[I], &LineSrcFile, Error));
                 
-                di_src_line *LTEntry = &DWLineTable[DWLineEntriesCount++];
+                di_src_line *LTEntry = &DISourceLines[DISourceLinesCount++];
                 LTEntry->Address = LineAddr;
                 LTEntry->LineNum = LineNum;
                 LTEntry->SrcFileIndex = SrcFileAssociatePath(LineSrcFile);
@@ -653,7 +703,7 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            dwarf_function *Func = &DWFunctions[DWFunctionsCount++];
+            di_function *Func = &DIFunctions[DIFuctionsCount++];
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -668,6 +718,13 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         StringCopy(Func->Name, Name);
+                    }break;
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        Func->TypeOffset = Offset;
                     }break;
                     case DW_AT_low_pc:
                     {
@@ -730,7 +787,9 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                             AttrTag == DW_AT_GNU_all_tail_call_sites;
                         if(!ignored)
                         {
-                            printf("Func Unhandled Attribute: %d\n", AttrTag);
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Func Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -743,74 +802,92 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            assert(DWFunctionsCount);
-            dwarf_function *Func = &DWFunctions[DWFunctionsCount - 1];
-            di_variable *Var = &Func->DIVariables[Func->DIVariablesCount++];
-            for(u32 I = 0; I < AttrCount; I++)
+            // TODO(mateusz): Globals
+            if(DIFuctionsCount)
             {
-                Dwarf_Attribute Attribute = AttrList[I];
-                Dwarf_Half AttrTag = 0;
-                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
-                
-                switch(AttrTag)
+                di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+                di_variable *Var = &Func->DIVariables[Func->DIVariablesCount++];
+                for(u32 I = 0; I < AttrCount; I++)
                 {
-                    case DW_AT_name:
+                    Dwarf_Attribute Attribute = AttrList[I];
+                    Dwarf_Half AttrTag = 0;
+                    DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                    
+                    switch(AttrTag)
                     {
-                        char *Name = 0x0;
-                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
-                        
-                        StringCopy(Var->Name, Name);
-                    }break;
-                    case DW_AT_type:
-                    {
-                        Dwarf_Off Offset = 0;
-                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
-                        
-                        Var->TypeOffset = Offset;
-                    }break;
-                    case DW_AT_location:
-                    {
-                        Dwarf_Loc_Head_c LocListHead = {};
-                        Dwarf_Unsigned LocCount = 0;
-                        DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
-                        
-                        assert(LocCount == 1);
-                        
-                        for(u32 I = 0; I < LocCount; I++)
+                        case DW_AT_name:
                         {
-                            Dwarf_Small LLEOut = 0;
-                            Dwarf_Addr LowPC = 0;
-                            Dwarf_Addr HighPC = 0;
-                            Dwarf_Unsigned LocListCountOut = 0;
-                            Dwarf_Locdesc_c IDK = 0;
-                            Dwarf_Small LocListSourceOut = 0;
-                            Dwarf_Unsigned ExpressionOffsetOut = 0;
-                            Dwarf_Unsigned LocDescOffsetOut = 0;
+                            char *Name = 0x0;
+                            DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
-                            DWARF_CALL(dwarf_get_locdesc_entry_c(LocListHead, I, &LLEOut, &LowPC, &HighPC, &LocListCountOut, &IDK, &LocListSourceOut, &ExpressionOffsetOut, 
-                                                                 &LocDescOffsetOut, Error));
+                            StringCopy(Var->Name, Name);
+                        }break;
+                        case DW_AT_type:
+                        {
+                            Dwarf_Off Offset = 0;
+                            DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
                             
-                            Dwarf_Small AtomOut = 0;
-                            Dwarf_Unsigned Operand1 = 0;
-                            Dwarf_Unsigned Operand2 = 0;
-                            Dwarf_Unsigned Operand3 = 0;
-                            Dwarf_Unsigned OffsetBranch = 0;
-                            DWARF_CALL(dwarf_get_location_op_value_c(IDK, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
+                            Var->TypeOffset = Offset;
+                        }break;
+                        case DW_AT_location:
+                        {
+                            Dwarf_Loc_Head_c LocListHead = {};
+                            Dwarf_Unsigned LocCount = 0;
+                            DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
                             
-                            //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                            assert(LocCount == 1);
                             
-                            assert(AtomOut == DW_OP_fbreg);
-                            Var->UsesFBReg = true;
-                            Var->Offset = Operand1;
-                        }
-                    }break;
+                            for(u32 I = 0; I < LocCount; I++)
+                            {
+                                Dwarf_Small LLEOut = 0;
+                                Dwarf_Addr LowPC = 0;
+                                Dwarf_Addr HighPC = 0;
+                                Dwarf_Unsigned LocListCountOut = 0;
+                                Dwarf_Locdesc_c LocDesc = 0;
+                                Dwarf_Small LocListSourceOut = 0;
+                                Dwarf_Unsigned ExpressionOffsetOut = 0;
+                                Dwarf_Unsigned LocDescOffsetOut = 0;
+                                
+                                DWARF_CALL(dwarf_get_locdesc_entry_c(LocListHead, I, &LLEOut, &LowPC, &HighPC, &LocListCountOut, &LocDesc, &LocListSourceOut, &ExpressionOffsetOut, 
+                                                                     &LocDescOffsetOut, Error));
+                                
+                                Dwarf_Small AtomOut = 0;
+                                Dwarf_Unsigned Operand1 = 0;
+                                Dwarf_Unsigned Operand2 = 0;
+                                Dwarf_Unsigned Operand3 = 0;
+                                Dwarf_Unsigned OffsetBranch = 0;
+                                DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
+                                
+                                //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                                
+                                assert(AtomOut == DW_OP_fbreg);
+                                Var->UsesFBReg = true;
+                                Var->Offset = Operand1;
+                            }
+                        }break;
+                        default:
+                        {
+                            bool ignored = AttrTag == DW_AT_decl_file ||
+                                AttrTag == DW_AT_decl_line ||
+                                AttrTag == DW_AT_decl_column;
+                            
+                            if(!ignored)
+                            {
+                                const char *AttrName = 0x0;
+                                DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                                printf("Variable Unhandled Attribute: %s\n", AttrName);
+                            }
+                        }break;
+                    }
                 }
+                
             }
-            
         }break;
         default:
         {
-            printf("Unhandled case: %d\n", Tag);
+            const char *TagName = 0x0;
+            DWARF_CALL(dwarf_get_TAG_name(Tag, &TagName));
+            printf("Unhandled Tag: %s\n", TagName);
         }break;
     }
     
@@ -950,10 +1027,20 @@ DebugeeStart()
 static void
 DebugStart()
 {
+    Breakpoints = (breakpoint *)malloc(MAX_BREAKPOINT_COUNT * sizeof(breakpoint));
+    DISourceFiles = (di_src_file *)malloc(MAX_DI_SOURCE_FILES * sizeof(di_src_file));
+    DISourceLines = (di_src_line *)malloc(MAX_DI_SOURCE_LINES * sizeof(di_src_line));
+    DIFunctions = (di_function *)malloc(MAX_DI_FUNCTIONS * sizeof(di_function));
+    DICompileUnits = (di_compile_unit *)malloc(MAX_DI_COMPILE_UNITS * sizeof(di_compile_unit));
+    
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(800, 600, "debag", NULL, NULL);
     glfwMakeContextCurrent(Window);
     glewInit();
+    
+    glfwSetKeyCallback(Window, KeyboardButtonCallback);
+    glfwSetMouseButtonCallback(Window, MouseButtonCallback);
+    glfwSetCursorPosCallback(Window, MousePositionCallback);
     
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -995,6 +1082,9 @@ DebugStart()
     
     while(!glfwWindowShouldClose(Window))
     {
+        //if(!Debuger.InputChange) { goto EndDraw; }
+        //else { Debuger.InputChange = false; }
+        
         glClear(GL_COLOR_BUFFER_BIT);
         
         ImGuiStartFrame();
@@ -1031,9 +1121,9 @@ DebugStart()
         
         if(ImGui::Button("BreakFunc"))
         {
-            for(u32 I = 0; I < DWFunctionsCount; I++)
+            for(u32 I = 0; I < DIFuctionsCount; I++)
             {
-                dwarf_function *Func = &DWFunctions[I];
+                di_function *Func = &DIFunctions[I];
                 if(strcmp(TextBuff2, Func->Name) == 0)
                 {
                     breakpoint BP = BreakpointCreate(Func->LowPC, Debuger.DebugeePID);
@@ -1045,7 +1135,7 @@ DebugStart()
             UpdateInfo();
         }
         
-        if(ImGui::Button("Continue"))
+        if(ImGui::Button("Continue") || KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
             ContinueProgram(Debuger.DebugeePID);
             UpdateInfo();
@@ -1057,17 +1147,17 @@ DebugStart()
             UpdateInfo();
         }
         
-        if(ImGui::Button("Step"))
+        if(ImGui::Button("Next") || KeyboardButtons[GLFW_KEY_F10].Pressed)
         {
-            ToNextLine(Debuger.DebugeePID, true);
+            ToNextLine(Debuger.DebugeePID, false);
             UpdateInfo();
         }
         
         ImGui::SameLine();
         
-        if(ImGui::Button("Next"))
+        if(ImGui::Button("Step") || KeyboardButtons[GLFW_KEY_F11].Pressed)
         {
-            ToNextLine(Debuger.DebugeePID, false);
+            ToNextLine(Debuger.DebugeePID, true);
             UpdateInfo();
         }
         
@@ -1099,7 +1189,7 @@ DebugStart()
             }
             if(ImGui::BeginTabItem("Locals"))
             {
-                dwarf_function *Func = FindFunctionConfiningAddress(Regs.rip);
+                di_function *Func = FindFunctionConfiningAddress(Regs.rip);
                 if(Func && Func->FrameBaseIsCFA)
                 {
                     size_t FBReg = DWARFGetCFA(Regs.rip);
@@ -1138,7 +1228,7 @@ DebugStart()
                 
                 if(Line)
                 {
-                    src_file *Src = &SourceFiles[Line->SrcFileIndex];
+                    di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
                     
                     char *LinePtr = Src->Content;
                     char *Prev = 0x0;
@@ -1153,6 +1243,7 @@ DebugStart()
                         {
                             ImGui::TextColored(CurrentLineColor, "%.*s",
                                                LineLength, Prev);
+                            ImGui::SetScrollHereY(0.5f);
                         }
                         else
                         {
@@ -1200,7 +1291,8 @@ DebugStart()
         ImGui::End();
         
         ImGuiEndFrame();
-        
+        //EndDraw:;
+        ButtonsUpdate(KeyboardButtons, (sizeof(KeyboardButtons)/sizeof(KeyboardButtons[0])));
         glfwPollEvents();
         glfwSwapBuffers(Window);
     }

@@ -20,6 +20,13 @@ typedef double f64;
 
 #define DWARF_CALL(x) assert((x) == DW_DLV_OK)
 
+struct button
+{
+    u8 Down : 1;
+    u8 Last : 1;
+    u8 Pressed : 1;
+};
+
 struct breakpoint
 {
     u64 Address;
@@ -53,7 +60,7 @@ struct address_range
     size_t End;
 };
 
-struct src_file
+struct di_src_file
 {
     char *Path;
     char *Content;
@@ -86,13 +93,14 @@ struct di_frame_info
 
 #define MAX_DI_VARIABLES 16
 
-struct dwarf_function
+struct di_function
 {
     char Name[64];
     char FilePath[64];
     
     size_t LowPC;
     size_t HighPC;
+    size_t TypeOffset;
     bool FrameBaseIsCFA;
     di_variable DIVariables[MAX_DI_VARIABLES];
     u32 DIVariablesCount = 0;
@@ -104,9 +112,9 @@ enum
     DI_COMP_UNIT_HAS_RANGES = 0x1,
 };
 
-typedef i32 di_comp_unit_flags;
+typedef i32 di_compile_unit_flags;
 
-struct di_comp_unit
+struct di_compile_unit
 {
     char Name[128];
     
@@ -114,7 +122,7 @@ struct di_comp_unit
     size_t HighPC;
     address_range AddressRanges[8];
     
-    di_comp_unit_flags Flags;
+    di_compile_unit_flags Flags;
 };
 
 enum
@@ -130,38 +138,41 @@ struct dbg
     dbg_flags Flags;
     i32 DebugeePID;
     char *DebugeeProgramPath;
+    bool InputChange;
 };
 
 #define MAX_BREAKPOINT_COUNT 8
-breakpoint Breakpoints[MAX_BREAKPOINT_COUNT];
+breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;
 
 #define MAX_DISASM_INSTRUCTIONS 31
 disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS];
 u32 DisasmInstCount = 0;
 
-#define MAX_SOURCE_FILES 8
-src_file SourceFiles[MAX_SOURCE_FILES];
-u32 SourceFilesCount = 0;
+#define MAX_DI_SOURCE_FILES 8
+di_src_file *DISourceFiles = 0x0;
+u32 DISourceFilesCount = 0;
+
+#define MAX_DI_SOURCE_LINES (1 << 15)
+di_src_line *DISourceLines = 0x0;
+u32 DISourceLinesCount = 0;
+
+#define MAX_DI_FUNCTIONS 128
+di_function *DIFunctions = 0x0;
+u32 DIFuctionsCount = 0;
+
+#define MAX_DI_COMPILE_UNITS 16
+di_compile_unit *DICompileUnits = 0x0;
+u32 DICompileUnitsCount = 0;
+
+di_frame_info DIFrameInfo = {};
 
 csh DisAsmHandle;
 user_regs_struct Regs;
 
-#define MAX_DW_LINE_TABLE_ENTRIES 256
-di_src_line DWLineTable[MAX_DW_LINE_TABLE_ENTRIES];
-u32 DWLineEntriesCount = 0;
-
-#define MAX_DW_FUNCTIONS 32
-dwarf_function DWFunctions[MAX_DW_FUNCTIONS];
-u32 DWFunctionsCount = 0;
-
-#define MAX_DW_COMP_UNITS 16
-di_comp_unit DICompUnits[MAX_DW_COMP_UNITS];
-u32 DICompUnitsCount = 0;
-
-di_frame_info DIFrameInfo = {};
-
 dbg Debuger;
+
+button KeyboardButtons[GLFW_KEY_LAST] = {};
 
 ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
