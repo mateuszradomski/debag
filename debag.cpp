@@ -400,7 +400,11 @@ DisassembleAroundAddress(size_t Address, i32 DebugeePID)
         InstructionAddress += Instruction->size;
         
         assert(strlen(Instruction->mnemonic) < sizeof(DisasmInst[I].Mnemonic));
-        assert(strlen(Instruction->op_str) < sizeof(DisasmInst[I].Operation));
+        if(!(strlen(Instruction->op_str) < sizeof(DisasmInst[I].Operation)))
+        {
+            printf("strlen(Instruction->op_str) = %ld\n", strlen(Instruction->op_str));
+            assert(false);
+        }
         strcpy(DisasmInst[I].Mnemonic, Instruction->mnemonic);
         strcpy(DisasmInst[I].Operation, Instruction->op_str);
         DisasmInstCount++;
