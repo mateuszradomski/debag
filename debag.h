@@ -51,7 +51,7 @@ struct disasm_inst
 {
     size_t Address;
     char Mnemonic[16];
-    char Operation[32];
+    char Operation[48];
 };
 
 struct address_range
@@ -125,6 +125,13 @@ struct di_compile_unit
     di_compile_unit_flags Flags;
 };
 
+struct di_base_type
+{
+    size_t DIEOffset;
+    u32 ByteSize;
+    u32 Encoding;
+};
+
 enum
 {
     DBG_FLAG_NULL = 0x0,
@@ -139,6 +146,7 @@ struct dbg
     i32 DebugeePID;
     char *DebugeeProgramPath;
     bool InputChange;
+    char ProgramArgs[128];
 };
 
 #define MAX_BREAKPOINT_COUNT 8
@@ -164,6 +172,10 @@ u32 DIFuctionsCount = 0;
 #define MAX_DI_COMPILE_UNITS 16
 di_compile_unit *DICompileUnits = 0x0;
 u32 DICompileUnitsCount = 0;
+
+#define MAX_DI_BASE_TYPES 24
+di_base_type DIBaseTypes[MAX_DI_BASE_TYPES];
+u32 DIBaseTypesCount = 0;
 
 di_frame_info DIFrameInfo = {};
 

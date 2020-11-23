@@ -47,6 +47,10 @@ WaitForSignal(i32 DebugeePID)
             }break;
         }
     }
+    if(SigInfo.si_signo == SIGSEGV)
+    {
+        printf("Program seg faulted\n");
+    }
 }
 
 static breakpoint *
@@ -164,6 +168,8 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine();
     
+    //printf("Range.Start = %lX, Range.End = %lX\n", Range.Start, Range.End);
+    
     breakpoint TempBreakpoints[8] = {};
     u32 TempBreakpointsCount = 0;
     
@@ -230,6 +236,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             // values i.e. jump tables
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
+            //printf("Breaking because of call\n");
             size_t FunctionAddress = Instruction->detail->x86.operands[0].imm;
             
             for(u32 I = 0; I < DICompileUnitsCount; I++)
@@ -247,6 +254,8 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         if(Type & INST_TYPE_RET)
         {
             size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
+            
+            //printf("Breaking because of return: %lX\n", ReturnAddress);
             
             for(u32 I = 0; I < DICompileUnitsCount; I++)
             {
@@ -269,12 +278,21 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             // that are not specified by fixed memory locations but rather register
             // values i.e. jump tables
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
+            // TODO(mateusz): When at a for loop, we have to do a next twice,
+            // because it jumps to somewhere and sets somethings up, maybe
+            // I can somehow make it not happen, and not set a breakpoint there.
+            // That would make it so that only one next call is needed to go
+            // over a for loop init.
             
             size_t OperandAddress = Instruction->detail->x86.operands[0].imm;
-            
-            breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
-            BreakpointEnable(&BP);
-            TempBreakpoints[TempBreakpointsCount++] = BP;
+            if(!AddressBetween(OperandAddress, Range.Start, Range.End))
+            {
+                //printf("Breaking because of rel branch: %lX\n", OperandAddress);
+                
+                breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
+                BreakpointEnable(&BP);
+                TempBreakpoints[TempBreakpointsCount++] = BP;
+            }
         }
         
         cs_free(Instruction, 1);
@@ -282,8 +300,11 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
     ContinueProgram(DebugeePID);
     
+    //printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
+    
     for(u32 I = 0; I < TempBreakpointsCount; I++)
     {
+        //printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
 }

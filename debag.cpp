@@ -130,6 +130,22 @@ StringCopy(char *Dest, char *Src)
     Dest[0] = '\0';
 }
 
+static void
+StringConcat(char *Dest, char *Src)
+{
+    while(Dest[0])
+    {
+        Dest++;
+    }
+    
+    while(Src[0])
+    {
+        Dest[0] = Src[0];
+        Dest++;
+        Src++;
+    }
+}
+
 static bool
 StringsMatch(char *Str0, char *Str1)
 {
@@ -304,6 +320,107 @@ FindFunctionConfiningAddress(size_t Address)
     return Result;
 }
 
+static di_base_type *
+FindBaseTypeByOffset(size_t BTDIEOffset)
+{
+    di_base_type *Type = 0x0;
+    for(u32 I = 0; I < DIBaseTypesCount; I++)
+    {
+        if(DIBaseTypes[I].DIEOffset == BTDIEOffset)
+        {
+            Type = &DIBaseTypes[I];
+            break;
+        }
+    }
+    
+    return Type;
+}
+
+static char *
+BaseTypeToFormatStr(di_base_type *Type)
+{
+    char *Result = "";
+    if(!Type) {
+        return Result;
+    }
+    
+    switch(Type->ByteSize)
+    {
+        case 1:
+        {
+            if(Type->Encoding == DW_ATE_signed)
+            {
+                Result = "%c";
+            }
+            else
+            {
+                Result = "%d";
+            }
+        }break;
+        case 2:
+        {
+            Result = "%d";
+        }break;
+        case 4:
+        {
+            if(Type->Encoding == DW_ATE_unsigned)
+            {
+                Result = "%u";
+            }
+            else if(Type->Encoding == DW_ATE_float)
+            {
+                Result = "%f";
+            }
+            else
+            {
+                Result = "%d";
+            }
+        }break;
+        case 8:
+        {
+            if(Type->Encoding == DW_ATE_unsigned)
+            {
+                Result = "%llu";
+            }
+            else if(Type->Encoding == DW_ATE_float)
+            {
+                Result = "%f";
+            }
+            else
+            {
+                Result = "%lld";
+            }
+        }break;
+        default:
+        {
+            printf("Unsupported byte size = %d", Type->ByteSize);
+            Result = "";
+        }break;
+    }
+    
+    return Result;
+}
+
+static char *
+BaseTypeToFormatStr(size_t BTDIEOffset)
+{
+    di_base_type *Type = FindBaseTypeByOffset(BTDIEOffset);
+    
+    return BaseTypeToFormatStr(Type);
+}
+
+static bool
+BaseTypeIsFloat(di_base_type *Type)
+{
+    return Type && Type->Encoding == DW_ATE_float && Type->ByteSize == 4;
+}
+
+static bool
+BaseTypeIsDoubleFloat(di_base_type *Type)
+{
+    return Type && Type->Encoding == DW_ATE_float && Type->ByteSize == 8;
+}
+
 static void
 ImGuiShowRegisters(user_regs_struct Regs)
 {
@@ -400,11 +517,7 @@ DisassembleAroundAddress(size_t Address, i32 DebugeePID)
         InstructionAddress += Instruction->size;
         
         assert(strlen(Instruction->mnemonic) < sizeof(DisasmInst[I].Mnemonic));
-        if(!(strlen(Instruction->op_str) < sizeof(DisasmInst[I].Operation)))
-        {
-            printf("strlen(Instruction->op_str) = %ld\n", strlen(Instruction->op_str));
-            assert(false);
-        }
+        assert(strlen(Instruction->op_str) < sizeof(DisasmInst[I].Operation));
         strcpy(DisasmInst[I].Mnemonic, Instruction->mnemonic);
         strcpy(DisasmInst[I].Operation, Instruction->op_str);
         DisasmInstCount++;
@@ -570,6 +683,8 @@ AddressRangeCurrentAndNextLine()
                     di_src_line *Next = &DISourceLines[I];
                     if(Next->LineNum != Current->LineNum)
                     {
+                        //printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
+                        //printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
                         Result = LineAddressRangeBetween(Current, Next);
                         goto end;
                     }
@@ -595,6 +710,37 @@ FindEntryPointAddress()
             Result = DIFunctions[I].LowPC;
             break;
         }
+    }
+    
+    return Result;
+}
+
+static size_t
+GetDebugeeLoadAddress(i32 DebugeePID)
+{
+    char Path[64] = {};
+    sprintf(Path, "/proc/%d/maps", DebugeePID);
+    
+    char AddrStr[16] = {};
+    FILE *FileHandle = fopen(Path, "r");
+    fread(AddrStr, sizeof(AddrStr), 1, FileHandle);
+    
+    u32 Length = sizeof(AddrStr);
+    for(u32 I = 0; I < sizeof(AddrStr); I++)
+    {
+        if(AddrStr[I] == '-')
+        {
+            Length = I;
+            break;
+        }
+    }
+    
+    size_t Result = 0x0;
+    
+    for(u32 I = 0; I < Length; I++)
+    {
+        size_t HexToDec = (AddrStr[I] - '0') > 10 ? (AddrStr[I] - 'a') + 10 : (AddrStr[I] - '0');
+        Result += HexToDec << (4 * (Length - I - 1));
     }
     
     return Result;
@@ -753,7 +899,6 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                         DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
                         
                         assert(LocCount == 1);
-                        
                         for(u32 I = 0; I < LocCount; I++)
                         {
                             Dwarf_Small LLEOut = 0;
@@ -887,6 +1032,54 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                 
             }
         }break;
+        case DW_TAG_base_type:
+        {
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_base_type *Type = (di_base_type *)&DIBaseTypes[DIBaseTypesCount++];
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            Type->DIEOffset = DIEOffset;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+#if 0
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        printf("%s", Name);
+#endif
+                    }break;
+                    case DW_AT_encoding:
+                    {
+                        Dwarf_Unsigned Encoding = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &Encoding, Error));
+                        Type->Encoding = Encoding;
+                    }break;
+                    case DW_AT_byte_size:
+                    {
+                        Dwarf_Unsigned ByteSize = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &ByteSize, Error));
+                        
+                        Type->ByteSize = ByteSize;
+                    }break;
+                    default:
+                    {
+                        const char *AttrName = 0x0;
+                        DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                        printf("Base Type Unhandled Attribute: %s\n", AttrName);
+                    }break;
+                }
+            }
+        }break;
         default:
         {
             const char *TagName = 0x0;
@@ -1011,6 +1204,33 @@ UpdateInfo()
 static void
 DebugeeStart()
 {
+#if 0    
+    char *ProgramArgs[16] = {};
+    ProgramArgs[0] = Debuger.DebugeeProgramPath;
+    ProgramArgs[1] = Debuger.ProgramArgs;
+    
+    char *CurrentChar = Debuger.ProgramArgs;
+    for(u32 I = 2; CurrentChar[0];)
+    {
+        if(CurrentChar[0] == ' ')
+        {
+            CurrentChar[0] = '\0';
+            CurrentChar++;
+            ProgramArgs[I++] = CurrentChar;
+        }
+        
+        CurrentChar++;
+    }
+    
+    char **WP = ProgramArgs;
+    while(*WP)
+    {
+        printf("%s\n", *WP);
+        WP++;
+    }
+    
+    assert(false);
+#endif
     i32 ProcessID = fork();
     
     // Child process
@@ -1018,7 +1238,25 @@ DebugeeStart()
     {
         personality(ADDR_NO_RANDOMIZE);
         ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
-        execl(Debuger.DebugeeProgramPath, Debuger.DebugeeProgramPath, NULL);
+        
+        char *ProgramArgs[16] = {};
+        ProgramArgs[0] = Debuger.DebugeeProgramPath;
+        ProgramArgs[1] = Debuger.ProgramArgs;
+        
+        char *CurrentChar = Debuger.ProgramArgs;
+        for(u32 I = 2; CurrentChar[0];)
+        {
+            if(CurrentChar[0] == ' ')
+            {
+                CurrentChar[0] = '\0';
+                CurrentChar++;
+                ProgramArgs[I++] = CurrentChar;
+            }
+            
+            CurrentChar++;
+        }
+        
+        execv(Debuger.DebugeeProgramPath, ProgramArgs);
     }
     else
     {
@@ -1031,11 +1269,11 @@ DebugeeStart()
 static void
 DebugStart()
 {
-    Breakpoints = (breakpoint *)malloc(MAX_BREAKPOINT_COUNT * sizeof(breakpoint));
-    DISourceFiles = (di_src_file *)malloc(MAX_DI_SOURCE_FILES * sizeof(di_src_file));
-    DISourceLines = (di_src_line *)malloc(MAX_DI_SOURCE_LINES * sizeof(di_src_line));
-    DIFunctions = (di_function *)malloc(MAX_DI_FUNCTIONS * sizeof(di_function));
-    DICompileUnits = (di_compile_unit *)malloc(MAX_DI_COMPILE_UNITS * sizeof(di_compile_unit));
+    Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
+    DISourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
+    DISourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
+    DIFunctions = (di_function *)calloc(MAX_DI_FUNCTIONS, sizeof(di_function));
+    DICompileUnits = (di_compile_unit *)calloc(MAX_DI_COMPILE_UNITS, sizeof(di_compile_unit));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(800, 600, "debag", NULL, NULL);
@@ -1061,10 +1299,14 @@ DebugStart()
     char TextBuff3[64] = {};
     strcpy(TextBuff3, Debuger.DebugeeProgramPath);
     
+    Debuger.Flags = DBG_FLAG_CHILD_PROCESS_EXITED;
+    
+#if 0    
     if(Debuger.DebugeeProgramPath)
     {
         DebugeeStart();
     }
+#endif
     
     Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -1075,6 +1317,7 @@ DebugStart()
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
     
+#if 0    
     DWARFReadDebug();
     // NOTE(mateusz): For debug purpouses
     size_t EntryPointAddress = FindEntryPointAddress();
@@ -1083,6 +1326,9 @@ DebugStart()
     breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
     BreakpointEnable(&BP);
     Breakpoints[BreakpointCount++] = BP;
+#endif
+    
+    //size_t Addr = GetDebugeeLoadAddress(Debuger.DebugeePID);
     
     while(!glfwWindowShouldClose(Window))
     {
@@ -1091,106 +1337,74 @@ DebugStart()
         
         glClear(GL_COLOR_BUFFER_BIT);
         
-        ImGuiStartFrame();
-        
-        ImGui::Begin("Control window");
-        
-        ImGui::InputText("Program path", TextBuff3, 64, ITFlags);
-        
-        ImGui::InputText("", TextBuff, 64, ITFlags);
-        ImGui::SameLine();
-        
-        if(ImGui::Button("Break"))
+        if(KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
-            u64 Address;
-            
-            if(CharInString(TextBuff, 'x'))
+            //Continue or start program
+            if(Debuger.Flags & DBG_FLAG_CHILD_PROCESS_EXITED)
             {
-                Address = HexStringToInt(TextBuff);
+                DebugeeStart();
+                DWARFReadDebug();
+                
+                // NOTE(mateusz): For debug purpouses
+                size_t EntryPointAddress = FindEntryPointAddress();
+                assert(EntryPointAddress);
+                
+                printf("Setting a breakpoint %lX\n", EntryPointAddress);
+                
+                breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+                BreakpointEnable(&BP);
+                Breakpoints[BreakpointCount++] = BP;
             }
             else
             {
-                Address = atol(TextBuff);
+                ContinueProgram(Debuger.DebugeePID);
             }
-            
-            breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
-            BreakpointEnable(&BP);
-            Breakpoints[BreakpointCount++] = BP;
-            
             UpdateInfo();
         }
         
-        ImGui::InputText("tbr", TextBuff2, 64, ITFlags);
-        ImGui::SameLine();
-        
-        if(ImGui::Button("BreakFunc"))
-        {
-            for(u32 I = 0; I < DIFuctionsCount; I++)
-            {
-                di_function *Func = &DIFunctions[I];
-                if(strcmp(TextBuff2, Func->Name) == 0)
-                {
-                    breakpoint BP = BreakpointCreate(Func->LowPC, Debuger.DebugeePID);
-                    BreakpointEnable(&BP);
-                    Breakpoints[BreakpointCount++] = BP;
-                }
-            }
-            
-            UpdateInfo();
-        }
-        
-        if(ImGui::Button("Continue") || KeyboardButtons[GLFW_KEY_F5].Pressed)
-        {
-            ContinueProgram(Debuger.DebugeePID);
-            UpdateInfo();
-        }
-        
-        if(ImGui::Button("Single Step"))
-        {
-            StepInstruction(Debuger.DebugeePID);
-            UpdateInfo();
-        }
-        
-        if(ImGui::Button("Next") || KeyboardButtons[GLFW_KEY_F10].Pressed)
+        if(KeyboardButtons[GLFW_KEY_F10].Pressed)
         {
             ToNextLine(Debuger.DebugeePID, false);
             UpdateInfo();
         }
         
-        ImGui::SameLine();
-        
-        if(ImGui::Button("Step") || KeyboardButtons[GLFW_KEY_F11].Pressed)
+        if(KeyboardButtons[GLFW_KEY_F11].Pressed)
         {
             ToNextLine(Debuger.DebugeePID, true);
             UpdateInfo();
         }
         
-        if((Debuger.Flags & DBG_FLAG_CHILD_PROCESS_EXITED) && ImGui::Button("Restart process"))
+        ImGuiStartFrame();
+        
+        ImGui::Begin("Control window");
+        
+        for(u32 I = 0; I < DisasmInstCount; I++)
         {
-            DebugeeStart();
+            disasm_inst *Inst = &DisasmInst[I];
             
-            // NOTE(mateusz): For debug purpouses
-            size_t EntryPointAddress = FindEntryPointAddress();
-            assert(EntryPointAddress);
-            
-            breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
-            BreakpointEnable(&BP);
-            Breakpoints[BreakpointCount++] = BP;
-            
-            DWARFReadDebug();
+            if(Inst->Address == Regs.rip)
+            {
+                ImGui::TextColored(CurrentLineColor,
+                                   "0x%" PRIx64 ":\t%s\t\t%s\n",
+                                   Inst->Address, Inst->Mnemonic, Inst->Operation);
+            }
+            else
+            {
+                ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
+                            Inst->Address, Inst->Mnemonic, Inst->Operation);
+            }
         }
         
         ImGui::End();
         
         ImGui::Begin("Program variables");
         
-        if(ImGui::BeginTabBar("Vars", ImGuiTabBarFlags_None))
+        ImGuiTabBarFlags TBFlags = ImGuiTabBarFlags_Reorderable;
+        TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
+        TBFlags |= ImGuiTabBarFlags_FittingPolicyScroll;
+        
+        if(ImGui::BeginTabBar("Vars", TBFlags))
         {
-            if(ImGui::BeginTabItem("x64 Registers"))
-            {
-                ImGuiShowRegisters(Regs);
-                ImGui::EndTabItem();
-            }
             if(ImGui::BeginTabItem("Locals"))
             {
                 di_function *Func = FindFunctionConfiningAddress(Regs.rip);
@@ -1207,15 +1421,128 @@ DebugStart()
                             size_t VarAddress = FBReg + Var->Offset;
                             
                             size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-                            i32 Value = (i32)MachineWord;
-                            ImGui::Text("%s: %d", Var->Name, Value);
+                            
+                            di_base_type *Type = FindBaseTypeByOffset(Var->TypeOffset);
+                            char FormatStr[64] = {};
+                            StringConcat(FormatStr, "%s: ");
+                            StringConcat(FormatStr, BaseTypeToFormatStr(Type));
+                            
+                            float *FloatPtr = (float *)&MachineWord;
+                            double *DoublePtr = (double *)&MachineWord;
+                            
+                            if(BaseTypeIsFloat(Type))
+                            {
+                                ImGui::Text(FormatStr, Var->Name, *FloatPtr);
+                            }
+                            else if(BaseTypeIsDoubleFloat(Type))
+                            {
+                                ImGui::Text(FormatStr, Var->Name, *DoublePtr);
+                            }
+                            else
+                            {
+                                ImGui::Text(FormatStr, Var->Name, MachineWord);
+                            }
                         }
                     }
                 }
                 
                 ImGui::EndTabItem();
             }
-            
+            if(ImGui::BeginTabItem("x64 Registers"))
+            {
+                ImGuiShowRegisters(Regs);
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Control panel"))
+            {
+                ImGui::InputText("Program path", TextBuff3, 64, ITFlags);
+                ImGui::InputText("Program args", Debuger.ProgramArgs, 64, ITFlags);
+                
+                ImGui::InputText("", TextBuff, 64, ITFlags);
+                ImGui::SameLine();
+                
+                if(ImGui::Button("Break"))
+                {
+                    u64 Address;
+                    
+                    if(CharInString(TextBuff, 'x'))
+                    {
+                        Address = HexStringToInt(TextBuff);
+                    }
+                    else
+                    {
+                        Address = atol(TextBuff);
+                    }
+                    
+                    breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
+                    BreakpointEnable(&BP);
+                    Breakpoints[BreakpointCount++] = BP;
+                    
+                    UpdateInfo();
+                }
+                
+                ImGui::InputText("tbr", TextBuff2, 64, ITFlags);
+                ImGui::SameLine();
+                
+                if(ImGui::Button("BreakFunc"))
+                {
+                    for(u32 I = 0; I < DIFuctionsCount; I++)
+                    {
+                        di_function *Func = &DIFunctions[I];
+                        if(strcmp(TextBuff2, Func->Name) == 0)
+                        {
+                            breakpoint BP = BreakpointCreate(Func->LowPC, Debuger.DebugeePID);
+                            BreakpointEnable(&BP);
+                            Breakpoints[BreakpointCount++] = BP;
+                        }
+                    }
+                    
+                    UpdateInfo();
+                }
+                
+                if(ImGui::Button("Continue") || KeyboardButtons[GLFW_KEY_F5].Pressed)
+                {
+                    ContinueProgram(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
+                
+                if(ImGui::Button("Single Step"))
+                {
+                    StepInstruction(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
+                
+                if(ImGui::Button("Next") || KeyboardButtons[GLFW_KEY_F10].Pressed)
+                {
+                    ToNextLine(Debuger.DebugeePID, false);
+                    UpdateInfo();
+                }
+                
+                ImGui::SameLine();
+                
+                if(ImGui::Button("Step") || KeyboardButtons[GLFW_KEY_F11].Pressed)
+                {
+                    ToNextLine(Debuger.DebugeePID, true);
+                    UpdateInfo();
+                }
+                
+                if((Debuger.Flags & DBG_FLAG_CHILD_PROCESS_EXITED) && ImGui::Button("Restart process"))
+                {
+                    DebugeeStart();
+                    
+                    // NOTE(mateusz): For debug purpouses
+                    size_t EntryPointAddress = FindEntryPointAddress();
+                    assert(EntryPointAddress);
+                    
+                    breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+                    BreakpointEnable(&BP);
+                    Breakpoints[BreakpointCount++] = BP;
+                    
+                    DWARFReadDebug();
+                }
+                
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
         
@@ -1224,7 +1551,11 @@ DebugStart()
         
         ImGui::Begin("Listings");
         
-        if(ImGui::BeginTabBar("Source and Disassebmly", ImGuiTabBarFlags_None))
+        TBFlags = ImGuiTabBarFlags_Reorderable;
+        TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
+        TBFlags |= ImGuiTabBarFlags_FittingPolicyScroll;
+        
+        if(ImGui::BeginTabBar("Source and Disassebmly", TBFlags))
         {
             if(ImGui::BeginTabItem("Source code"))
             {
@@ -1270,22 +1601,7 @@ DebugStart()
             }
             if(ImGui::BeginTabItem("Disassembly"))
             {
-                for(u32 I = 0; I < DisasmInstCount; I++)
-                {
-                    disasm_inst *Inst = &DisasmInst[I];
-                    
-                    if(Inst->Address == Regs.rip)
-                    {
-                        ImGui::TextColored(CurrentLineColor,
-                                           "0x%" PRIx64 ":\t%s\t\t%s\n",
-                                           Inst->Address, Inst->Mnemonic, Inst->Operation);
-                    }
-                    else
-                    {
-                        ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
-                                    Inst->Address, Inst->Mnemonic, Inst->Operation);
-                    }
-                }
+                
                 ImGui::EndTabItem();
             }
             
