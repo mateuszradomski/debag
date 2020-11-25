@@ -79,7 +79,7 @@ struct di_variable
     char Name[64];
     
     size_t TypeOffset;
-    bool UsesFBReg;
+    u8 LocationAtom;
     ssize_t Offset;
 };
 
@@ -91,6 +91,7 @@ struct di_frame_info
     Dwarf_Signed FDECount;
 };
 
+#define MAX_DI_PARAMETERS 16
 #define MAX_DI_VARIABLES 16
 
 struct di_function
@@ -102,6 +103,8 @@ struct di_function
     size_t HighPC;
     size_t TypeOffset;
     bool FrameBaseIsCFA;
+    di_variable DIParams[MAX_DI_PARAMETERS];
+    u32 DIParamsCount = 0;
     di_variable DIVariables[MAX_DI_VARIABLES];
     u32 DIVariablesCount = 0;
 };
@@ -130,6 +133,13 @@ struct di_base_type
     size_t DIEOffset;
     u32 ByteSize;
     u32 Encoding;
+};
+
+struct di_typedef
+{
+    char Name[64];
+    size_t DIEOffset;
+    size_t ActualTypeOffset;
 };
 
 enum
@@ -165,7 +175,7 @@ u32 DISourceFilesCount = 0;
 di_src_line *DISourceLines = 0x0;
 u32 DISourceLinesCount = 0;
 
-#define MAX_DI_FUNCTIONS 128
+#define MAX_DI_FUNCTIONS 192
 di_function *DIFunctions = 0x0;
 u32 DIFuctionsCount = 0;
 
@@ -176,6 +186,10 @@ u32 DICompileUnitsCount = 0;
 #define MAX_DI_BASE_TYPES 24
 di_base_type DIBaseTypes[MAX_DI_BASE_TYPES];
 u32 DIBaseTypesCount = 0;
+
+#define MAX_DI_TYPEDEFS 128
+di_base_type DITypedefs[MAX_DI_TYPEDEFS];
+u32 DITypedefsCount = 0;
 
 di_frame_info DIFrameInfo = {};
 

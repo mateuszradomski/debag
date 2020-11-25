@@ -8,6 +8,27 @@ AddressBetween(size_t Address, size_t Lower, size_t Upper)
     return Result;
 }
 
+// TODO(mateusz): This is utter shit, please, PLEASE!!!!
+// Do something about!!!
+static bool
+AddressInDiffrentLine(size_t Address)
+{
+    di_src_line *Current = LineTableFindByAddress(Regs.rip);
+    assert(Current);
+    
+    for(u32 I = 0; I < DISourceLinesCount; I++)
+    {
+        if(Current->Address != DISourceLines[I].Address &&
+           Current->LineNum != DISourceLines[I].LineNum &&
+           DISourceLines[I].Address == Address)
+        {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 static void
 WaitForSignal(i32 DebugeePID)
 {
@@ -285,7 +306,11 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             // over a for loop init.
             
             size_t OperandAddress = Instruction->detail->x86.operands[0].imm;
-            if(!AddressBetween(OperandAddress, Range.Start, Range.End))
+            //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
+            
+            bool Between = AddressBetween(OperandAddress, Range.Start, Range.End);
+            bool DiffrentLine = AddressInDiffrentLine(OperandAddress);
+            if(!Between && DiffrentLine)
             {
                 //printf("Breaking because of rel branch: %lX\n", OperandAddress);
                 

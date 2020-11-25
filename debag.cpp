@@ -481,6 +481,39 @@ ImGuiShowRegisters(user_regs_struct Regs)
     ImGui::Text("gs: %lX", (u64)Regs.gs);
 }
 
+static void
+ImGuiShowVariable(di_variable *Var, size_t FBReg)
+{
+    if(Var->LocationAtom == DW_OP_fbreg)
+    {
+        // TODO(mateusz): Right now only ints
+        size_t VarAddress = FBReg + Var->Offset;
+        
+        size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+        
+        di_base_type *Type = FindBaseTypeByOffset(Var->TypeOffset);
+        char FormatStr[64] = {};
+        StringConcat(FormatStr, "%s: ");
+        StringConcat(FormatStr, BaseTypeToFormatStr(Type));
+        
+        float *FloatPtr = (float *)&MachineWord;
+        double *DoublePtr = (double *)&MachineWord;
+        
+        if(BaseTypeIsFloat(Type))
+        {
+            ImGui::Text(FormatStr, Var->Name, *FloatPtr);
+        }
+        else if(BaseTypeIsDoubleFloat(Type))
+        {
+            ImGui::Text(FormatStr, Var->Name, *DoublePtr);
+        }
+        else
+        {
+            ImGui::Text(FormatStr, Var->Name, MachineWord);
+        }
+    }
+}
+
 static size_t
 PeekDebugeeMemory(size_t Address, i32 DebugeePID)
 {
@@ -933,7 +966,8 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                             AttrTag == DW_AT_decl_column || AttrTag == DW_AT_prototyped ||
                             AttrTag == DW_AT_GNU_all_call_sites ||
                             AttrTag == DW_AT_external ||
-                            AttrTag == DW_AT_GNU_all_tail_call_sites;
+                            AttrTag == DW_AT_GNU_all_tail_call_sites ||
+                            AttrTag == DW_AT_sibling;
                         if(!ignored)
                         {
                             const char *AttrName = 0x0;
@@ -1009,8 +1043,7 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                                 
                                 //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                                 
-                                assert(AtomOut == DW_OP_fbreg);
-                                Var->UsesFBReg = true;
+                                Var->LocationAtom = AtomOut;
                                 Var->Offset = Operand1;
                             }
                         }break;
@@ -1029,7 +1062,93 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                         }break;
                     }
                 }
-                
+            }
+        }break;
+        case DW_TAG_formal_parameter:
+        {
+            // NOTE(mateusz): This is copy pasta from the variable code higher up
+            //printf("Variable\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            // TODO(mateusz): Globals
+            if(DIFuctionsCount)
+            {
+                di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+                di_variable *Param = &Func->DIParams[Func->DIParamsCount++];
+                for(u32 I = 0; I < AttrCount; I++)
+                {
+                    Dwarf_Attribute Attribute = AttrList[I];
+                    Dwarf_Half AttrTag = 0;
+                    DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                    
+                    switch(AttrTag)
+                    {
+                        case DW_AT_name:
+                        {
+                            char *Name = 0x0;
+                            DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                            
+                            StringCopy(Param->Name, Name);
+                        }break;
+                        case DW_AT_type:
+                        {
+                            Dwarf_Off Offset = 0;
+                            DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                            
+                            Param->TypeOffset = Offset;
+                        }break;
+                        case DW_AT_location:
+                        {
+                            Dwarf_Loc_Head_c LocListHead = {};
+                            Dwarf_Unsigned LocCount = 0;
+                            DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
+                            
+                            assert(LocCount == 1);
+                            
+                            for(u32 I = 0; I < LocCount; I++)
+                            {
+                                Dwarf_Small LLEOut = 0;
+                                Dwarf_Addr LowPC = 0;
+                                Dwarf_Addr HighPC = 0;
+                                Dwarf_Unsigned LocListCountOut = 0;
+                                Dwarf_Locdesc_c LocDesc = 0;
+                                Dwarf_Small LocListSourceOut = 0;
+                                Dwarf_Unsigned ExpressionOffsetOut = 0;
+                                Dwarf_Unsigned LocDescOffsetOut = 0;
+                                
+                                DWARF_CALL(dwarf_get_locdesc_entry_c(LocListHead, I, &LLEOut, &LowPC, &HighPC, &LocListCountOut, &LocDesc, &LocListSourceOut, &ExpressionOffsetOut, 
+                                                                     &LocDescOffsetOut, Error));
+                                
+                                Dwarf_Small AtomOut = 0;
+                                Dwarf_Unsigned Operand1 = 0;
+                                Dwarf_Unsigned Operand2 = 0;
+                                Dwarf_Unsigned Operand3 = 0;
+                                Dwarf_Unsigned OffsetBranch = 0;
+                                DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
+                                
+                                //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                                
+                                Param->LocationAtom = AtomOut;
+                                Param->Offset = Operand1;
+                            }
+                        }break;
+                        default:
+                        {
+                            bool ignored = AttrTag == DW_AT_decl_file ||
+                                AttrTag == DW_AT_decl_line ||
+                                AttrTag == DW_AT_decl_column;
+                            
+                            if(!ignored)
+                            {
+                                const char *AttrName = 0x0;
+                                DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                                printf("Variable Unhandled Attribute: %s\n", AttrName);
+                            }
+                        }break;
+                    }
+                }
             }
         }break;
         case DW_TAG_base_type:
@@ -1076,6 +1195,53 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                         const char *AttrName = 0x0;
                         DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
                         printf("Base Type Unhandled Attribute: %s\n", AttrName);
+                    }break;
+                }
+            }
+        }break;
+        case DW_TAG_typedef:
+        {
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_typedef *Typedef = (di_typedef *)&DITypedefs[DITypedefsCount++];
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            Typedef->DIEOffset = DIEOffset;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        StringCopy(Typedef->Name, Name);
+                    }break;
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        Typedef->ActualTypeOffset = Offset;
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_decl_file ||
+                            AttrTag == DW_AT_decl_line ||
+                            AttrTag == DW_AT_decl_column;
+                        
+                        if(!ignored)
+                        {
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Base Type Unhandled Attribute: %s\n", AttrName);
+                        }
                     }break;
                 }
             }
@@ -1411,38 +1577,16 @@ DebugStart()
                 if(Func && Func->FrameBaseIsCFA)
                 {
                     size_t FBReg = DWARFGetCFA(Regs.rip);
+                    for(u32 I = 0; I < Func->DIParamsCount; I++)
+                    {
+                        di_variable *Param = &Func->DIParams[I];
+                        ImGuiShowVariable(Param, FBReg);
+                    }
+                    
                     for(u32 I = 0; I < Func->DIVariablesCount; I++)
                     {
                         di_variable *Var = &Func->DIVariables[I];
-                        
-                        if(Var->UsesFBReg)
-                        {
-                            // TODO(mateusz): Right now only ints
-                            size_t VarAddress = FBReg + Var->Offset;
-                            
-                            size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-                            
-                            di_base_type *Type = FindBaseTypeByOffset(Var->TypeOffset);
-                            char FormatStr[64] = {};
-                            StringConcat(FormatStr, "%s: ");
-                            StringConcat(FormatStr, BaseTypeToFormatStr(Type));
-                            
-                            float *FloatPtr = (float *)&MachineWord;
-                            double *DoublePtr = (double *)&MachineWord;
-                            
-                            if(BaseTypeIsFloat(Type))
-                            {
-                                ImGui::Text(FormatStr, Var->Name, *FloatPtr);
-                            }
-                            else if(BaseTypeIsDoubleFloat(Type))
-                            {
-                                ImGui::Text(FormatStr, Var->Name, *DoublePtr);
-                            }
-                            else
-                            {
-                                ImGui::Text(FormatStr, Var->Name, MachineWord);
-                            }
-                        }
+                        ImGuiShowVariable(Var, FBReg);
                     }
                 }
                 
