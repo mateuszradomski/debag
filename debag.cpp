@@ -1022,7 +1022,7 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
         }break;
         case DW_TAG_lexical_block:
         {
-            printf("libdwarf: Lexical block\n");
+            //printf("libdwarf: Lexical block\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1683,6 +1683,23 @@ DebugStart()
                     {
                         di_variable *Var = &Func->DIFuncLexScope.DIVariables[I];
                         ImGuiShowVariable(Var, FBReg);
+                    }
+                    
+                    for(u32 LexScopeIndex = 0;
+                        LexScopeIndex < Func->DILexScopeCount;
+                        LexScopeIndex++)
+                    {
+                        di_lexical_scope *LexScope = &Func->DILexScopes[LexScopeIndex];
+                        
+                        if(AddressBetween(Regs.rip, LexScope->LowPC, LexScope->HighPC - 1))
+                        {
+                            for(u32 I = 0; I < LexScope->DIVariablesCount; I++)
+                            {
+                                di_variable *Var = &LexScope->DIVariables[I];
+                                ImGuiShowVariable(Var, FBReg);
+                            }
+                        }
+                        
                     }
                 }
                 

@@ -199,7 +199,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine();
     
-    printf("Range.Start = %lX, Range.End = %lX\n", Range.Start, Range.End);
+    //printf("Range.Start = %lX, Range.End = %lX\n", Range.Start, Range.End);
     
     breakpoint TempBreakpoints[8] = {};
     u32 TempBreakpointsCount = 0;
@@ -293,7 +293,6 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             }
             else 
             {
-#if 1
                 size_t CurrentAddress = JumpAddress;
                 while(true)
                 {
@@ -334,7 +333,6 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                         break;
                     }
                 }
-#endif
             }
         }
         
@@ -343,10 +341,10 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
     ContinueProgram(DebugeePID);
     
-    printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
+    //printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
     {
-        printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
+        //printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
     
