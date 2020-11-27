@@ -310,7 +310,8 @@ FindFunctionConfiningAddress(size_t Address)
     
     for(u32 I = 0; I < DIFuctionsCount; I++)
     {
-        if(AddressBetween(Address, DIFunctions[I].LowPC, DIFunctions[I].HighPC))
+        di_function *Func = &DIFunctions[I];
+        if(AddressBetween(Address, Func->DIFuncLexScope.LowPC, Func->DIFuncLexScope.HighPC))
         {
             Result = &DIFunctions[I];
             break;
@@ -522,6 +523,43 @@ PeekDebugeeMemory(size_t Address, i32 DebugeePID)
     MachineWord = ptrace(PTRACE_PEEKDATA, DebugeePID, Address, 0x0);
     
     return MachineWord;
+    
+}
+
+static inst_type
+GetInstructionType(cs_insn *Instruction)
+{
+    inst_type Result = 0;
+    
+    if(Instruction->detail && Instruction->detail->groups_count > 0)
+    {
+        for(i32 GroupIndex = 0;
+            GroupIndex < Instruction->detail->groups_count;
+            GroupIndex++)
+        {
+            switch(Instruction->detail->groups[GroupIndex])
+            {
+                case X86_GRP_JUMP:
+                {
+                    Result |= INST_TYPE_JUMP;
+                }break;
+                case X86_GRP_CALL:
+                {
+                    Result |= INST_TYPE_CALL;
+                }break;
+                case X86_GRP_RET:
+                {
+                    Result |= INST_TYPE_RET;
+                }break;
+                case X86_GRP_BRANCH_RELATIVE:
+                {
+                    Result |= INST_TYPE_RELATIVE_BRANCH;
+                }break;
+            }
+        }
+    }
+    
+    return Result;
 }
 
 static void
@@ -708,7 +746,9 @@ AddressRangeCurrentAndNextLine()
                 {
                     di_function *Func = FindFunctionConfiningAddress(Current->Address);
                     Result.Start = Current->Address;
-                    Result.End = Func->HighPC;
+                    // TODO(mateusz): I think this will be different, in that it will use 
+                    // the lexical scopes
+                    Result.End = Func->DIFuncLexScope.HighPC;
                     goto end;
                 }
                 else
@@ -740,7 +780,7 @@ FindEntryPointAddress()
     {
         if(StringsMatch(DIFunctions[I].Name, "main"))
         {
-            Result = DIFunctions[I].LowPC;
+            Result = DIFunctions[I].DIFuncLexScope.LowPC;
             break;
         }
     }
@@ -887,6 +927,8 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             di_function *Func = &DIFunctions[DIFuctionsCount++];
+            assert(Func->DILexScopeCount == 0);
+            di_lexical_scope *LexScope = &Func->DIFuncLexScope;
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -911,18 +953,18 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                     }break;
                     case DW_AT_low_pc:
                     {
-                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&Func->LowPC;
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&LexScope->LowPC;
                         DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
                     }break;
                     case DW_AT_high_pc:
                     {
-                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&Func->HighPC;
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&LexScope->HighPC;
                         
                         Dwarf_Half Form = 0;
                         Dwarf_Form_Class FormType = {};
                         DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
                         if (FormType == DW_FORM_CLASS_CONSTANT) {
-                            Func->HighPC += Func->LowPC;
+                            LexScope->HighPC += LexScope->LowPC;
                         }
                     }break;
                     case DW_AT_frame_base:
@@ -989,7 +1031,9 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
             if(DIFuctionsCount)
             {
                 di_function *Func = &DIFunctions[DIFuctionsCount - 1];
-                di_variable *Var = &Func->DIVariables[Func->DIVariablesCount++];
+                bool HasLexScopes = Func->DILexScopeCount != 0;
+                di_lexical_scope *LexScope = HasLexScopes ? &Func->DILexScopes[Func->DILexScopeCount - 1] : &Func->DIFuncLexScope;
+                di_variable *Var = &LexScope->DIVariables[LexScope->DIVariablesCount++];
                 for(u32 I = 0; I < AttrCount; I++)
                 {
                     Dwarf_Attribute Attribute = AttrList[I];
@@ -1515,8 +1559,6 @@ DebugStart()
                 size_t EntryPointAddress = FindEntryPointAddress();
                 assert(EntryPointAddress);
                 
-                printf("Setting a breakpoint %lX\n", EntryPointAddress);
-                
                 breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
                 BreakpointEnable(&BP);
                 Breakpoints[BreakpointCount++] = BP;
@@ -1583,9 +1625,9 @@ DebugStart()
                         ImGuiShowVariable(Param, FBReg);
                     }
                     
-                    for(u32 I = 0; I < Func->DIVariablesCount; I++)
+                    for(u32 I = 0; I < Func->DIFuncLexScope.DIVariablesCount; I++)
                     {
-                        di_variable *Var = &Func->DIVariables[I];
+                        di_variable *Var = &Func->DIFuncLexScope.DIVariables[I];
                         ImGuiShowVariable(Var, FBReg);
                     }
                 }
@@ -1635,7 +1677,7 @@ DebugStart()
                         di_function *Func = &DIFunctions[I];
                         if(strcmp(TextBuff2, Func->Name) == 0)
                         {
-                            breakpoint BP = BreakpointCreate(Func->LowPC, Debuger.DebugeePID);
+                            breakpoint BP = BreakpointCreate(Func->DIFuncLexScope.LowPC, Debuger.DebugeePID);
                             BreakpointEnable(&BP);
                             Breakpoints[BreakpointCount++] = BP;
                         }

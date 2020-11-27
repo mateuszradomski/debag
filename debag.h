@@ -91,22 +91,31 @@ struct di_frame_info
     Dwarf_Signed FDECount;
 };
 
-#define MAX_DI_PARAMETERS 16
 #define MAX_DI_VARIABLES 16
+
+struct di_lexical_scope
+{
+    size_t LowPC;
+    size_t HighPC;
+    di_variable DIVariables[MAX_DI_VARIABLES];
+    u32 DIVariablesCount = 0;
+};
+
+#define MAX_DI_PARAMETERS 16
+#define MAX_DI_LEX_SCOPES 16
 
 struct di_function
 {
     char Name[64];
     char FilePath[64];
     
-    size_t LowPC;
-    size_t HighPC;
     size_t TypeOffset;
     bool FrameBaseIsCFA;
     di_variable DIParams[MAX_DI_PARAMETERS];
     u32 DIParamsCount = 0;
-    di_variable DIVariables[MAX_DI_VARIABLES];
-    u32 DIVariablesCount = 0;
+    di_lexical_scope DIFuncLexScope;
+    di_lexical_scope DILexScopes[MAX_DI_LEX_SCOPES];
+    u32 DILexScopeCount = 0;
 };
 
 enum
@@ -225,6 +234,7 @@ static address_range AddressRangeCurrentAndNextLine();
 static void ImGuiShowRegisters(user_regs_struct Regs);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
 static void DisassembleAroundAddress(size_t Address, i32 DebugeePID);
+static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t FindEntryPointAddress();
 static void DebugStart();
 
