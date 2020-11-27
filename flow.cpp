@@ -75,11 +75,11 @@ WaitForSignal(i32 DebugeePID)
 }
 
 static breakpoint *
-BreakpointFind(u64 Address, i32 DebugeePID)
+BreakpointFind(u64 Address, i32 DebugeePID, breakpoint *BPs, u32 Count)
 {
-    for(u32 I = 0; I < BreakpointCount; I++)
+    for(u32 I = 0; I < Count; I++)
     {
-        breakpoint *BP = &Breakpoints[I];
+        breakpoint *BP = &BPs[I];
         if(BP->Address == Address && BP->DebugeePID == DebugeePID && BP->Enabled)
         {
             return BP;
@@ -87,6 +87,16 @@ BreakpointFind(u64 Address, i32 DebugeePID)
     }
     
     return 0x0;
+}
+
+static breakpoint *
+BreakpointFind(u64 Address, i32 DebugeePID)
+{
+    breakpoint *Result = 0x0;
+    
+    Result = BreakpointFind(Address, DebugeePID, Breakpoints, BreakpointCount);
+    
+    return Result;
 }
 
 static bool
@@ -189,7 +199,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine();
     
-    //printf("Range.Start = %lX, Range.End = %lX\n", Range.Start, Range.End);
+    printf("Range.Start = %lX, Range.End = %lX\n", Range.Start, Range.End);
     
     breakpoint TempBreakpoints[8] = {};
     u32 TempBreakpointsCount = 0;
@@ -283,6 +293,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             }
             else 
             {
+#if 1
                 size_t CurrentAddress = JumpAddress;
                 while(true)
                 {
@@ -307,19 +318,23 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                         assert(Instruction->detail->x86.operands[0].imm > 0x100);
                         
                         size_t OperandAddress = Instruction->detail->x86.operands[0].imm;
-                        //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
-                        
-                        //printf("Break condition branch in jump instrs: %lX\n", OperandAddress);
-                        
-                        breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
-                        BreakpointEnable(&BP);
-                        TempBreakpoints[TempBreakpointsCount++] = BP;
+                        if(!BreakpointFind(OperandAddress, DebugeePID, TempBreakpoints, TempBreakpointsCount))
+                        {
+                            //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
+                            
+                            //printf("Break condition branch in jump instrs: %lX\n", OperandAddress);
+                            
+                            breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
+                            BreakpointEnable(&BP);
+                            TempBreakpoints[TempBreakpointsCount++] = BP;
+                        }
                     }
                     else if(!(DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP))
                     {
                         break;
                     }
                 }
+#endif
             }
         }
         
@@ -328,10 +343,10 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
     ContinueProgram(DebugeePID);
     
-    //printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
+    printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
     {
-        //printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
+        printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
     

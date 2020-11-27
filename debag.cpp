@@ -1020,6 +1020,62 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                 }
             }
         }break;
+        case DW_TAG_lexical_block:
+        {
+            printf("libdwarf: Lexical block\n");
+            
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            assert(DIFuctionsCount);
+            di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+            di_lexical_scope *LexScope = &Func->DILexScopes[Func->DILexScopeCount++];
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                
+                switch(AttrTag)
+                {
+                    case DW_AT_low_pc:
+                    {
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&LexScope->LowPC;
+                        DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
+                        
+                        printf("\tLowPC = %lX\n", LexScope->LowPC);
+                    }break;
+                    case DW_AT_high_pc:
+                    {
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&LexScope->HighPC;
+                        
+                        Dwarf_Half Form = 0;
+                        Dwarf_Form_Class FormType = {};
+                        DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
+                        if (FormType == DW_FORM_CLASS_CONSTANT) {
+                            LexScope->HighPC += LexScope->LowPC;
+                        }
+                        
+                        printf("\tHighPC = %lX\n", LexScope->HighPC);
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_decl_file ||
+                            AttrTag == DW_AT_decl_line ||
+                            AttrTag == DW_AT_decl_column;
+                        
+                        if(!ignored)
+                        {
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Variable Unhandled Attribute: %s\n", AttrName);
+                        }
+                    }break;
+                }
+            }
+        }break;
         case DW_TAG_variable:
         {
             //printf("Variable\n");
@@ -1563,10 +1619,8 @@ DebugStart()
                 BreakpointEnable(&BP);
                 Breakpoints[BreakpointCount++] = BP;
             }
-            else
-            {
-                ContinueProgram(Debuger.DebugeePID);
-            }
+            
+            ContinueProgram(Debuger.DebugeePID);
             UpdateInfo();
         }
         
