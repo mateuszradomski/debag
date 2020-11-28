@@ -556,7 +556,12 @@ static void
 UpdateInfo()
 {
     Regs = PeekRegisters(Debuger.DebugeePID);
-    DisassembleAroundAddress(Regs.rip, Debuger.DebugeePID);
+    
+    di_function *Func = FindFunctionConfiningAddress(Regs.rip);
+    if(Func)
+    {
+        DisassembleAroundAddress(Func->DIFuncLexScope.LowPC, Debuger.DebugeePID);
+    }
 }
 
 static void
@@ -639,12 +644,16 @@ DeallocDebugInfo()
     memset(DISourceLines, 0, sizeof(di_src_line) * DISourceLinesCount);
     memset(DIFunctions, 0, sizeof(di_function) * DIFuctionsCount);
     memset(DICompileUnits, 0, sizeof(di_compile_unit) * DICompileUnitsCount);
+    memset(DIVariables, 0, sizeof(di_variable) * DIVariablesCount);
+    memset(DIParams, 0, sizeof(di_variable) * DIParamsCount);
     
     BreakpointCount = 0;
     DisasmInstCount = 0;
     Regs = {};
     DISourceFilesCount = 0;
     DISourceLinesCount = 0;
+    DIVariablesCount = 0;
+    DIParamsCount = 0;
     DIFuctionsCount = 0;
     DICompileUnitsCount = 0;
     DIBaseTypesCount = 0;
@@ -720,6 +729,12 @@ DebugStart()
         //if(!Debuger.InputChange) { goto EndDraw; }
         //else { Debuger.InputChange = false; }
         
+        // NOTE(mateusz): This has to happen before the calls to next lines
+        if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+        {
+            Debuger.Flags ^= DEBUGEE_FLAG_STEPED;
+        }
+        
         glClear(GL_COLOR_BUFFER_BIT);
         
         if(KeyboardButtons[GLFW_KEY_F5].Pressed)
@@ -757,7 +772,7 @@ DebugStart()
         
         ImGuiStartFrame();
         
-        ImGui::Begin("Control window");
+        ImGui::Begin("Disassembly");
         
         for(u32 I = 0; I < DisasmInstCount; I++)
         {
@@ -768,6 +783,11 @@ DebugStart()
                 ImGui::TextColored(CurrentLineColor,
                                    "0x%" PRIx64 ":\t%s\t\t%s\n",
                                    Inst->Address, Inst->Mnemonic, Inst->Operation);
+                
+                if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                {
+                    ImGui::SetScrollHereY(0.5f);
+                }
             }
             else
             {
@@ -970,7 +990,11 @@ DebugStart()
                         {
                             ImGui::TextColored(CurrentLineColor, "%.*s",
                                                LineLength, Prev);
-                            ImGui::SetScrollHereY(0.5f);
+                            
+                            if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                            {
+                                ImGui::SetScrollHereY(0.5f);
+                            }
                         }
                         else
                         {
@@ -988,11 +1012,6 @@ DebugStart()
                         }
                     }
                 }
-                
-                ImGui::EndTabItem();
-            }
-            if(ImGui::BeginTabItem("Disassembly"))
-            {
                 
                 ImGui::EndTabItem();
             }

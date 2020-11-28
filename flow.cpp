@@ -181,6 +181,8 @@ ContinueProgram(i32 DebugeePID)
         StepInstruction(DebugeePID);
     }
     
+    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
+    
     ptrace(PTRACE_CONT, DebugeePID, 0x0, 0x0);
     WaitForSignal(DebugeePID);
 }
@@ -341,5 +343,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         //printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
+    
+    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
     
 }

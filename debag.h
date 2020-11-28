@@ -76,8 +76,9 @@ struct address_range
 
 enum
 {
-    DEBUGEE_FLAG_NULL = 0x0,
-    DEBUGEE_FLAG_RUNNING = 0x1,
+    DEBUGEE_FLAG_NULL = 0,
+    DEBUGEE_FLAG_RUNNING = (1 << 0),
+    DEBUGEE_FLAG_STEPED = (1 << 1),
 };
 
 typedef i32 debugee_flag;
@@ -102,7 +103,7 @@ struct arena
 breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;
 
-#define MAX_DISASM_INSTRUCTIONS 31
+#define MAX_DISASM_INSTRUCTIONS 1024
 disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS];
 u32 DisasmInstCount = 0;
 

@@ -1119,6 +1119,7 @@ DWARFRead()
     DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
     DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
     
+#if 0    
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
     {
         if(CountTable[I])
@@ -1128,6 +1129,7 @@ DWARFRead()
             printf("[%s]: %d\n", A, CountTable[I]);
         }
     }
+#endif
     
     //TIMER_END(0);
     
