@@ -69,11 +69,11 @@ struct di_lexical_scope
     size_t *RangesHighPCs;
     u32 RangesCount = 0;
     
-    di_variable DIVariables[MAX_DI_VARIABLES];
-    u32 DIVariablesCount = 0;
+    //di_variable DIVariables[MAX_DI_VARIABLES];
+    di_variable *Variables;
+    u32 VariablesCount;
 };
 
-#define MAX_DI_PARAMETERS 16
 #define MAX_DI_LEX_SCOPES 16
 
 struct di_function

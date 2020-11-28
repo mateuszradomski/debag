@@ -818,9 +818,9 @@ DebugStart()
                         ImGuiShowVariable(Param, FBReg);
                     }
                     
-                    for(u32 I = 0; I < Func->DIFuncLexScope.DIVariablesCount; I++)
+                    for(u32 I = 0; I < Func->DIFuncLexScope.VariablesCount; I++)
                     {
-                        di_variable *Var = &Func->DIFuncLexScope.DIVariables[I];
+                        di_variable *Var = &Func->DIFuncLexScope.Variables[I];
                         ImGuiShowVariable(Var, FBReg);
                     }
                     
@@ -834,9 +834,9 @@ DebugStart()
                         {
                             if(AddressBetween(Regs.rip, LexScope->LowPC, LexScope->HighPC - 1))
                             {
-                                for(u32 I = 0; I < LexScope->DIVariablesCount; I++)
+                                for(u32 I = 0; I < LexScope->VariablesCount; I++)
                                 {
-                                    di_variable *Var = &LexScope->DIVariables[I];
+                                    di_variable *Var = &LexScope->Variables[I];
                                     ImGuiShowVariable(Var, FBReg);
                                 }
                             }
@@ -847,9 +847,9 @@ DebugStart()
                             {
                                 if(AddressBetween(Regs.rip, LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
                                 {
-                                    for(u32 I = 0; I < LexScope->DIVariablesCount; I++)
+                                    for(u32 I = 0; I < LexScope->VariablesCount; I++)
                                     {
-                                        di_variable *Var = &LexScope->DIVariables[I];
+                                        di_variable *Var = &LexScope->Variables[I];
                                         ImGuiShowVariable(Var, FBReg);
                                     }
                                 }

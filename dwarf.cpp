@@ -681,13 +681,25 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            // TODO(mateusz): Globals
+            di_variable *Var = &DIVariables[DIVariablesCount++];
+            
+            // NOTE(mateusz): Globals
             if(DIFuctionsCount)
             {
-                di_function *Func = &DIFunctions[DIFuctionsCount - 1];
-                bool HasLexScopes = Func->DILexScopeCount != 0;
-                di_lexical_scope *LexScope = HasLexScopes ? &Func->DILexScopes[Func->DILexScopeCount - 1] : &Func->DIFuncLexScope;
-                di_variable *Var = &LexScope->DIVariables[LexScope->DIVariablesCount++];
+                if(DIFuctionsCount)
+                {
+                    
+                    di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+                    bool HasLexScopes = Func->DILexScopeCount != 0;
+                    di_lexical_scope *LexScope = HasLexScopes ? &Func->DILexScopes[Func->DILexScopeCount - 1] : &Func->DIFuncLexScope;
+                    if(!LexScope->Variables)
+                    {
+                        LexScope->Variables = Var;
+                    }
+                    
+                    LexScope->VariablesCount += 1;
+                }
+                
                 for(u32 I = 0; I < AttrCount; I++)
                 {
                     Dwarf_Attribute Attribute = AttrList[I];
