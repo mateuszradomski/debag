@@ -112,6 +112,9 @@ user_regs_struct Regs;
 
 dbg Debuger;
 
+u32 WindowWidth = 800;
+u32 WindowHeight = 600;
+
 button KeyboardButtons[GLFW_KEY_LAST] = {};
 
 ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);

@@ -673,7 +673,7 @@ DebugStart()
     DISourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
     
     glfwInit();
-    GLFWwindow *Window = glfwCreateWindow(800, 600, "debag", NULL, NULL);
+    GLFWwindow *Window = glfwCreateWindow(WindowWidth, WindowHeight, "debag", NULL, NULL);
     glfwMakeContextCurrent(Window);
     glewInit();
     
@@ -769,8 +769,8 @@ DebugStart()
         ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
         ImGui::Begin("Disassembly", 0x0, WinFlags);
         
-        ImGui::SetWindowPos(ImVec2(400, 0));
-        ImGui::SetWindowSize(ImVec2(400, 400));
+        ImGui::SetWindowPos(ImVec2(WindowWidth / 2, 0));
+        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
         
         for(u32 I = 0; I < DisasmInstCount; I++)
         {
@@ -799,7 +799,8 @@ DebugStart()
         ImGui::Begin("Listings", 0x0, WinFlags);
         
         ImGui::SetWindowPos(ImVec2(0, 0));
-        ImGui::SetWindowSize(ImVec2(400, 400));
+        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
+        
         {
             di_src_line *Line = LineTableFindByAddress(Regs.rip);
             
@@ -849,8 +850,8 @@ DebugStart()
         
         ImGui::Begin("Program variables", 0x0, WinFlags);
         
-        ImGui::SetWindowPos(ImVec2(0, 400));
-        ImGui::SetWindowSize(ImVec2(800, 200));
+        ImGui::SetWindowPos(ImVec2(0, (WindowHeight / 3) * 2));
+        ImGui::SetWindowSize(ImVec2(WindowWidth, WindowHeight / 3));
         
         ImGuiTabBarFlags TBFlags = ImGuiTabBarFlags_Reorderable;
         TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
