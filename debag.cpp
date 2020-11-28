@@ -776,7 +776,7 @@ DebugStart()
         
         ImGuiStartFrame();
         
-        ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
         ImGui::Begin("Disassembly", 0x0, WinFlags);
         
         ImGui::SetWindowPos(ImVec2(WindowWidth / 2, 0));
