@@ -594,6 +594,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                 Func->LexScopes = LexScope;
             }
             
+            Func->LexScopesCount += 1;
+            
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
