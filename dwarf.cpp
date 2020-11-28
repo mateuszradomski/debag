@@ -51,7 +51,7 @@ FindFunctionConfiningAddress(size_t Address)
     for(u32 I = 0; I < DIFuctionsCount; I++)
     {
         di_function *Func = &DIFunctions[I];
-        if(AddressBetween(Address, Func->DIFuncLexScope.LowPC, Func->DIFuncLexScope.HighPC))
+        if(AddressBetween(Address, Func->FuncLexScope.LowPC, Func->FuncLexScope.HighPC))
         {
             Result = &DIFunctions[I];
             break;
@@ -299,7 +299,7 @@ AddressRangeCurrentAndNextLine()
                     Result.Start = Current->Address;
                     // TODO(mateusz): I think this will be different, in that it will use 
                     // the lexical scopes
-                    Result.End = Func->DIFuncLexScope.HighPC;
+                    Result.End = Func->FuncLexScope.HighPC;
                     goto end;
                 }
                 else
@@ -331,7 +331,7 @@ FindEntryPointAddress()
     {
         if(StringsMatch(DIFunctions[I].Name, "main"))
         {
-            Result = DIFunctions[I].DIFuncLexScope.LowPC;
+            Result = DIFunctions[I].FuncLexScope.LowPC;
             break;
         }
     }
@@ -482,8 +482,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             di_function *Func = &DIFunctions[DIFuctionsCount++];
-            assert(Func->DILexScopeCount == 0);
-            di_lexical_scope *LexScope = &Func->DIFuncLexScope;
+            assert(Func->LexScopesCount == 0);
+            di_lexical_scope *LexScope = &Func->FuncLexScope;
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -586,8 +586,13 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             assert(DIFuctionsCount);
+            
+            di_lexical_scope *LexScope = &DILexScopes[DILexScopesCount++];
             di_function *Func = &DIFunctions[DIFuctionsCount - 1];
-            di_lexical_scope *LexScope = &Func->DILexScopes[Func->DILexScopeCount++];
+            if(!Func->LexScopes)
+            {
+                Func->LexScopes = LexScope;
+            }
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -690,8 +695,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                 {
                     
                     di_function *Func = &DIFunctions[DIFuctionsCount - 1];
-                    bool HasLexScopes = Func->DILexScopeCount != 0;
-                    di_lexical_scope *LexScope = HasLexScopes ? &Func->DILexScopes[Func->DILexScopeCount - 1] : &Func->DIFuncLexScope;
+                    bool HasLexScopes = Func->LexScopesCount != 0;
+                    di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
                     if(!LexScope->Variables)
                     {
                         LexScope->Variables = Var;
@@ -1130,6 +1135,7 @@ DWARFRead()
     DIPointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
     DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
     DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
+    DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
     
 #if 0    
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)

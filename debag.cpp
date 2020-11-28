@@ -560,7 +560,7 @@ UpdateInfo()
     di_function *Func = FindFunctionConfiningAddress(Regs.rip);
     if(Func)
     {
-        DisassembleAroundAddress(Func->DIFuncLexScope.LowPC, Debuger.DebugeePID);
+        DisassembleAroundAddress(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
     }
 }
 
@@ -659,6 +659,7 @@ DeallocDebugInfo()
     DIBaseTypesCount = 0;
     DITypedefsCount = 0;
     DIPointerTypesCount = 0;
+    DILexScopesCount = 0;
     DIFrameInfo = {};
     ArenaDestroy(DIArena);
     DIArena = 0x0;
@@ -694,13 +695,6 @@ DebugStart()
     char TextBuff2[64] = {};
     char TextBuff3[64] = {};
     strcpy(TextBuff3, Debuger.DebugeeProgramPath);
-    
-#if 0    
-    if(Debuger.DebugeeProgramPath)
-    {
-        DebugeeStart();
-    }
-#endif
     
     Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -772,7 +766,11 @@ DebugStart()
         
         ImGuiStartFrame();
         
-        ImGui::Begin("Disassembly");
+        ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        ImGui::Begin("Disassembly", 0x0, WinFlags);
+        
+        ImGui::SetWindowPos(ImVec2(400, 0));
+        ImGui::SetWindowSize(ImVec2(400, 400));
         
         for(u32 I = 0; I < DisasmInstCount; I++)
         {
@@ -798,7 +796,61 @@ DebugStart()
         
         ImGui::End();
         
-        ImGui::Begin("Program variables");
+        ImGui::Begin("Listings", 0x0, WinFlags);
+        
+        ImGui::SetWindowPos(ImVec2(0, 0));
+        ImGui::SetWindowSize(ImVec2(400, 400));
+        {
+            di_src_line *Line = LineTableFindByAddress(Regs.rip);
+            
+            if(Line)
+            {
+                di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
+                
+                char *LinePtr = Src->Content;
+                char *Prev = 0x0;
+                for(u32 I = 0; I < Src->LineCount + 1; I++)
+                {
+                    Prev = LinePtr;
+                    LinePtr = strchr(LinePtr, '\n') + 1;
+                    u32 LineLength = (u64)LinePtr - (u64)Prev;
+                    
+                    // NOTE(mateusz): Lines are indexed from 1
+                    if(Line->LineNum == I + 1)
+                    {
+                        ImGui::TextColored(CurrentLineColor, "%.*s",
+                                           LineLength, Prev);
+                        
+                        if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                        {
+                            ImGui::SetScrollHereY(0.5f);
+                        }
+                    }
+                    else
+                    {
+                        di_src_line *DrawingLine = LineTableFindByLineNum(I + 1);
+                        
+                        if(DrawingLine && BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))
+                        {
+                            ImGui::TextColored(BreakpointLineColor, "%.*s",
+                                               LineLength, Prev);
+                        }
+                        else
+                        {
+                            ImGui::Text("%.*s", LineLength, Prev);
+                        }
+                    }
+                }
+            }
+            
+        }
+        
+        ImGui::End();
+        
+        ImGui::Begin("Program variables", 0x0, WinFlags);
+        
+        ImGui::SetWindowPos(ImVec2(0, 400));
+        ImGui::SetWindowSize(ImVec2(800, 200));
         
         ImGuiTabBarFlags TBFlags = ImGuiTabBarFlags_Reorderable;
         TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
@@ -818,17 +870,17 @@ DebugStart()
                         ImGuiShowVariable(Param, FBReg);
                     }
                     
-                    for(u32 I = 0; I < Func->DIFuncLexScope.VariablesCount; I++)
+                    for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
                     {
-                        di_variable *Var = &Func->DIFuncLexScope.Variables[I];
+                        di_variable *Var = &Func->FuncLexScope.Variables[I];
                         ImGuiShowVariable(Var, FBReg);
                     }
                     
                     for(u32 LexScopeIndex = 0;
-                        LexScopeIndex < Func->DILexScopeCount;
+                        LexScopeIndex < Func->LexScopesCount;
                         LexScopeIndex++)
                     {
-                        di_lexical_scope *LexScope = &Func->DILexScopes[LexScopeIndex];
+                        di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
                         
                         if(LexScope->RangesCount == 0)
                         {
@@ -903,7 +955,7 @@ DebugStart()
                         di_function *Func = &DIFunctions[I];
                         if(strcmp(TextBuff2, Func->Name) == 0)
                         {
-                            breakpoint BP = BreakpointCreate(Func->DIFuncLexScope.LowPC, Debuger.DebugeePID);
+                            breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
                             BreakpointEnable(&BP);
                             Breakpoints[BreakpointCount++] = BP;
                         }
@@ -958,66 +1010,6 @@ DebugStart()
             ImGui::EndTabBar();
         }
         
-        
-        ImGui::End();
-        
-        ImGui::Begin("Listings");
-        
-        TBFlags = ImGuiTabBarFlags_Reorderable;
-        TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
-        TBFlags |= ImGuiTabBarFlags_FittingPolicyScroll;
-        
-        if(ImGui::BeginTabBar("Source and Disassebmly", TBFlags))
-        {
-            if(ImGui::BeginTabItem("Source code"))
-            {
-                di_src_line *Line = LineTableFindByAddress(Regs.rip);
-                
-                if(Line)
-                {
-                    di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
-                    
-                    char *LinePtr = Src->Content;
-                    char *Prev = 0x0;
-                    for(u32 I = 0; I < Src->LineCount + 1; I++)
-                    {
-                        Prev = LinePtr;
-                        LinePtr = strchr(LinePtr, '\n') + 1;
-                        u32 LineLength = (u64)LinePtr - (u64)Prev;
-                        
-                        // NOTE(mateusz): Lines are indexed from 1
-                        if(Line->LineNum == I + 1)
-                        {
-                            ImGui::TextColored(CurrentLineColor, "%.*s",
-                                               LineLength, Prev);
-                            
-                            if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
-                            {
-                                ImGui::SetScrollHereY(0.5f);
-                            }
-                        }
-                        else
-                        {
-                            di_src_line *DrawingLine = LineTableFindByLineNum(I + 1);
-                            
-                            if(DrawingLine && BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))
-                            {
-                                ImGui::TextColored(BreakpointLineColor, "%.*s",
-                                                   LineLength, Prev);
-                            }
-                            else
-                            {
-                                ImGui::Text("%.*s", LineLength, Prev);
-                            }
-                        }
-                    }
-                }
-                
-                ImGui::EndTabItem();
-            }
-            
-            ImGui::EndTabBar();
-        }
         
         ImGui::End();
         

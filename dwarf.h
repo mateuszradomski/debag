@@ -69,7 +69,6 @@ struct di_lexical_scope
     size_t *RangesHighPCs;
     u32 RangesCount = 0;
     
-    //di_variable DIVariables[MAX_DI_VARIABLES];
     di_variable *Variables;
     u32 VariablesCount;
 };
@@ -84,9 +83,9 @@ struct di_function
     bool FrameBaseIsCFA;
     di_variable *Params;
     u32 ParamCount;
-    di_lexical_scope DIFuncLexScope;
-    di_lexical_scope DILexScopes[MAX_DI_LEX_SCOPES];
-    u32 DILexScopeCount = 0;
+    di_lexical_scope FuncLexScope;
+    di_lexical_scope *LexScopes;
+    u32 LexScopesCount;
 };
 
 enum
@@ -132,6 +131,9 @@ u32 DIVariablesCount = 0;
 
 di_variable *DIParams = 0x0;
 u32 DIParamsCount = 0;
+
+di_lexical_scope *DILexScopes = 0x0;
+u32 DILexScopesCount;
 
 di_function *DIFunctions = 0x0;
 u32 DIFuctionsCount = 0;
