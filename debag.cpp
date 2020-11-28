@@ -531,7 +531,7 @@ GetInstructionType(cs_insn *Instruction)
 {
     inst_type Result = 0;
     
-    if(Instruction->detail && Instruction->detail->groups_count > 0)
+    if(Instruction->detail)
     {
         for(i32 GroupIndex = 0;
             GroupIndex < Instruction->detail->groups_count;
@@ -1040,12 +1040,52 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                 
                 switch(AttrTag)
                 {
+                    case DW_AT_ranges:
+                    {
+                        Dwarf_Ranges *Ranges = 0x0;
+                        Dwarf_Signed RangesCount = 0;
+                        Dwarf_Unsigned ByteCount = 0;
+                        
+                        Dwarf_Off DebugRangesOffset = 0;
+                        DWARF_CALL(dwarf_global_formref(Attribute, &DebugRangesOffset, Error));
+                        
+                        DWARF_CALL(dwarf_get_ranges_a(Debug, DebugRangesOffset, DIE, &Ranges,
+                                                      &RangesCount, &ByteCount, Error));
+                        
+                        di_compile_unit *CU = &DICompileUnits[DICompileUnitsCount - 1];
+                        size_t SelectedAddress = 0x0;
+                        for(u32 I = 0; I < RangesCount; I++)
+                        {
+                            switch(Ranges[I].dwr_type)
+                            {
+                                case DW_RANGES_ENTRY:
+                                {
+                                    size_t RLowPC = CU->LowPC + Ranges[I].dwr_addr1 + SelectedAddress;
+                                    size_t RHighPC = CU->LowPC + Ranges[I].dwr_addr2 + SelectedAddress;
+                                    
+                                    u32 RIndex = LexScope->RangesCount++;
+                                    LexScope->RangesLowPCs[RIndex] = RLowPC;
+                                    LexScope->RangesHighPCs[RIndex] = RHighPC;
+                                }break;
+                                case DW_RANGES_ADDRESS_SELECTION:
+                                {
+                                    SelectedAddress = Ranges[I].dwr_addr2;
+                                }break;
+                                case DW_RANGES_END:
+                                {
+                                    break;
+                                }break;
+                                default:
+                                {
+                                    assert(false);
+                                };
+                            }
+                        }
+                    }break;
                     case DW_AT_low_pc:
                     {
                         Dwarf_Addr *WritePoint = (Dwarf_Addr *)&LexScope->LowPC;
                         DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
-                        
-                        printf("\tLowPC = %lX\n", LexScope->LowPC);
                     }break;
                     case DW_AT_high_pc:
                     {
@@ -1057,8 +1097,6 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                         if (FormType == DW_FORM_CLASS_CONSTANT) {
                             LexScope->HighPC += LexScope->LowPC;
                         }
-                        
-                        printf("\tHighPC = %lX\n", LexScope->HighPC);
                     }break;
                     default:
                     {
@@ -1691,15 +1729,31 @@ DebugStart()
                     {
                         di_lexical_scope *LexScope = &Func->DILexScopes[LexScopeIndex];
                         
-                        if(AddressBetween(Regs.rip, LexScope->LowPC, LexScope->HighPC - 1))
+                        if(LexScope->RangesCount == 0)
                         {
-                            for(u32 I = 0; I < LexScope->DIVariablesCount; I++)
+                            if(AddressBetween(Regs.rip, LexScope->LowPC, LexScope->HighPC - 1))
                             {
-                                di_variable *Var = &LexScope->DIVariables[I];
-                                ImGuiShowVariable(Var, FBReg);
+                                for(u32 I = 0; I < LexScope->DIVariablesCount; I++)
+                                {
+                                    di_variable *Var = &LexScope->DIVariables[I];
+                                    ImGuiShowVariable(Var, FBReg);
+                                }
                             }
                         }
-                        
+                        else
+                        {
+                            for(u32 RIndex = 0; RIndex < LexScope->RangesCount; RIndex++)
+                            {
+                                if(AddressBetween(Regs.rip, LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
+                                {
+                                    for(u32 I = 0; I < LexScope->DIVariablesCount; I++)
+                                    {
+                                        di_variable *Var = &LexScope->DIVariables[I];
+                                        ImGuiShowVariable(Var, FBReg);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 

@@ -310,6 +310,8 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     if(Count == 0) { break; }
                     CurrentAddress += Instruction->size;
                     
+                    // TODO(mateusz): Use x86 instructions id's to decide if to
+                    // break or not, this whole inst_type is really unreliable
                     inst_type DeepType = GetInstructionType(Instruction);
                     if((DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP))
                     {
@@ -328,7 +330,8 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                             TempBreakpoints[TempBreakpointsCount++] = BP;
                         }
                     }
-                    else if(!(DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP))
+                    if((!(DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP)) ||
+                       Instruction->id == X86_INS_JMP)
                     {
                         break;
                     }

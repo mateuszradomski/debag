@@ -60,6 +60,9 @@ struct address_range
     size_t End;
 };
 
+// TODO(mateusz): All of this debug information is going to be
+// allocated using a linear allocator, which will reduce the memory waste
+
 struct di_src_file
 {
     char *Path;
@@ -95,8 +98,15 @@ struct di_frame_info
 
 struct di_lexical_scope
 {
+    // NOTE(mateusz): If RangesCount == 0, then address information is stored
+    // in LowPC and HighPC, otherwise, LowPC and HighPC are zeroed and addresses
+    // are stores in RangesLowPCs and RangesHighPCs and there are RangesCount of them
     size_t LowPC;
     size_t HighPC;
+    size_t RangesLowPCs[8];
+    size_t RangesHighPCs[8];
+    u32 RangesCount = 0;
+    
     di_variable DIVariables[MAX_DI_VARIABLES];
     u32 DIVariablesCount = 0;
 };
