@@ -311,7 +311,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     CurrentAddress += Instruction->size;
                     
                     inst_type DeepType = GetInstructionType(Instruction);
-                    if((DeepType & INST_TYPE_JUMP) && Instruction->id != X86_INS_JMP)
+                    if((DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP))
                     {
                         assert(Instruction->detail->x86.op_count == 1);
                         assert(Instruction->detail->x86.operands[0].imm > 0x100);
