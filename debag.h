@@ -20,6 +20,9 @@ typedef double f64;
 
 #define DWARF_CALL(x) assert((x) == DW_DLV_OK)
 
+#define Kilobytes(x) ((x) * 1024)
+#define ArrayPush(a,T,c) ((T *)ArenaPush((a), sizeof(T)*(c)))
+
 struct button
 {
     u8 Down : 1;
@@ -62,19 +65,26 @@ struct address_range
 
 enum
 {
-    DBG_FLAG_NULL = 0x0,
-    DBG_FLAG_CHILD_PROCESS_EXITED = 0x1,
+    DEBUGEE_FLAG_NULL = 0x0,
+    DEBUGEE_FLAG_RUNNING = 0x1,
 };
 
-typedef i32 dbg_flags;
+typedef i32 debugee_flag;
 
 struct dbg
 {
-    dbg_flags Flags;
+    debugee_flag Flags;
     i32 DebugeePID;
     char *DebugeeProgramPath;
     bool InputChange;
     char ProgramArgs[128];
+};
+
+struct arena
+{
+    u8* BasePtr;
+    u8* CursorPtr;
+    size_t Size;
 };
 
 #define MAX_BREAKPOINT_COUNT 8
@@ -129,6 +139,11 @@ static bool StringsMatch(char *Str0, char *Str1);
 static u64 HexStringToInt(char *String);
 static char * DumpFile(char *Path);
 
+static arena *ArenaCreate(size_t Size);
+static void *ArenaPush(arena *Arena, size_t Size);
+static void ArenaDestroy(arena *Arena);
+
 static void DebugStart();
+static void DeallocDebugInfo();
 
 #endif //DEBAG_H

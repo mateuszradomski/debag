@@ -28,7 +28,8 @@ WaitForSignal(i32 DebugeePID)
     
     if(WIFEXITED(WaitStatus))
     {
-        Debuger.Flags |= DBG_FLAG_CHILD_PROCESS_EXITED;
+        Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
+        DeallocDebugInfo();
     }
     
     siginfo_t SigInfo;

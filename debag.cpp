@@ -200,6 +200,49 @@ HexStringToInt(char *String)
     return Result;
 }
 
+static arena *
+ArenaCreate(size_t Size)
+{
+    arena *Result = (arena *)malloc(sizeof(arena));
+    
+    Result->BasePtr = (u8 *)malloc(Size);
+    Result->CursorPtr = Result->BasePtr;
+    Result->Size = Size;
+    
+    return Result;
+}
+
+static void
+ArenaDestroy(arena *Arena)
+{
+    if(Arena)
+    {
+        free(Arena->BasePtr);
+    }
+}
+
+static void *
+ArenaPush(arena *Arena, size_t Size)
+{
+    void *Result = 0x0;
+    if(Arena)
+    {
+        size_t BytesLeft = Arena->Size - (size_t)(Arena->CursorPtr - Arena->BasePtr);
+        if(Size <= BytesLeft)
+        {
+            Result = Arena->CursorPtr;
+            Arena->CursorPtr += Size;
+        }
+        else
+        {
+            printf("%lu\n", (size_t)(Arena->CursorPtr - Arena->BasePtr));
+            assert(false);
+        }
+    }
+    
+    return Result;
+}
+
 static inline bool
 AddressBetween(size_t Address, size_t Lower, size_t Upper)
 {
@@ -576,9 +619,40 @@ DebugeeStart()
     else
     {
         Debuger.DebugeePID = ProcessID;
-        Debuger.Flags &= ~DBG_FLAG_CHILD_PROCESS_EXITED;
+        Debuger.Flags |= DEBUGEE_FLAG_RUNNING;
         WaitForSignal(Debuger.DebugeePID);
     }
+}
+
+static void
+DeallocDebugInfo()
+{
+    Dwarf_Error Error;
+    if(Debug)
+    {
+        DWARF_CALL(dwarf_finish(Debug, &Error));
+    }
+    Debug = 0;
+    
+    memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
+    memset(DISourceFiles, 0, sizeof(di_src_file) * DISourceFilesCount);
+    memset(DISourceLines, 0, sizeof(di_src_line) * DISourceLinesCount);
+    memset(DIFunctions, 0, sizeof(di_function) * DIFuctionsCount);
+    memset(DICompileUnits, 0, sizeof(di_compile_unit) * DICompileUnitsCount);
+    
+    BreakpointCount = 0;
+    DisasmInstCount = 0;
+    Regs = {};
+    DISourceFilesCount = 0;
+    DISourceLinesCount = 0;
+    DIFuctionsCount = 0;
+    DICompileUnitsCount = 0;
+    DIBaseTypesCount = 0;
+    DITypedefsCount = 0;
+    DIPointerTypesCount = 0;
+    DIFrameInfo = {};
+    ArenaDestroy(DIArena);
+    DIArena = 0x0;
 }
 
 static void
@@ -613,8 +687,6 @@ DebugStart()
     char TextBuff2[64] = {};
     char TextBuff3[64] = {};
     strcpy(TextBuff3, Debuger.DebugeeProgramPath);
-    
-    Debuger.Flags = DBG_FLAG_CHILD_PROCESS_EXITED;
     
 #if 0    
     if(Debuger.DebugeeProgramPath)
@@ -655,10 +727,10 @@ DebugStart()
         if(KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
             //Continue or start program
-            if(Debuger.Flags & DBG_FLAG_CHILD_PROCESS_EXITED)
+            if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
             {
                 DebugeeStart();
-                DWARFReadDebug();
+                DWARFRead();
                 
                 // NOTE(mateusz): For debug purpouses
                 size_t EntryPointAddress = FindEntryPointAddress();
@@ -848,7 +920,7 @@ DebugStart()
                     UpdateInfo();
                 }
                 
-                if((Debuger.Flags & DBG_FLAG_CHILD_PROCESS_EXITED) && ImGui::Button("Restart process"))
+                if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING) && ImGui::Button("Restart process"))
                 {
                     DebugeeStart();
                     
@@ -860,7 +932,7 @@ DebugStart()
                     BreakpointEnable(&BP);
                     Breakpoints[BreakpointCount++] = BP;
                     
-                    DWARFReadDebug();
+                    DWARFRead();
                 }
                 
                 ImGui::EndTabItem();
