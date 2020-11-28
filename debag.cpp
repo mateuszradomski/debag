@@ -64,6 +64,15 @@ MouseButtonCallback(GLFWwindow *Window, int Key, int Action, int Mods)
 }
 
 static void
+WindowSizeCallback(GLFWwindow* Window, i32 Width, i32 Height)
+{
+    (void)Window;
+    
+    WindowWidth = Width;
+    WindowHeight = Height;
+}
+
+static void
 ButtonsUpdate(button *Buttons, u32 Count)
 {
     for(u32 I = 0; I < Count; I++)
@@ -680,6 +689,7 @@ DebugStart()
     glfwSetKeyCallback(Window, KeyboardButtonCallback);
     glfwSetMouseButtonCallback(Window, MouseButtonCallback);
     glfwSetCursorPosCallback(Window, MousePositionCallback);
+    glfwSetWindowSizeCallback(Window, WindowSizeCallback);
     
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

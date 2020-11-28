@@ -112,8 +112,8 @@ user_regs_struct Regs;
 
 dbg Debuger;
 
-u32 WindowWidth = 800;
-u32 WindowHeight = 600;
+u32 WindowWidth = 1024;
+u32 WindowHeight = 768;
 
 button KeyboardButtons[GLFW_KEY_LAST] = {};
 
