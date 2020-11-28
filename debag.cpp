@@ -661,8 +661,6 @@ DebugStart()
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     DISourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
     DISourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
-    DIFunctions = (di_function *)calloc(MAX_DI_FUNCTIONS, sizeof(di_function));
-    DICompileUnits = (di_compile_unit *)calloc(MAX_DI_COMPILE_UNITS, sizeof(di_compile_unit));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(800, 600, "debag", NULL, NULL);
@@ -794,9 +792,9 @@ DebugStart()
                 if(Func && Func->FrameBaseIsCFA)
                 {
                     size_t FBReg = DWARFGetCFA(Regs.rip);
-                    for(u32 I = 0; I < Func->DIParamsCount; I++)
+                    for(u32 I = 0; I < Func->ParamCount; I++)
                     {
-                        di_variable *Param = &Func->DIParams[I];
+                        di_variable *Param = &Func->Params[I];
                         ImGuiShowVariable(Param, FBReg);
                     }
                     

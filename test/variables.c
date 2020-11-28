@@ -1,5 +1,6 @@
-
 typedef float real32;
+
+real32 global_variable = 3.1459f;
 
 int main()
 {

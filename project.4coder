@@ -11,6 +11,7 @@ patterns = {
 };
 blacklist_patterns = {
 ".*",
+"libs/*",
 };
 load_paths_base = {
  { ".", .relative = true, .recursive = true, },

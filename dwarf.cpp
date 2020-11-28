@@ -776,7 +776,12 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             if(DIFuctionsCount)
             {
                 di_function *Func = &DIFunctions[DIFuctionsCount - 1];
-                di_variable *Param = &Func->DIParams[Func->DIParamsCount++];
+                if(Func->ParamCount == 0)
+                {
+                    Func->Params = &DIParams[DIParamsCount];
+                }
+                Func->ParamCount += 1;
+                di_variable *Param = &DIParams[DIParamsCount++];
                 for(u32 I = 0; I < AttrCount; I++)
                 {
                     Dwarf_Attribute Attribute = AttrList[I];
@@ -1027,6 +1032,44 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
 }
 
 static void
+DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT])
+{
+    Dwarf_Error Error_ = {};
+    Dwarf_Error *Error = &Error_;
+    Dwarf_Die CurrentDIE = DIE;
+    
+    Dwarf_Half Tag = 0;
+    assert(dwarf_tag(CurrentDIE, &Tag, Error) == DW_DLV_OK);
+    
+    assert(Tag <= DWARF_TAGS_COUNT);
+    CountTable[Tag] += 1;
+    
+    Dwarf_Die ChildDIE = 0;
+    i32 Result = dwarf_child(CurrentDIE, &ChildDIE, Error);
+    
+    if(Result == DW_DLV_OK)
+    { 
+        DWARFCountTags(Debug, ChildDIE, CountTable);
+        Dwarf_Die SiblingDIE = ChildDIE;
+        while(Result == DW_DLV_OK)
+        {
+            CurrentDIE = SiblingDIE;
+            Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, Error);
+            if(Result == DW_DLV_OK)
+            {
+                DWARFCountTags(Debug, SiblingDIE, CountTable);
+            }
+            else
+            {
+                break;
+            }
+        };
+    }
+    
+    return;
+}
+
+static void
 DWARFRead()
 {
     i32 Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
@@ -1045,6 +1088,48 @@ DWARFRead()
     Dwarf_Unsigned NextCUHeader = 0;
     
     DIArena = ArenaCreate(Kilobytes(16));
+    u32 CountTable[DWARF_TAGS_COUNT] = {};
+    
+    for(i32 CUCount = 0;;++CUCount) {
+        // NOTE(mateusz): I don't know what it does
+        i32 Result = dwarf_next_cu_header(Debug, &CUHeaderLength,
+                                          &Version, &AbbrevOffset, &AddressSize,
+                                          &NextCUHeader, Error);
+        
+        assert(Result != DW_DLV_ERROR);
+        if(Result  == DW_DLV_NO_ENTRY) {
+            break;
+        }
+        
+        /* The CU will have a single sibling, a cu_die. */
+        Dwarf_Die CurrentDIE = 0;
+        Result = dwarf_siblingof(Debug, 0, &CurrentDIE, Error);
+        assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
+        
+        DWARFCountTags(Debug, CurrentDIE, CountTable);
+    }
+    
+    //TIMER_START(0);
+    
+    DICompileUnits = (di_compile_unit *)calloc(CountTable[DW_TAG_compile_unit], sizeof(di_compile_unit));
+    DIFunctions = (di_function *)calloc(CountTable[DW_TAG_subprogram], sizeof(di_function));
+    DIBaseTypes = (di_base_type *)calloc(CountTable[DW_TAG_base_type], sizeof(di_base_type));
+    DITypedefs = (di_typedef *)calloc(CountTable[DW_TAG_typedef], sizeof(di_typedef));
+    DIPointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
+    DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
+    DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
+    
+    for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
+    {
+        if(CountTable[I])
+        {
+            const char *A = 0x0;
+            dwarf_get_TAG_name(I, &A);
+            printf("[%s]: %d\n", A, CountTable[I]);
+        }
+    }
+    
+    //TIMER_END(0);
     
     for(i32 CUCount = 0;;++CUCount) {
         // NOTE(mateusz): I don't know what it does

@@ -23,6 +23,17 @@ typedef double f64;
 #define Kilobytes(x) ((x) * 1024)
 #define ArrayPush(a,T,c) ((T *)ArenaPush((a), sizeof(T)*(c)))
 
+#define TIMER_START(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].start);
+#define TIMER_END(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].end); printf("Timer %d finished in %ld us\n", (id), (TPoints[(id)].end.tv_nsec - TPoints[(id)].start.tv_nsec) / 1000);
+
+struct TimePoints
+{
+    struct timespec start;
+    struct timespec end;
+};
+
+static TimePoints TPoints[32] = {};
+
 struct button
 {
     u8 Down : 1;

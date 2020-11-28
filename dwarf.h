@@ -3,6 +3,9 @@
 #ifndef DWARF_H
 #define DWARF_H
 
+// NOTE(mateusz): With DWARF5 and non-platform specifc it's DW_TAG_immutable_type
+#define DWARF_TAGS_COUNT 0x4b
+
 enum
 {
     DI_COMP_UNIT_NULL = 0x0,
@@ -79,8 +82,8 @@ struct di_function
     
     size_t TypeOffset;
     bool FrameBaseIsCFA;
-    di_variable DIParams[MAX_DI_PARAMETERS];
-    u32 DIParamsCount = 0;
+    di_variable *Params;
+    u32 ParamCount;
     di_lexical_scope DIFuncLexScope;
     di_lexical_scope DILexScopes[MAX_DI_LEX_SCOPES];
     u32 DILexScopeCount = 0;
@@ -124,24 +127,25 @@ u32 DISourceFilesCount = 0;
 di_src_line *DISourceLines = 0x0;
 u32 DISourceLinesCount = 0;
 
-#define MAX_DI_FUNCTIONS 192
+di_variable *DIVariables = 0x0;
+u32 DIVariablesCount = 0;
+
+di_variable *DIParams = 0x0;
+u32 DIParamsCount = 0;
+
 di_function *DIFunctions = 0x0;
 u32 DIFuctionsCount = 0;
 
-#define MAX_DI_COMPILE_UNITS 16
 di_compile_unit *DICompileUnits = 0x0;
 u32 DICompileUnitsCount = 0;
 
-#define MAX_DI_BASE_TYPES 24
-di_base_type DIBaseTypes[MAX_DI_BASE_TYPES];
+di_base_type *DIBaseTypes = 0x0;
 u32 DIBaseTypesCount = 0;
 
-#define MAX_DI_TYPEDEFS 128
-di_typedef DITypedefs[MAX_DI_TYPEDEFS];
+di_typedef *DITypedefs = 0x0;
 u32 DITypedefsCount = 0;
 
-#define MAX_DI_POINTER_TYPES 64
-di_pointer_type DIPointerTypes[MAX_DI_POINTER_TYPES];
+di_pointer_type *DIPointerTypes;
 u32 DIPointerTypesCount = 0;
 
 di_frame_info DIFrameInfo = {};
