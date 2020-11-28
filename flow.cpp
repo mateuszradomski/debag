@@ -310,10 +310,8 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     if(Count == 0) { break; }
                     CurrentAddress += Instruction->size;
                     
-                    // TODO(mateusz): Use x86 instructions id's to decide if to
-                    // break or not, this whole inst_type is really unreliable
                     inst_type DeepType = GetInstructionType(Instruction);
-                    if((DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP))
+                    if((DeepType & INST_TYPE_JUMP) && Instruction->id != X86_INS_JMP)
                     {
                         assert(Instruction->detail->x86.op_count == 1);
                         assert(Instruction->detail->x86.operands[0].imm > 0x100);
@@ -330,8 +328,10 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                             TempBreakpoints[TempBreakpointsCount++] = BP;
                         }
                     }
-                    if((!(DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP)) ||
-                       Instruction->id == X86_INS_JMP)
+                    // TODO(mateusz): This isn't that safe I guess
+                    // It's created upon a feeling I have of programs, nothing
+                    // doc/spec based
+                    if(Instruction->id == X86_INS_JMP)
                     {
                         break;
                     }

@@ -322,14 +322,47 @@ FindFunctionConfiningAddress(size_t Address)
 }
 
 static di_base_type *
-FindBaseTypeByOffset(size_t BTDIEOffset)
+FindBaseTypeByOffset(size_t BTDIEOffset, type_flags *TFlags)
 {
     di_base_type *Type = 0x0;
+    
+    size_t LookForOffset = BTDIEOffset;
+    for(u32 I = 0; I < DITypedefsCount; I++)
+    {
+        if(DITypedefs[I].DIEOffset == LookForOffset)
+        {
+            LookForOffset = DITypedefs[I].ActualTypeOffset;
+            if(TFlags)
+            {
+                *TFlags |= TYPE_IS_TYPEDEF;
+            }
+            goto EndSearch;
+        }
+    }
+    
+    for(u32 I = 0; I < DIPointerTypesCount; I++)
+    {
+        if(DIPointerTypes[I].DIEOffset == LookForOffset)
+        {
+            LookForOffset = DIPointerTypes[I].ActualTypeOffset;
+            if(TFlags)
+            {
+                *TFlags |= TYPE_IS_POINTER;
+            }
+            goto EndSearch;
+        }
+    }
+    
+    EndSearch:;
     for(u32 I = 0; I < DIBaseTypesCount; I++)
     {
-        if(DIBaseTypes[I].DIEOffset == BTDIEOffset)
+        if(DIBaseTypes[I].DIEOffset == LookForOffset)
         {
             Type = &DIBaseTypes[I];
+            if(TFlags)
+            {
+                *TFlags |= TYPE_IS_BASE;
+            }
             break;
         }
     }
@@ -337,66 +370,80 @@ FindBaseTypeByOffset(size_t BTDIEOffset)
     return Type;
 }
 
+static di_base_type *
+FindBaseTypeByOffset(size_t BTDIEOffset)
+{
+    di_base_type *Type = 0x0;
+    
+    Type = FindBaseTypeByOffset(BTDIEOffset, 0x0);
+    
+    return Type;
+}
+
 static char *
-BaseTypeToFormatStr(di_base_type *Type)
+BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
 {
     char *Result = "";
-    if(!Type) {
-        return Result;
-    }
     
-    switch(Type->ByteSize)
+    if(Type && (TFlag & TYPE_IS_POINTER))
     {
-        case 1:
+        Result = "%p";
+    }
+    else if(Type)
+    {
+        switch(Type->ByteSize)
         {
-            if(Type->Encoding == DW_ATE_signed)
+            case 1:
             {
-                Result = "%c";
-            }
-            else
+                if(Type->Encoding == DW_ATE_signed)
+                {
+                    Result = "%c";
+                }
+                else
+                {
+                    Result = "%d";
+                }
+            }break;
+            case 2:
             {
                 Result = "%d";
-            }
-        }break;
-        case 2:
-        {
-            Result = "%d";
-        }break;
-        case 4:
-        {
-            if(Type->Encoding == DW_ATE_unsigned)
+            }break;
+            case 4:
             {
-                Result = "%u";
-            }
-            else if(Type->Encoding == DW_ATE_float)
+                if(Type->Encoding == DW_ATE_unsigned)
+                {
+                    Result = "%u";
+                }
+                else if(Type->Encoding == DW_ATE_float)
+                {
+                    Result = "%f";
+                }
+                else
+                {
+                    Result = "%d";
+                }
+            }break;
+            case 8:
             {
-                Result = "%f";
-            }
-            else
+                if(Type->Encoding == DW_ATE_unsigned)
+                {
+                    Result = "%llu";
+                }
+                else if(Type->Encoding == DW_ATE_float)
+                {
+                    Result = "%f";
+                }
+                else
+                {
+                    Result = "%lld";
+                }
+            }break;
+            default:
             {
-                Result = "%d";
-            }
-        }break;
-        case 8:
-        {
-            if(Type->Encoding == DW_ATE_unsigned)
-            {
-                Result = "%llu";
-            }
-            else if(Type->Encoding == DW_ATE_float)
-            {
-                Result = "%f";
-            }
-            else
-            {
-                Result = "%lld";
-            }
-        }break;
-        default:
-        {
-            printf("Unsupported byte size = %d", Type->ByteSize);
-            Result = "";
-        }break;
+                printf("Unsupported byte size = %d", Type->ByteSize);
+                Result = "";
+            }break;
+        }
     }
     
     return Result;
@@ -405,9 +452,10 @@ BaseTypeToFormatStr(di_base_type *Type)
 static char *
 BaseTypeToFormatStr(size_t BTDIEOffset)
 {
-    di_base_type *Type = FindBaseTypeByOffset(BTDIEOffset);
+    type_flags TFlag = 0;
+    di_base_type *Type = FindBaseTypeByOffset(BTDIEOffset, &TFlag);
     
-    return BaseTypeToFormatStr(Type);
+    return BaseTypeToFormatStr(Type, TFlag);
 }
 
 static bool
@@ -492,10 +540,11 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg)
         
         size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
         
-        di_base_type *Type = FindBaseTypeByOffset(Var->TypeOffset);
+        type_flags TFlag = 0;
+        di_base_type *Type = FindBaseTypeByOffset(Var->TypeOffset, &TFlag);
         char FormatStr[64] = {};
         StringConcat(FormatStr, "%s: ");
-        StringConcat(FormatStr, BaseTypeToFormatStr(Type));
+        StringConcat(FormatStr, BaseTypeToFormatStr(Type, TFlag));
         
         float *FloatPtr = (float *)&MachineWord;
         double *DoublePtr = (double *)&MachineWord;
@@ -1343,7 +1392,7 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_typedef *Typedef = (di_typedef *)&DITypedefs[DITypedefsCount++];
+            di_typedef *Typedef = &DITypedefs[DITypedefsCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             Typedef->DIEOffset = DIEOffset;
@@ -1383,6 +1432,48 @@ DWARFReadDIEsDebug(Dwarf_Debug Debug, Dwarf_Die DIE, i32 RecurLevel)
                     }break;
                 }
             }
+        }break;
+        case DW_TAG_pointer_type:
+        {
+            //printf("libdwarf: Pointer Type\n");
+            
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_pointer_type *PType = &DIPointerTypes[DIPointerTypesCount++];
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            PType->DIEOffset = DIEOffset;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_byte_size:
+                    {
+                        Dwarf_Unsigned ByteSize = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &ByteSize, Error));
+                        
+                        assert(ByteSize == sizeof(void *));
+                    }break;
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        PType->ActualTypeOffset = Offset;
+                    }break;
+                    default:
+                    {
+                        assert(!"Not expected TAG!");
+                    }break;
+                }
+            }
+            
         }break;
         default:
         {

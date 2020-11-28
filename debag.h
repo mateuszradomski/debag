@@ -147,6 +147,16 @@ struct di_compile_unit
     di_compile_unit_flags Flags;
 };
 
+enum
+{
+    TYPE_NONE = 0,
+    TYPE_IS_BASE = (1 << 0),
+    TYPE_IS_TYPEDEF = (1 << 1),
+    TYPE_IS_POINTER = (1 << 2),
+};
+
+typedef i32 type_flags;
+
 struct di_base_type
 {
     size_t DIEOffset;
@@ -157,6 +167,12 @@ struct di_base_type
 struct di_typedef
 {
     char Name[64];
+    size_t DIEOffset;
+    size_t ActualTypeOffset;
+};
+
+struct di_pointer_type
+{
     size_t DIEOffset;
     size_t ActualTypeOffset;
 };
@@ -207,8 +223,12 @@ di_base_type DIBaseTypes[MAX_DI_BASE_TYPES];
 u32 DIBaseTypesCount = 0;
 
 #define MAX_DI_TYPEDEFS 128
-di_base_type DITypedefs[MAX_DI_TYPEDEFS];
+di_typedef DITypedefs[MAX_DI_TYPEDEFS];
 u32 DITypedefsCount = 0;
+
+#define MAX_DI_POINTER_TYPES 64
+di_pointer_type DIPointerTypes[MAX_DI_POINTER_TYPES];
+u32 DIPointerTypesCount = 0;
 
 di_frame_info DIFrameInfo = {};
 
