@@ -60,123 +60,6 @@ struct address_range
     size_t End;
 };
 
-// TODO(mateusz): All of this debug information is going to be
-// allocated using a linear allocator, which will reduce the memory waste
-
-struct di_src_file
-{
-    char *Path;
-    char *Content;
-    u32 LineCount;
-};
-
-struct di_src_line
-{
-    size_t Address;
-    u32 LineNum;
-    i32 SrcFileIndex;
-};
-
-struct di_variable
-{
-    char Name[64];
-    
-    size_t TypeOffset;
-    u8 LocationAtom;
-    ssize_t Offset;
-};
-
-struct di_frame_info
-{
-    Dwarf_Cie *CIEs;
-    Dwarf_Signed CIECount;
-    Dwarf_Fde *FDEs;
-    Dwarf_Signed FDECount;
-};
-
-#define MAX_DI_VARIABLES 16
-
-struct di_lexical_scope
-{
-    // NOTE(mateusz): If RangesCount == 0, then address information is stored
-    // in LowPC and HighPC, otherwise, LowPC and HighPC are zeroed and addresses
-    // are stores in RangesLowPCs and RangesHighPCs and there are RangesCount of them
-    size_t LowPC;
-    size_t HighPC;
-    size_t RangesLowPCs[8];
-    size_t RangesHighPCs[8];
-    u32 RangesCount = 0;
-    
-    di_variable DIVariables[MAX_DI_VARIABLES];
-    u32 DIVariablesCount = 0;
-};
-
-#define MAX_DI_PARAMETERS 16
-#define MAX_DI_LEX_SCOPES 16
-
-struct di_function
-{
-    char Name[64];
-    char FilePath[64];
-    
-    size_t TypeOffset;
-    bool FrameBaseIsCFA;
-    di_variable DIParams[MAX_DI_PARAMETERS];
-    u32 DIParamsCount = 0;
-    di_lexical_scope DIFuncLexScope;
-    di_lexical_scope DILexScopes[MAX_DI_LEX_SCOPES];
-    u32 DILexScopeCount = 0;
-};
-
-enum
-{
-    DI_COMP_UNIT_NULL = 0x0,
-    DI_COMP_UNIT_HAS_RANGES = 0x1,
-};
-
-typedef i32 di_compile_unit_flags;
-
-struct di_compile_unit
-{
-    char Name[128];
-    
-    size_t LowPC;
-    size_t HighPC;
-    address_range AddressRanges[8];
-    
-    di_compile_unit_flags Flags;
-};
-
-enum
-{
-    TYPE_NONE = 0,
-    TYPE_IS_BASE = (1 << 0),
-    TYPE_IS_TYPEDEF = (1 << 1),
-    TYPE_IS_POINTER = (1 << 2),
-};
-
-typedef i32 type_flags;
-
-struct di_base_type
-{
-    size_t DIEOffset;
-    u32 ByteSize;
-    u32 Encoding;
-};
-
-struct di_typedef
-{
-    char Name[64];
-    size_t DIEOffset;
-    size_t ActualTypeOffset;
-};
-
-struct di_pointer_type
-{
-    size_t DIEOffset;
-    size_t ActualTypeOffset;
-};
-
 enum
 {
     DBG_FLAG_NULL = 0x0,
@@ -201,36 +84,6 @@ u32 BreakpointCount = 0;
 #define MAX_DISASM_INSTRUCTIONS 31
 disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS];
 u32 DisasmInstCount = 0;
-
-#define MAX_DI_SOURCE_FILES 8
-di_src_file *DISourceFiles = 0x0;
-u32 DISourceFilesCount = 0;
-
-#define MAX_DI_SOURCE_LINES (1 << 15)
-di_src_line *DISourceLines = 0x0;
-u32 DISourceLinesCount = 0;
-
-#define MAX_DI_FUNCTIONS 192
-di_function *DIFunctions = 0x0;
-u32 DIFuctionsCount = 0;
-
-#define MAX_DI_COMPILE_UNITS 16
-di_compile_unit *DICompileUnits = 0x0;
-u32 DICompileUnitsCount = 0;
-
-#define MAX_DI_BASE_TYPES 24
-di_base_type DIBaseTypes[MAX_DI_BASE_TYPES];
-u32 DIBaseTypesCount = 0;
-
-#define MAX_DI_TYPEDEFS 128
-di_typedef DITypedefs[MAX_DI_TYPEDEFS];
-u32 DITypedefsCount = 0;
-
-#define MAX_DI_POINTER_TYPES 64
-di_pointer_type DIPointerTypes[MAX_DI_POINTER_TYPES];
-u32 DIPointerTypesCount = 0;
-
-di_frame_info DIFrameInfo = {};
 
 csh DisAsmHandle;
 user_regs_struct Regs;
@@ -258,14 +111,24 @@ static breakpoint BreakpointCreate(u64 Address, i32 DebugeePID);
 static void BreakpointEnable(breakpoint *BP);
 static void BreakpointDisable(breakpoint *BP);
 
-static di_src_line *LineTableFindByAddress(size_t Address);
-static di_src_line *LineTableFindByLineNum(u32 LineNum);
 static address_range AddressRangeCurrentAndNextLine();
 static void ImGuiShowRegisters(user_regs_struct Regs);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
 static void DisassembleAroundAddress(size_t Address, i32 DebugeePID);
 static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t FindEntryPointAddress();
+
+static bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
+static size_t GetRegisterByABINumber(u32 Number);
+
+static bool CharInString(char *String, char C);
+static u32 StringCountChar(char *String, char C);
+static void StringCopy(char *Dest, char *Src);
+static void StringConcat(char *Dest, char *Src);
+static bool StringsMatch(char *Str0, char *Str1);
+static u64 HexStringToInt(char *String);
+static char * DumpFile(char *Path);
+
 static void DebugStart();
 
 #endif //DEBAG_H

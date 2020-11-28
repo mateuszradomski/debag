@@ -1,13 +1,3 @@
-static inline bool
-AddressBetween(size_t Address, size_t Lower, size_t Upper)
-{
-    bool Result = false;
-    
-    Result = (Address >= Lower) && (Address <= Upper);
-    
-    return Result;
-}
-
 // TODO(mateusz): This is utter shit, please, PLEASE!!!!
 // Do something about!!!
 static bool
