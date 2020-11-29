@@ -71,19 +71,20 @@ This function recursivley adds "decorator" types to the flags, and ultimately re
 
 */
 
-static void *
-FindUnderlayingType(size_t BTDIEOffset, type_flags *TFlags)
+static di_underlaying_type
+FindUnderlayingType(size_t BTDIEOffset)
 {
+    di_underlaying_type Result = {};
+    
     for(u32 I = 0; I < DITypedefsCount; I++)
     {
         if(DITypedefs[I].DIEOffset == BTDIEOffset)
         {
-            if(TFlags)
-            {
-                *TFlags |= TYPE_IS_TYPEDEF;
-            }
+            Result = FindUnderlayingType(DITypedefs[I].ActualTypeOffset);
+            Result.Flags |= TYPE_IS_TYPEDEF;
+            Result.Name = DITypedefs[I].Name;
             
-            return FindUnderlayingType(DITypedefs[I].ActualTypeOffset, TFlags);
+            return Result;
         }
     }
     
@@ -91,12 +92,9 @@ FindUnderlayingType(size_t BTDIEOffset, type_flags *TFlags)
     {
         if(DIPointerTypes[I].DIEOffset == BTDIEOffset)
         {
-            if(TFlags)
-            {
-                *TFlags |= TYPE_IS_POINTER;
-            }
-            
-            return FindUnderlayingType(DIPointerTypes[I].ActualTypeOffset, TFlags);
+            Result = FindUnderlayingType(DIPointerTypes[I].ActualTypeOffset);
+            Result.Flags |= TYPE_IS_POINTER;
+            return Result;
         }
     }
     
@@ -105,12 +103,11 @@ FindUnderlayingType(size_t BTDIEOffset, type_flags *TFlags)
     {
         if(DIStructTypes[I].DIEOffset == BTDIEOffset)
         {
-            if(TFlags)
-            {
-                *TFlags |= TYPE_IS_STRUCT;
-            }
+            Result.Flags |= TYPE_IS_STRUCT;
+            Result.Struct = &DIStructTypes[I];
+            Result.Name = DIStructTypes[I].Name;
             
-            return &DIStructTypes[I];
+            return Result;
         }
     }
     
@@ -118,16 +115,15 @@ FindUnderlayingType(size_t BTDIEOffset, type_flags *TFlags)
     {
         if(DIBaseTypes[I].DIEOffset == BTDIEOffset)
         {
-            if(TFlags)
-            {
-                *TFlags |= TYPE_IS_BASE;
-            }
+            Result.Flags |= TYPE_IS_BASE;
+            Result.Type = &DIBaseTypes[I];
+            Result.Name = "FIXME!";
             
-            return &DIBaseTypes[I];
+            return Result;
         }
     }
     
-    return 0x0;
+    return Result;
 }
 
 #if 0
@@ -1280,7 +1276,7 @@ DWARFRead()
     DIStructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
     DIStructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
     
-#if 0    
+#if 0
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
     {
         if(CountTable[I])

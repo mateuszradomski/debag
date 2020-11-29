@@ -385,22 +385,31 @@ ImGuiShowRegisters(user_regs_struct Regs)
 static void
 ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
-    type_flags TFlag = 0;
-    void *Type = FindUnderlayingType(TypeOffset, &TFlag);
+    di_underlaying_type Underlaying = FindUnderlayingType(TypeOffset);
     
     size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
     
-    if(TFlag & TYPE_IS_STRUCT)
+    if(Underlaying.Flags & TYPE_IS_STRUCT)
     {
-        di_struct_type *Struct = (di_struct_type *)Type;
+        di_struct_type *Struct = Underlaying.Struct;
         
-        char *UniquePointer = "structuniquepointer\n";
+        bool Open = ImGui::TreeNode(VarName, "%s", VarName);
+        ImGui::NextColumn();
+        ImGui::Text("0x%lX", VarAddress);
+        ImGui::NextColumn();
+        ImGui::Text("%s", Underlaying.Name);
+        ImGui::NextColumn();
         
-        if(!(TFlag & TYPE_IS_POINTER) && ImGui::TreeNode(UniquePointer, "%s: %s", VarName, Struct->Name))
+        if(Open)
         {
             for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
             {
                 di_struct_member *Member = &Struct->Members[MemberIndex];
+                
+                if(Underlaying.Flags & TYPE_IS_POINTER)
+                {
+                    VarAddress = MachineWord;
+                }
                 size_t MemberAddress = VarAddress + Member->ByteLocation;
                 
                 ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
@@ -410,28 +419,35 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
         }
         
     }
-    else if(TFlag & TYPE_IS_BASE)
+    else if(Underlaying.Flags & TYPE_IS_BASE)
     {
-        di_base_type *BType = (di_base_type *)Type;
+        di_base_type *BType = Underlaying.Type;
+        
+        ImGui::Text("%s", VarName);
+        ImGui::NextColumn();
+        
         char FormatStr[64] = {};
-        StringConcat(FormatStr, "%s: ");
-        StringConcat(FormatStr, BaseTypeToFormatStr(BType, TFlag));
+        StringConcat(FormatStr, BaseTypeToFormatStr(BType, Underlaying.Flags));
         
         float *FloatPtr = (float *)&MachineWord;
         double *DoublePtr = (double *)&MachineWord;
         
         if(BaseTypeIsFloat(BType))
         {
-            ImGui::Text(FormatStr, VarName, *FloatPtr);
+            ImGui::Text(FormatStr, *FloatPtr);
         }
         else if(BaseTypeIsDoubleFloat(BType))
         {
-            ImGui::Text(FormatStr, VarName, *DoublePtr);
+            ImGui::Text(FormatStr, *DoublePtr);
         }
         else
         {
-            ImGui::Text(FormatStr, VarName, MachineWord);
+            ImGui::Text(FormatStr, MachineWord);
         }
+        
+        ImGui::NextColumn();
+        ImGui::Text("%s", Underlaying.Name);
+        ImGui::NextColumn();
     }
     else
     {
@@ -889,10 +905,7 @@ DebugStart()
                     
                     if(ImGui::IsItemClicked())
                     {
-                        breakpoint BP = BreakpointAtSourceLine(Src, I + 1);
-                        BreakpointEnable(&BP);
-                        Breakpoints[BreakpointCount++] = BP;
-                        printf("[%d] line has a breakpoint\n", I + 1);
+                        BreakpointPushAtSourceLine(Src, I + 1, Breakpoints, &BreakpointCount);
                     }
                 }
             }
@@ -918,6 +931,14 @@ DebugStart()
                 if(Func && Func->FrameBaseIsCFA)
                 {
                     size_t FBReg = DWARFGetCFA(Regs.rip);
+                    
+                    ImGui::Columns(3, "tree", true);
+                    
+                    ImGui::Text("Name"); ImGui::NextColumn();
+                    ImGui::Text("Value"); ImGui::NextColumn();
+                    ImGui::Text("Type"); ImGui::NextColumn();
+                    ImGui::Separator();
+                    
                     for(u32 I = 0; I < Func->ParamCount; I++)
                     {
                         di_variable *Param = &Func->Params[I];
@@ -963,7 +984,12 @@ DebugStart()
                         }
                     }
                 }
+                else if(Func)
+                {
+                    assert(false);
+                }
                 
+                ImGui::Columns(1);
                 ImGui::EndTabItem();
             }
             if(ImGui::BeginTabItem("x64 Registers"))
@@ -1057,6 +1083,15 @@ DebugStart()
                     Breakpoints[BreakpointCount++] = BP;
                     
                     DWARFRead();
+                }
+                
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Breakpoints"))
+            {
+                for(u32 I = 0; I < BreakpointCount; I++)
+                {
+                    ImGui::Text("Breakpoint at %lX\n", Breakpoints[I].Address);
                 }
                 
                 ImGui::EndTabItem();

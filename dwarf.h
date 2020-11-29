@@ -138,6 +138,19 @@ struct di_struct_type
     u32 MembersCount;
 };
 
+struct di_underlaying_type
+{
+    char *Name;
+    
+    union
+    {
+        void *Ptr;
+        di_struct_type *Struct;
+        di_base_type *Type;
+    };
+    type_flags Flags;
+};
+
 #define MAX_DI_SOURCE_FILES 8
 di_src_file *DISourceFiles = 0x0;
 u32 DISourceFilesCount = 0;
