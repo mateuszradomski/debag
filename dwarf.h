@@ -94,6 +94,9 @@ enum
     TYPE_IS_BASE = (1 << 0),
     TYPE_IS_TYPEDEF = (1 << 1),
     TYPE_IS_POINTER = (1 << 2),
+    TYPE_IS_CONST = (1 << 3),
+    TYPE_IS_STRUCT = (1 << 4),
+    TYPE_IS_ARRAY = (1 << 5),
 };
 
 typedef i32 type_flags;
@@ -116,6 +119,23 @@ struct di_pointer_type
 {
     size_t DIEOffset;
     size_t ActualTypeOffset;
+};
+
+struct di_struct_member
+{
+    char *Name;
+    
+    size_t ActualTypeOffset;
+    u32 ByteLocation;
+};
+
+struct di_struct_type
+{
+    char *Name;
+    
+    size_t DIEOffset;
+    di_struct_member *Members;
+    u32 MembersCount;
 };
 
 #define MAX_DI_SOURCE_FILES 8
@@ -149,6 +169,12 @@ u32 DITypedefsCount = 0;
 
 di_pointer_type *DIPointerTypes;
 u32 DIPointerTypesCount = 0;
+
+di_struct_member *DIStructMembers = 0x0;
+u32 DIStructMembersCount = 0;
+
+di_struct_type *DIStructTypes = 0x0;
+u32 DIStructTypesCount = 0;
 
 di_frame_info DIFrameInfo = {};
 Dwarf_Debug Debug = 0;

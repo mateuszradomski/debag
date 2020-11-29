@@ -19,7 +19,7 @@ LineTableFindByAddress(size_t Address)
 }
 
 static di_src_line *
-LineTableFindByLineNum(u32 LineNum)
+LineFindByNumber(u32 LineNum)
 {
     for(u32 I = 0; I < DISourceLinesCount; I++)
     {
@@ -61,56 +61,76 @@ FindFunctionConfiningAddress(size_t Address)
     return Result;
 }
 
-static di_base_type *
-FindBaseTypeByOffset(size_t BTDIEOffset, type_flags *TFlags)
+/* NOTE(mateusz): 
+
+Types like DW_TAG_pointer_type, DW_TAG_typedef, DW_TAG_const_type, DW_TAG_array_type...
+are considered as "decorator" types, and only help in displaying the underlaying types.
+As underlaying types we understand DW_TAG_base_type or DW_TAG_structure_type.
+This function recursivley adds "decorator" types to the flags, and ultimately returns
+ void * that depending on the underlaying type is either di_base_type or di_struct_type.
+
+*/
+
+static void *
+FindUnderlayingType(size_t BTDIEOffset, type_flags *TFlags)
 {
-    di_base_type *Type = 0x0;
-    
-    size_t LookForOffset = BTDIEOffset;
     for(u32 I = 0; I < DITypedefsCount; I++)
     {
-        if(DITypedefs[I].DIEOffset == LookForOffset)
+        if(DITypedefs[I].DIEOffset == BTDIEOffset)
         {
-            LookForOffset = DITypedefs[I].ActualTypeOffset;
             if(TFlags)
             {
                 *TFlags |= TYPE_IS_TYPEDEF;
             }
-            goto EndSearch;
+            
+            return FindUnderlayingType(DITypedefs[I].ActualTypeOffset, TFlags);
         }
     }
     
     for(u32 I = 0; I < DIPointerTypesCount; I++)
     {
-        if(DIPointerTypes[I].DIEOffset == LookForOffset)
+        if(DIPointerTypes[I].DIEOffset == BTDIEOffset)
         {
-            LookForOffset = DIPointerTypes[I].ActualTypeOffset;
             if(TFlags)
             {
                 *TFlags |= TYPE_IS_POINTER;
             }
-            goto EndSearch;
+            
+            return FindUnderlayingType(DIPointerTypes[I].ActualTypeOffset, TFlags);
         }
     }
     
-    EndSearch:;
+    // Underlaying types
+    for(u32 I = 0; I < DIStructTypesCount; I++)
+    {
+        if(DIStructTypes[I].DIEOffset == BTDIEOffset)
+        {
+            if(TFlags)
+            {
+                *TFlags |= TYPE_IS_STRUCT;
+            }
+            
+            return &DIStructTypes[I];
+        }
+    }
+    
     for(u32 I = 0; I < DIBaseTypesCount; I++)
     {
-        if(DIBaseTypes[I].DIEOffset == LookForOffset)
+        if(DIBaseTypes[I].DIEOffset == BTDIEOffset)
         {
-            Type = &DIBaseTypes[I];
             if(TFlags)
             {
                 *TFlags |= TYPE_IS_BASE;
             }
-            break;
+            
+            return &DIBaseTypes[I];
         }
     }
     
-    return Type;
+    return 0x0;
 }
 
-
+#if 0
 static di_base_type *
 FindBaseTypeByOffset(size_t BTDIEOffset)
 {
@@ -120,6 +140,7 @@ FindBaseTypeByOffset(size_t BTDIEOffset)
     
     return Type;
 }
+#endif
 
 static char *
 BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
@@ -190,6 +211,7 @@ BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
     return Result;
 }
 
+#if 0
 static char *
 BaseTypeToFormatStr(size_t BTDIEOffset)
 {
@@ -198,6 +220,7 @@ BaseTypeToFormatStr(size_t BTDIEOffset)
     
     return BaseTypeToFormatStr(Type, TFlag);
 }
+#endif
 
 static bool
 BaseTypeIsFloat(di_base_type *Type)
@@ -770,7 +793,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             bool ignored = AttrTag == DW_AT_decl_file ||
                                 AttrTag == DW_AT_decl_line ||
-                                AttrTag == DW_AT_decl_column;
+                                AttrTag == DW_AT_decl_column ||
+                                AttrTag == DW_AT_sibling;
                             
                             if(!ignored)
                             {
@@ -1017,6 +1041,121 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             }
             
         }break;
+        case DW_TAG_structure_type:
+        {
+            //printf("libdwarf: Strcture Type\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_struct_type *StructType = &DIStructTypes[DIStructTypesCount++];
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            StructType->DIEOffset = DIEOffset;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        
+                        u32 Size = strlen(Name) + 1;
+                        StructType->Name = ArrayPush(DIArena, char, Size);
+                        StringCopy(StructType->Name, Name);
+                    }break;
+                    case DW_AT_declaration:
+                    {
+                        // TODO(mateusz): I have not way to really represent that in a way that is formal
+                        // I have to create a test program for that and see how it behaves
+                        StructType->Members = 0x0;
+                        StructType->MembersCount = 0;
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_byte_size ||
+                            AttrTag == DW_AT_decl_file ||
+                            AttrTag == DW_AT_decl_line ||
+                            AttrTag == DW_AT_decl_column ||
+                            AttrTag == DW_AT_sibling;
+                        if(!ignored)
+                        {
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Structure type unhandled Attribute: %s\n", AttrName);
+                        }
+                    }break;
+                }
+            }
+        }break;
+        case DW_TAG_member:
+        {
+            //printf("libdwarf: Strcture member\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            assert(DIStructTypesCount != 0);
+            di_struct_member *Member = &DIStructMembers[DIStructMembersCount++];
+            
+            di_struct_type *Struct = &DIStructTypes[DIStructTypesCount - 1];
+            if(Struct->MembersCount == 0)
+            {
+                Struct->Members = Member;
+            }
+            
+            Struct->MembersCount += 1;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_name:
+                    {
+                        char *Name = 0x0;
+                        DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                        
+                        u32 Size = strlen(Name) + 1;
+                        Member->Name = ArrayPush(DIArena, char, Size);
+                        StringCopy(Member->Name, Name);
+                    }break;
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        Member->ActualTypeOffset = Offset;
+                    }break;
+                    case DW_AT_data_member_location:
+                    {
+                        Dwarf_Unsigned Location = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &Location, Error));
+                        
+                        Member->ByteLocation = Location;
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_decl_file ||
+                            AttrTag == DW_AT_decl_line ||
+                            AttrTag == DW_AT_decl_column;
+                        if(!ignored)
+                        {
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Structure member unhandled Attribute: %s\n", AttrName);
+                        }
+                    }break;
+                }
+            }
+        }break;
         default:
         {
             const char *TagName = 0x0;
@@ -1138,6 +1277,8 @@ DWARFRead()
     DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
     DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
     DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
+    DIStructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
+    DIStructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
     
 #if 0    
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)

@@ -139,6 +139,25 @@ BreakpointDisable(breakpoint *BP)
     ptrace(PTRACE_POKEDATA, BP->DebugeePID, BP->Address, RestoredOpCodes);
 }
 
+static breakpoint
+BreakpointAtSourceLine(di_src_file *Src, u32 LineNum)
+{
+    (void)Src;
+    di_src_line *Line = LineFindByNumber(LineNum);
+    
+    breakpoint BP = {};
+    
+    if(Line)
+    {
+        bool NoBreakpointAtLine = BreakpointFind(Line->Address, Debuger.DebugeePID) == 0;
+        if(NoBreakpointAtLine)
+        {
+            BP = BreakpointCreate(Line->Address, Debuger.DebugeePID);
+        }
+    }
+    
+    return BP;
+}
 
 static void
 StepInstruction(i32 DebugeePID)

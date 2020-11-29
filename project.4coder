@@ -33,6 +33,12 @@ command_list = {
    .cmd = { { "sadf\\adsf", .os = "win"   },
             { "sadf/adsf" , .os = "linux" },
             { "sadf/adsf" , .os = "mac"   }, }, },
+ { .name = "build_tests",
+   .out = "*run*", .footer_panel = false, .save_dirty_files = false,
+   .cmd = { { "build_tests.sh", .os = "win"   },
+            { "./build_tests.sh" , .os = "linux" },
+            { "./build_tests.sh" , .os = "mac"   }, }, },
 };
 fkey_command[1] = "build";
 fkey_command[2] = "run";
+fkey_command[3] = "build_tests";

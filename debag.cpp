@@ -383,36 +383,71 @@ ImGuiShowRegisters(user_regs_struct Regs)
 }
 
 static void
-ImGuiShowVariable(di_variable *Var, size_t FBReg)
+ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
-    if(Var->LocationAtom == DW_OP_fbreg)
+    type_flags TFlag = 0;
+    void *Type = FindUnderlayingType(TypeOffset, &TFlag);
+    
+    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+    
+    if(TFlag & TYPE_IS_STRUCT)
     {
-        // TODO(mateusz): Right now only ints
-        size_t VarAddress = FBReg + Var->Offset;
+        di_struct_type *Struct = (di_struct_type *)Type;
         
-        size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+        char *UniquePointer = "structuniquepointer\n";
         
-        type_flags TFlag = 0;
-        di_base_type *Type = FindBaseTypeByOffset(Var->TypeOffset, &TFlag);
+        if(!(TFlag & TYPE_IS_POINTER) && ImGui::TreeNode(UniquePointer, "%s: %s", VarName, Struct->Name))
+        {
+            for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
+            {
+                di_struct_member *Member = &Struct->Members[MemberIndex];
+                size_t MemberAddress = VarAddress + Member->ByteLocation;
+                
+                ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
+            }
+            
+            ImGui::TreePop();
+        }
+        
+    }
+    else if(TFlag & TYPE_IS_BASE)
+    {
+        di_base_type *BType = (di_base_type *)Type;
         char FormatStr[64] = {};
         StringConcat(FormatStr, "%s: ");
-        StringConcat(FormatStr, BaseTypeToFormatStr(Type, TFlag));
+        StringConcat(FormatStr, BaseTypeToFormatStr(BType, TFlag));
         
         float *FloatPtr = (float *)&MachineWord;
         double *DoublePtr = (double *)&MachineWord;
         
-        if(BaseTypeIsFloat(Type))
+        if(BaseTypeIsFloat(BType))
         {
-            ImGui::Text(FormatStr, Var->Name, *FloatPtr);
+            ImGui::Text(FormatStr, VarName, *FloatPtr);
         }
-        else if(BaseTypeIsDoubleFloat(Type))
+        else if(BaseTypeIsDoubleFloat(BType))
         {
-            ImGui::Text(FormatStr, Var->Name, *DoublePtr);
+            ImGui::Text(FormatStr, VarName, *DoublePtr);
         }
         else
         {
-            ImGui::Text(FormatStr, Var->Name, MachineWord);
+            ImGui::Text(FormatStr, VarName, MachineWord);
         }
+    }
+    else
+    {
+        //printf("Var [%s] doesn't have a type\n", VarName);
+        //assert(false);
+    }
+}
+
+static void
+ImGuiShowVariable(di_variable *Var, size_t FBReg)
+{
+    // TODO(mateusz): Other ways of accessing variables
+    if(Var->LocationAtom == DW_OP_fbreg)
+    {
+        size_t VarAddress = FBReg + Var->Offset;
+        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
 }
 
@@ -839,7 +874,7 @@ DebugStart()
                     }
                     else
                     {
-                        di_src_line *DrawingLine = LineTableFindByLineNum(I + 1);
+                        di_src_line *DrawingLine = LineFindByNumber(I + 1);
                         
                         if(DrawingLine && BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))
                         {
@@ -850,6 +885,14 @@ DebugStart()
                         {
                             ImGui::Text("%.*s", LineLength, Prev);
                         }
+                    }
+                    
+                    if(ImGui::IsItemClicked())
+                    {
+                        breakpoint BP = BreakpointAtSourceLine(Src, I + 1);
+                        BreakpointEnable(&BP);
+                        Breakpoints[BreakpointCount++] = BP;
+                        printf("[%d] line has a breakpoint\n", I + 1);
                     }
                 }
             }
