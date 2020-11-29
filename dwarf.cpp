@@ -117,7 +117,7 @@ FindUnderlayingType(size_t BTDIEOffset)
         {
             Result.Flags |= TYPE_IS_BASE;
             Result.Type = &DIBaseTypes[I];
-            Result.Name = "FIXME!";
+            Result.Name = DIBaseTypes[I].Name;
             
             return Result;
         }
@@ -702,7 +702,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_variable:
         {
-            //printf("Variable\n");
+            //printf("libdwarf: Variable\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -899,6 +899,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_base_type:
         {
+            //printf("libdwarf: Base Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -917,11 +918,12 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                 {
                     case DW_AT_name:
                     {
-#if 0
                         char *Name = 0x0;
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
-                        printf("%s", Name);
-#endif
+                        
+                        u32 Size = strlen(Name) + 1;
+                        Type->Name = ArrayPush(DIArena, char, Size);
+                        StringCopy(Type->Name, Name);
                     }break;
                     case DW_AT_encoding:
                     {

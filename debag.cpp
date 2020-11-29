@@ -393,6 +393,10 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     {
         di_struct_type *Struct = Underlaying.Struct;
         
+        if(Underlaying.Flags & TYPE_IS_POINTER)
+        {
+            VarAddress = MachineWord;
+        }
         bool Open = ImGui::TreeNode(VarName, "%s", VarName);
         ImGui::NextColumn();
         ImGui::Text("0x%lX", VarAddress);
@@ -405,11 +409,6 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
             for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
             {
                 di_struct_member *Member = &Struct->Members[MemberIndex];
-                
-                if(Underlaying.Flags & TYPE_IS_POINTER)
-                {
-                    VarAddress = MachineWord;
-                }
                 size_t MemberAddress = VarAddress + Member->ByteLocation;
                 
                 ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
@@ -832,6 +831,7 @@ DebugStart()
         
         ImGui::SetWindowPos(ImVec2(WindowWidth / 2, 0));
         ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
         for(u32 I = 0; I < DisasmInstCount; I++)
         {
@@ -855,12 +855,14 @@ DebugStart()
             }
         }
         
+        ImGui::PopStyleVar();
         ImGui::End();
         
         ImGui::Begin("Listings", 0x0, WinFlags);
-        
         ImGui::SetWindowPos(ImVec2(0, 0));
         ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
+        
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
         {
             di_src_line *Line = LineTableFindByAddress(Regs.rip);
@@ -912,6 +914,7 @@ DebugStart()
             
         }
         
+        ImGui::PopStyleVar();
         ImGui::End();
         
         ImGui::Begin("Program variables", 0x0, WinFlags);
@@ -927,6 +930,7 @@ DebugStart()
         {
             if(ImGui::BeginTabItem("Locals"))
             {
+                ImGui::BeginChild("regs");
                 di_function *Func = FindFunctionConfiningAddress(Regs.rip);
                 if(Func && Func->FrameBaseIsCFA)
                 {
@@ -989,12 +993,15 @@ DebugStart()
                     assert(false);
                 }
                 
+                ImGui::EndChild();
                 ImGui::Columns(1);
                 ImGui::EndTabItem();
             }
             if(ImGui::BeginTabItem("x64 Registers"))
             {
+                ImGui::BeginChild("regs");
                 ImGuiShowRegisters(Regs);
+                ImGui::EndChild();
                 ImGui::EndTabItem();
             }
             if(ImGui::BeginTabItem("Control panel"))

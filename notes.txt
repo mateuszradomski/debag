@@ -1,0 +1,13 @@
+For right clicking things and geting context menus: 
+
+if (ImGui::BeginPopupContextItem("item context menu"))
+{
+	if(ImGui::Selectable("Settozero"))value=0.0f;
+	if(ImGui::Selectable("SettoPI"))value=3.1415f;
+	ImGui::SetNextItemWidth(-1);
+	ImGui::DragFloat("##Value",&value,0.1f,0.0f,0.0f);
+	ImGui::EndPopup();
+}
+
+For styling how variables look:
+ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0.0f);

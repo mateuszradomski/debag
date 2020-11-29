@@ -103,6 +103,7 @@ typedef i32 type_flags;
 
 struct di_base_type
 {
+    char *Name;
     size_t DIEOffset;
     u32 ByteSize;
     u32 Encoding;
