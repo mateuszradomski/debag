@@ -8,6 +8,7 @@
 #include <sys/personality.h>
 #include <sys/user.h>
 #include <sys/stat.h>
+#include <sys/prctl.h>
 #include <fcntl.h>
 
 #include <GL/glew.h>
@@ -161,6 +162,12 @@ static bool
 StringsMatch(char *Str0, char *Str1)
 {
     bool Result = true;
+    
+    if(!Str0 || !Str1)
+    {
+        Result = false;
+        return Result;
+    }
     
     while(Str0 && Str0[0] && Str1 && Str1[0])
     {
@@ -393,15 +400,22 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     {
         di_struct_type *Struct = Underlaying.Struct;
         
+        char TypeName[128] = {};
+        strcat(TypeName, Underlaying.Name);
+        
+        // TODO(mateusz): Stacked pointers dereference, like (void **)
         if(Underlaying.Flags & TYPE_IS_POINTER)
         {
             VarAddress = MachineWord;
+            
+            strcat(TypeName, " *");
         }
+        
         bool Open = ImGui::TreeNode(VarName, "%s", VarName);
         ImGui::NextColumn();
-        ImGui::Text("0x%lX", VarAddress);
+        ImGui::Text("0x%lx", VarAddress);
         ImGui::NextColumn();
-        ImGui::Text("%s", Underlaying.Name);
+        ImGui::Text("%s", TypeName);
         ImGui::NextColumn();
         
         if(Open)
@@ -431,11 +445,13 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
         float *FloatPtr = (float *)&MachineWord;
         double *DoublePtr = (double *)&MachineWord;
         
-        if(BaseTypeIsFloat(BType))
+        bool IsPointer = Underlaying.Flags & TYPE_IS_POINTER;
+        
+        if(BaseTypeIsFloat(BType) && !IsPointer)
         {
             ImGui::Text(FormatStr, *FloatPtr);
         }
-        else if(BaseTypeIsDoubleFloat(BType))
+        else if(BaseTypeIsDoubleFloat(BType) && !IsPointer)
         {
             ImGui::Text(FormatStr, *DoublePtr);
         }
@@ -444,8 +460,16 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
             ImGui::Text(FormatStr, MachineWord);
         }
         
+        char TypeName[128] = {};
+        strcat(TypeName, Underlaying.Name);
+        
+        if(Underlaying.Flags & TYPE_IS_POINTER)
+        {
+            strcat(TypeName, " *");
+        }
+        
         ImGui::NextColumn();
-        ImGui::Text("%s", Underlaying.Name);
+        ImGui::Text("%s", TypeName);
         ImGui::NextColumn();
     }
     else
@@ -660,6 +684,7 @@ DebugeeStart()
     {
         personality(ADDR_NO_RANDOMIZE);
         ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
+        prctl(PR_SET_PDEATHSIG, SIGHUP);
         
         char *ProgramArgs[16] = {};
         ProgramArgs[0] = Debuger.DebugeeProgramPath;
@@ -761,20 +786,15 @@ DebugStart()
     ImGuiInputTextFlags ITFlags = 0;
     ITFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
     
+    ImGuiTabBarFlags TBFlags = ImGuiTabBarFlags_Reorderable;
+    TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
+    TBFlags |= ImGuiTabBarFlags_FittingPolicyScroll;
+    
+    ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    
     assert(cs_open(CS_ARCH_X86, CS_MODE_64, &DisAsmHandle) == CS_ERR_OK);
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
-    
-#if 0    
-    DWARFReadDebug();
-    // NOTE(mateusz): For debug purpouses
-    size_t EntryPointAddress = FindEntryPointAddress();
-    assert(EntryPointAddress);
-    
-    breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
-    BreakpointEnable(&BP);
-    Breakpoints[BreakpointCount++] = BP;
-#endif
     
     //size_t Addr = GetDebugeeLoadAddress(Debuger.DebugeePID);
     
@@ -801,6 +821,7 @@ DebugStart()
                 
                 // NOTE(mateusz): For debug purpouses
                 size_t EntryPointAddress = FindEntryPointAddress();
+                printf("%lx\n", EntryPointAddress);
                 assert(EntryPointAddress);
                 
                 breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
@@ -826,7 +847,6 @@ DebugStart()
         
         ImGuiStartFrame();
         
-        ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
         ImGui::Begin("Disassembly", 0x0, WinFlags);
         
         ImGui::SetWindowPos(ImVec2(WindowWidth / 2, 0));
@@ -864,54 +884,64 @@ DebugStart()
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
+        
+        if(ImGui::BeginTabBar("Source lines", TBFlags))
         {
-            di_src_line *Line = LineTableFindByAddress(Regs.rip);
-            
-            if(Line)
+            if(ImGui::BeginTabItem("Source"))
             {
-                di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
+                ImGui::BeginChild("srcfile");
+                di_src_line *Line = LineTableFindByAddress(Regs.rip);
                 
-                char *LinePtr = Src->Content;
-                char *Prev = 0x0;
-                for(u32 I = 0; I < Src->LineCount + 1; I++)
+                if(Line)
                 {
-                    Prev = LinePtr;
-                    LinePtr = strchr(LinePtr, '\n') + 1;
-                    u32 LineLength = (u64)LinePtr - (u64)Prev;
+                    di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
                     
-                    // NOTE(mateusz): Lines are indexed from 1
-                    if(Line->LineNum == I + 1)
+                    char *LinePtr = Src->Content;
+                    char *Prev = 0x0;
+                    for(u32 I = 0; I < Src->LineCount + 1; I++)
                     {
-                        ImGui::TextColored(CurrentLineColor, "%.*s",
-                                           LineLength, Prev);
+                        Prev = LinePtr;
+                        LinePtr = strchr(LinePtr, '\n') + 1;
+                        u32 LineLength = (u64)LinePtr - (u64)Prev;
                         
-                        if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                        // NOTE(mateusz): Lines are indexed from 1
+                        if(Line->LineNum == I + 1)
                         {
-                            ImGui::SetScrollHereY(0.5f);
-                        }
-                    }
-                    else
-                    {
-                        di_src_line *DrawingLine = LineFindByNumber(I + 1);
-                        
-                        if(DrawingLine && BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))
-                        {
-                            ImGui::TextColored(BreakpointLineColor, "%.*s",
+                            ImGui::TextColored(CurrentLineColor, "%.*s",
                                                LineLength, Prev);
+                            
+                            if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                            {
+                                ImGui::SetScrollHereY(0.5f);
+                            }
                         }
                         else
                         {
-                            ImGui::Text("%.*s", LineLength, Prev);
+                            di_src_line *DrawingLine = LineFindByNumber(I + 1);
+                            
+                            if(DrawingLine && BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))
+                            {
+                                ImGui::TextColored(BreakpointLineColor, "%.*s",
+                                                   LineLength, Prev);
+                            }
+                            else
+                            {
+                                ImGui::Text("%.*s", LineLength, Prev);
+                            }
+                        }
+                        
+                        if(ImGui::IsItemClicked())
+                        {
+                            BreakpointPushAtSourceLine(Src, I + 1, Breakpoints, &BreakpointCount);
                         }
                     }
-                    
-                    if(ImGui::IsItemClicked())
-                    {
-                        BreakpointPushAtSourceLine(Src, I + 1, Breakpoints, &BreakpointCount);
-                    }
                 }
+                
+                ImGui::EndChild();
+                ImGui::EndTabItem();
             }
             
+            ImGui::EndTabBar();
         }
         
         ImGui::PopStyleVar();
@@ -922,15 +952,13 @@ DebugStart()
         ImGui::SetWindowPos(ImVec2(0, (WindowHeight / 3) * 2));
         ImGui::SetWindowSize(ImVec2(WindowWidth, WindowHeight / 3));
         
-        ImGuiTabBarFlags TBFlags = ImGuiTabBarFlags_Reorderable;
-        TBFlags |= ImGuiTabBarFlags_FittingPolicyResizeDown;
-        TBFlags |= ImGuiTabBarFlags_FittingPolicyScroll;
-        
         if(ImGui::BeginTabBar("Vars", TBFlags))
         {
             if(ImGui::BeginTabItem("Locals"))
             {
                 ImGui::BeginChild("regs");
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+                
                 di_function *Func = FindFunctionConfiningAddress(Regs.rip);
                 if(Func && Func->FrameBaseIsCFA)
                 {
@@ -993,6 +1021,7 @@ DebugStart()
                     assert(false);
                 }
                 
+                ImGui::PopStyleVar();
                 ImGui::EndChild();
                 ImGui::Columns(1);
                 ImGui::EndTabItem();

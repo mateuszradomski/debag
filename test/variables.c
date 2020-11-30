@@ -44,5 +44,8 @@ int main()
     struct asssss asdf1;
     struct asssss asdf2;
     
+    float *floatotreal32pointer = &X;
+    real32 *real32tofloatpoiter = &ssss;
+    
     real32 Result = X * ssss;
 }

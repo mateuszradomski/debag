@@ -350,6 +350,7 @@ FindEntryPointAddress()
     {
         if(StringsMatch(DIFunctions[I].Name, "main"))
         {
+            printf("entrypoint: %s\n", DIFunctions[I].Name);
             Result = DIFunctions[I].FuncLexScope.LowPC;
             break;
         }
@@ -1098,7 +1099,12 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            assert(DIStructTypesCount != 0);
+            if(DIStructTypesCount == 0)
+            {
+                printf("Unhandled class type\n");
+                return;
+            }
+            
             di_struct_member *Member = &DIStructMembers[DIStructMembersCount++];
             
             di_struct_type *Struct = &DIStructTypes[DIStructTypesCount - 1];
