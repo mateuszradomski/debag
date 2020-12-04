@@ -396,7 +396,123 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     
     size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
     
-    if(Underlaying.Flags & TYPE_IS_STRUCT)
+    if(Underlaying.Flags & TYPE_IS_ARRAY)
+    {
+        char TypeName[128] = {};
+        strcat(TypeName, Underlaying.Name);
+        
+        // TODO(mateusz): Stacked pointers dereference, like (void **)
+        if(Underlaying.Flags & TYPE_IS_POINTER)
+        {
+            VarAddress = MachineWord;
+            
+            strcat(TypeName, " *");
+        }
+        
+        bool Open = ImGui::TreeNode(VarName, "%s", VarName);
+        ImGui::NextColumn();
+        ImGui::Text("0x%lx", VarAddress);
+        ImGui::NextColumn();
+        ImGui::Text("%s", TypeName);
+        ImGui::NextColumn();
+        
+        if(Open)
+        {
+            for(u32 I = 0; I <= Underlaying.ArrayUpperBound; I++)
+            {
+                size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+                
+                if(Underlaying.Flags & TYPE_IS_STRUCT)
+                {
+                    di_struct_type *Struct = Underlaying.Struct;
+                    
+                    char TypeName[128] = {};
+                    strcat(TypeName, Underlaying.Name);
+                    
+                    // TODO(mateusz): Stacked pointers dereference, like (void **)
+                    if(Underlaying.Flags & TYPE_IS_POINTER)
+                    {
+                        VarAddress = MachineWord;
+                        
+                        strcat(TypeName, " *");
+                    }
+                    
+                    char VarNameFull[128] = {};
+                    sprintf(VarNameFull, "%s[%d]", VarName, I);
+                    bool Open = ImGui::TreeNode(VarNameFull, "%s", VarNameFull);
+                    ImGui::NextColumn();
+                    ImGui::Text("0x%lx", VarAddress);
+                    ImGui::NextColumn();
+                    ImGui::Text("%s", TypeName);
+                    ImGui::NextColumn();
+                    
+                    if(Open)
+                    {
+                        for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
+                        {
+                            di_struct_member *Member = &Struct->Members[MemberIndex];
+                            size_t MemberAddress = VarAddress + Member->ByteLocation;
+                            
+                            ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
+                        }
+                        
+                        ImGui::TreePop();
+                    }
+                    
+                    VarAddress += Underlaying.Struct->ByteSize;
+                }
+                else if(Underlaying.Flags & TYPE_IS_BASE)
+                {
+                    di_base_type *BType = Underlaying.Type;
+                    
+                    ImGui::Text("%s[%d]", VarName, I);
+                    ImGui::NextColumn();
+                    
+                    char FormatStr[64] = {};
+                    StringConcat(FormatStr, BaseTypeToFormatStr(BType, Underlaying.Flags));
+                    
+                    float *FloatPtr = (float *)&MachineWord;
+                    double *DoublePtr = (double *)&MachineWord;
+                    
+                    bool IsPointer = Underlaying.Flags & TYPE_IS_POINTER;
+                    
+                    if(BaseTypeIsFloat(BType) && !IsPointer)
+                    {
+                        ImGui::Text(FormatStr, *FloatPtr);
+                    }
+                    else if(BaseTypeIsDoubleFloat(BType) && !IsPointer)
+                    {
+                        ImGui::Text(FormatStr, *DoublePtr);
+                    }
+                    else
+                    {
+                        ImGui::Text(FormatStr, MachineWord);
+                    }
+                    
+                    char TypeName[128] = {};
+                    strcat(TypeName, Underlaying.Name);
+                    
+                    if(Underlaying.Flags & TYPE_IS_POINTER)
+                    {
+                        strcat(TypeName, " *");
+                    }
+                    
+                    ImGui::NextColumn();
+                    ImGui::Text("%s", TypeName);
+                    ImGui::NextColumn();
+                    
+                    VarAddress += Underlaying.Type->ByteSize;
+                }
+                else
+                {
+                    //printf("Var [%s] doesn't have a type\n", VarName);
+                    //assert(false);
+                }
+            }
+            ImGui::TreePop();
+        }
+    }
+    else if(Underlaying.Flags & TYPE_IS_STRUCT)
     {
         di_struct_type *Struct = Underlaying.Struct;
         
@@ -730,6 +846,13 @@ DeallocDebugInfo()
     memset(DICompileUnits, 0, sizeof(di_compile_unit) * DICompileUnitsCount);
     memset(DIVariables, 0, sizeof(di_variable) * DIVariablesCount);
     memset(DIParams, 0, sizeof(di_variable) * DIParamsCount);
+    memset(DIBaseTypes, 0, sizeof(di_base_type) * DIBaseTypesCount);
+    memset(DITypedefs, 0, sizeof(di_typedef) * DITypedefsCount);
+    memset(DIPointerTypes, 0, sizeof(di_pointer_type) * DIPointerTypesCount);
+    memset(DIStructMembers, 0, sizeof(di_struct_member) * DIStructMembersCount);
+    memset(DIStructTypes, 0, sizeof(di_struct_type) * DIStructTypesCount);
+    memset(DIArrayTypes, 0, sizeof(di_array_type) * DIArrayTypesCount);
+    memset(DILexScopes, 0, sizeof(di_lexical_scope) * DILexScopesCount);
     
     BreakpointCount = 0;
     DisasmInstCount = 0;
@@ -743,6 +866,9 @@ DeallocDebugInfo()
     DIBaseTypesCount = 0;
     DITypedefsCount = 0;
     DIPointerTypesCount = 0;
+    DIStructMembersCount = 0;
+    DIStructTypesCount = 0;
+    DIArrayTypesCount = 0;
     DILexScopesCount = 0;
     DIFrameInfo = {};
     ArenaDestroy(DIArena);

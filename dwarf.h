@@ -135,8 +135,17 @@ struct di_struct_type
     char *Name;
     
     size_t DIEOffset;
+    size_t ByteSize;
     di_struct_member *Members;
     u32 MembersCount;
+};
+
+struct di_array_type
+{
+    size_t DIEOffset;
+    size_t ActualTypeOffset;
+    size_t RangesTypeOffset;
+    size_t UpperBound;
 };
 
 struct di_underlaying_type
@@ -149,6 +158,8 @@ struct di_underlaying_type
         di_struct_type *Struct;
         di_base_type *Type;
     };
+    
+    size_t ArrayUpperBound; // STUPID!!
     type_flags Flags;
 };
 
@@ -189,6 +200,9 @@ u32 DIStructMembersCount = 0;
 
 di_struct_type *DIStructTypes = 0x0;
 u32 DIStructTypesCount = 0;
+
+di_array_type *DIArrayTypes = 0x0;
+u32 DIArrayTypesCount = 0;
 
 di_frame_info DIFrameInfo = {};
 Dwarf_Debug Debug = 0;

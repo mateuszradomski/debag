@@ -98,6 +98,17 @@ FindUnderlayingType(size_t BTDIEOffset)
         }
     }
     
+    for(u32 I = 0; I < DIArrayTypesCount; I++)
+    {
+        if(DIArrayTypes[I].DIEOffset == BTDIEOffset)
+        {
+            Result = FindUnderlayingType(DIArrayTypes[I].ActualTypeOffset);
+            Result.ArrayUpperBound = DIArrayTypes[I].UpperBound;
+            Result.Flags |= TYPE_IS_ARRAY;
+            return Result;
+        }
+    }
+    
     // Underlaying types
     for(u32 I = 0; I < DIStructTypesCount; I++)
     {
@@ -1068,6 +1079,13 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         StructType->Name = ArrayPush(DIArena, char, Size);
                         StringCopy(StructType->Name, Name);
                     }break;
+                    case DW_AT_byte_size:
+                    {
+                        Dwarf_Unsigned ByteSize = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &ByteSize, Error));
+                        
+                        StructType->ByteSize = ByteSize;
+                    }break;
                     case DW_AT_declaration:
                     {
                         // TODO(mateusz): I have not way to really represent that in a way that is formal
@@ -1077,8 +1095,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                     }break;
                     default:
                     {
-                        bool ignored = AttrTag == DW_AT_byte_size ||
-                            AttrTag == DW_AT_decl_file ||
+                        bool ignored = AttrTag == DW_AT_decl_file ||
                             AttrTag == DW_AT_decl_line ||
                             AttrTag == DW_AT_decl_column ||
                             AttrTag == DW_AT_sibling;
@@ -1155,6 +1172,90 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
                             printf("Structure member unhandled Attribute: %s\n", AttrName);
+                        }
+                    }break;
+                }
+            }
+        }break;
+        case DW_TAG_array_type:
+        {
+            //printf("libdwarf: Array type\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_array_type *AType = &DIArrayTypes[DIArrayTypesCount++];
+            
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            AType->DIEOffset = DIEOffset;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        AType->ActualTypeOffset = Offset;
+                    }break;
+                    default:
+                    {
+                        bool ignored = AttrTag == DW_AT_sibling;
+                        if(!ignored)
+                        {
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Array type unhandled Attribute: %s\n", AttrName);
+                        }
+                    }break;
+                }
+            }
+        }break;
+        case DW_TAG_subrange_type:
+        {
+            //printf("libdwarf: Subrange type\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            assert(DIArrayTypesCount);
+            di_array_type *AType = &DIArrayTypes[DIArrayTypesCount - 1];
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        AType->RangesTypeOffset = Offset;
+                    }break;
+                    case DW_AT_upper_bound:
+                    {
+                        Dwarf_Unsigned Bound = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &Bound, Error));
+                        
+                        AType->UpperBound = Bound;
+                    }break;
+                    default:
+                    {
+                        bool ignored = false;
+                        if(!ignored)
+                        {
+                            const char *AttrName = 0x0;
+                            DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                            printf("Array type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1283,7 +1384,7 @@ DWARFRead()
     DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
     DIStructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
     DIStructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
-    
+    DIArrayTypes = (di_array_type *)calloc(CountTable[DW_TAG_array_type], sizeof(di_array_type));
 #if 0
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
     {
