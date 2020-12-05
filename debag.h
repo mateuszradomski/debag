@@ -106,7 +106,7 @@ breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;
 
 #define MAX_DISASM_INSTRUCTIONS 1024
-disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS];
+disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS] = {};
 u32 DisasmInstCount = 0;
 
 csh DisAsmHandle;
@@ -142,7 +142,7 @@ static void BreakpointDisable(breakpoint *BP);
 static address_range AddressRangeCurrentAndNextLine();
 static void ImGuiShowRegisters(user_regs_struct Regs);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
-static void DisassembleAroundAddress(size_t Address, i32 DebugeePID);
+static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
 static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t FindEntryPointAddress();
 
@@ -161,7 +161,7 @@ static arena *ArenaCreate(size_t Size);
 static void *ArenaPush(arena *Arena, size_t Size);
 static void ArenaDestroy(arena *Arena);
 
-static void DebugStart();
+static void DebugerMain();
 static void DeallocDebugInfo();
 
 #endif //DEBAG_H

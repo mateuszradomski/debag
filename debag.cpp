@@ -731,23 +731,36 @@ GetInstructionType(cs_insn *Instruction)
 }
 
 static void
-DisassembleAroundAddress(size_t Address, i32 DebugeePID)
+DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 {
     DisasmInstCount = 0;
     
     cs_insn *Instruction = {};
-    size_t InstructionAddress = Address;
-    for(int I = 0; I < MAX_DISASM_INSTRUCTIONS; I++)
+    size_t InstructionAddress = AddrRange.Start;
+    for(int I = 0; I < MAX_DISASM_INSTRUCTIONS && InstructionAddress < AddrRange.End; I++)
     {
-        size_t MachineWord = PeekDebugeeMemory(InstructionAddress, DebugeePID);
+        u8 InstrInMemory[16] = {};
+        size_t *MemoryPtr = (size_t *)InstrInMemory;
+        
+        size_t TempAddress = InstructionAddress;
+        for(u32 I = 0; I < sizeof(InstrInMemory) / sizeof(size_t); I++)
+        {
+            *MemoryPtr = PeekDebugeeMemory(TempAddress, DebugeePID);
+            MemoryPtr += 1;
+            TempAddress += 1;
+            if(TempAddress >= AddrRange.End)
+            {
+                break;
+            }
+        }
         
         breakpoint *BP = BreakpointFind(InstructionAddress, DebugeePID);
         if(BP)
         {
-            MachineWord = (MachineWord & ~0xff) | BP->SavedOpCode;
+            InstrInMemory[0] = BP->SavedOpCode;
         }
         
-        int Count = cs_disasm(DisAsmHandle, (const u8 *)&MachineWord, sizeof(MachineWord),
+        int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
                               InstructionAddress, 1, &Instruction);
         
         // TODO(mateusz): In the tests_bin/variables program there are weird bytes
@@ -813,6 +826,7 @@ DisassembleAroundAddress(size_t Address, i32 DebugeePID)
         
         cs_free(Instruction, 1);
     }
+    
 }
 
 static char *
@@ -839,7 +853,11 @@ UpdateInfo()
     di_function *Func = FindFunctionConfiningAddress(Regs.rip);
     if(Func)
     {
-        DisassembleAroundAddress(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
+        address_range LexScopeRange = {};
+        LexScopeRange.Start = Func->FuncLexScope.LowPC;
+        LexScopeRange.End = Func->FuncLexScope.HighPC;
+        
+        DisassembleAroundAddress(LexScopeRange, Debuger.DebugeePID);
     }
 }
 
@@ -956,7 +974,7 @@ DeallocDebugInfo()
 }
 
 static void
-DebugStart()
+DebugerMain()
 {
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     DISourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
@@ -979,6 +997,10 @@ DebugStart()
     
     ImGui_ImplGlfw_InitForOpenGL(Window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
+    
+    // Make windows square not round
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 0.0f;
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
@@ -1361,7 +1383,7 @@ main(i32 ArgCount, char **Args)
     }
     
     Debuger.DebugeeProgramPath = Args[1];
-    DebugStart();
+    DebugerMain();
     
     return 0;
 }
