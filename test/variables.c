@@ -14,7 +14,7 @@ struct swarray
     int inside_array[12];
 };
 
-struct asssss
+struct big_struct
 {
     
     int a;
@@ -46,9 +46,9 @@ int main()
     
     struct vec2 myVec2 = {0};
     
-    struct asssss asdf;
-    struct asssss asdf1;
-    struct asssss asdf2;
+    struct big_struct asdf;
+    struct big_struct asdf1;
+    struct big_struct asdf2;
     
     float *floatotreal32pointer = &X;
     real32 *real32tofloatpoiter = &ssss;
@@ -56,6 +56,12 @@ int main()
     float array[16] = { 1.0f, 0.0f, 2.0f };
     struct vec2 myVec2s[3] = { 1.0f };
     struct swarray stresstest[2] = {};
+    
+    float verts[] = {
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 1.0f,
+    };
     
     real32 Result = X * ssss;
 }

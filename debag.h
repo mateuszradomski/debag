@@ -17,6 +17,7 @@ typedef float f32;
 typedef double f64;
 
 #define TO_LOWERCASE(C) ((C) | (1 << 5))
+#define IS_PRINTABLE(C) ((C) >= ' ' && (C) <= '~')
 
 #define DWARF_CALL(x) assert((x) == DW_DLV_OK)
 

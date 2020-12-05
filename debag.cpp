@@ -405,7 +405,7 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
         char *PChar = (char *)&MachineWord;
         
         int RemainingBytes = sizeof(MachineWord);
-        while(PChar[0])
+        while(PChar[0] && IS_PRINTABLE(PChar[0]))
         {
             Temp[TIndex++] = PChar[0];
             PChar += 1;
@@ -477,7 +477,7 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
             {
                 if(BType->Encoding == DW_ATE_signed_char)
                 {
-                    ImGui::Text("%c", *TypesPtrs.Char);
+                    ImGui::Text("%c (%x)", *TypesPtrs.Char, (*TypesPtrs.Char));
                 }
                 else
                 {
@@ -611,7 +611,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
     }
     
     ImGui::NextColumn();
-    ImGui::Text("%s", TypeName);
+    ImGui::Text("%s[%ld]", TypeName, Underlaying.ArrayUpperBound + 1);
     ImGui::NextColumn();
     
     if(Open)
