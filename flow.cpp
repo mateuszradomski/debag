@@ -71,7 +71,7 @@ BreakpointFind(u64 Address, i32 DebugeePID, breakpoint *BPs, u32 Count)
     for(u32 I = 0; I < Count; I++)
     {
         breakpoint *BP = &BPs[I];
-        if(BP->Address == Address && BP->DebugeePID == DebugeePID && BP->Enabled)
+        if(BP->Address == Address && BP->DebugeePID == DebugeePID)
         {
             return BP;
         }
@@ -162,12 +162,12 @@ static void
 StepInstruction(i32 DebugeePID)
 {
     breakpoint *BP = BreakpointFind(Regs.rip, DebugeePID);
-    if(BP && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
+    if(BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
     ptrace(PTRACE_SINGLESTEP, DebugeePID, 0x0, 0x0);
     WaitForSignal(DebugeePID);
     
-    if(BP && !BP->ExectuedSavedOpCode) { BreakpointEnable(BP); }
+    if(BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointEnable(BP); }
     if(BP) { BP->ExectuedSavedOpCode = !BP->ExectuedSavedOpCode; }
     
     Regs = PeekRegisters(DebugeePID);
@@ -200,7 +200,7 @@ ContinueProgram(i32 DebugeePID)
         StepInstruction(DebugeePID);
         
         breakpoint *BP = BreakpointFind(OldPC, DebugeePID);
-        if(BP)
+        if(BreakpointEnabled(BP))
         {
             BP->ExectuedSavedOpCode = false;
         }
@@ -232,7 +232,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         size_t MachineWord = PeekDebugeeMemory(CurrentAddress, DebugeePID);
         
         breakpoint *BP = BreakpointFind(CurrentAddress, DebugeePID);
-        if(BP)
+        if(BreakpointEnabled(BP))
         {
             MachineWord = (MachineWord & ~0xff) | BP->SavedOpCode;
         }
@@ -317,7 +317,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     size_t DeepOpcodes = PeekDebugeeMemory(CurrentAddress, Debuger.DebugeePID);
                     
                     breakpoint *BP = BreakpointFind(CurrentAddress, DebugeePID);
-                    if(BP)
+                    if(BreakpointEnabled(BP))
                     {
                         DeepOpcodes = (DeepOpcodes & ~0xff) | BP->SavedOpCode;
                     }

@@ -56,8 +56,6 @@ struct di_frame_info
     Dwarf_Signed FDECount;
 };
 
-#define MAX_DI_VARIABLES 16
-
 struct di_lexical_scope
 {
     // NOTE(mateusz): If RangesCount == 0, then address information is stored
@@ -72,8 +70,6 @@ struct di_lexical_scope
     di_variable *Variables;
     u32 VariablesCount;
 };
-
-#define MAX_DI_LEX_SCOPES 16
 
 struct di_function
 {

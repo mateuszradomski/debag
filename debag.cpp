@@ -754,8 +754,8 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
             }
         }
         
-        breakpoint *BP = BreakpointFind(InstructionAddress, DebugeePID);
-        if(BP)
+        breakpoint *BP = 0x0; ;
+        if((BP = BreakpointFind(InstructionAddress, DebugeePID)) && BreakpointEnabled(BP))
         {
             InstrInMemory[0] = BP->SavedOpCode;
         }
@@ -1112,7 +1112,6 @@ DebugerMain()
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
-        
         if(ImGui::BeginTabBar("Source lines", TBFlags))
         {
             if(ImGui::BeginTabItem("Source"))
@@ -1123,7 +1122,7 @@ DebugerMain()
                 if(Line)
                 {
                     di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
-                    
+                    di_src_line *DrawingLine = 0x0;
                     char *LinePtr = Src->Content;
                     char *Prev = 0x0;
                     for(u32 I = 0; I < Src->LineCount + 1; I++)
@@ -1135,8 +1134,8 @@ DebugerMain()
                         // NOTE(mateusz): Lines are indexed from 1
                         if(Line->LineNum == I + 1)
                         {
-                            ImGui::TextColored(CurrentLineColor, "%.*s",
-                                               LineLength, Prev);
+                            DrawingLine = Line;
+                            ImGui::TextColored(CurrentLineColor, "%.*s", LineLength, Prev);
                             
                             if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                             {
@@ -1145,10 +1144,13 @@ DebugerMain()
                         }
                         else
                         {
-                            di_src_line *DrawingLine = LineFindByNumber(I + 1);
-                            
-                            if(DrawingLine && BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))
+                            di_src_line *TempLine = LineFindByNumber(I + 1);
+                            if(TempLine)
                             {
+                                DrawingLine = TempLine;
+                            }
+                            
+                            if(DrawingLine && BreakpointEnabled(BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))){
                                 ImGui::TextColored(BreakpointLineColor, "%.*s",
                                                    LineLength, Prev);
                             }
@@ -1160,7 +1162,23 @@ DebugerMain()
                         
                         if(ImGui::IsItemClicked())
                         {
-                            BreakpointPushAtSourceLine(Src, I + 1, Breakpoints, &BreakpointCount);
+                            assert(DrawingLine);
+                            breakpoint *BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID);
+                            if(BreakpointEnabled(BP))
+                            {
+                                BreakpointDisable(BP);
+                            }
+                            else
+                            {
+                                if(BP)
+                                {
+                                    BreakpointEnable(BP);
+                                }
+                                else
+                                {
+                                    BreakpointPushAtSourceLine(Src, DrawingLine->LineNum, Breakpoints, &BreakpointCount);
+                                }
+                            }
                         }
                     }
                 }
