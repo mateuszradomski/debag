@@ -122,6 +122,7 @@ ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 
 static void ImGuiStartFrame();
 static void ImGuiEndFrame();
+static void ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName);
 
 static bool CharInString(char *String, char C);
 static u32 StringCountChar(char *String, char C);
