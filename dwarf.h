@@ -118,6 +118,12 @@ struct di_pointer_type
     size_t ActualTypeOffset;
 };
 
+struct di_const_type
+{
+    size_t DIEOffset;
+    size_t ActualTypeOffset;
+};
+
 struct di_struct_member
 {
     char *Name;
@@ -190,6 +196,9 @@ u32 DITypedefsCount = 0;
 
 di_pointer_type *DIPointerTypes;
 u32 DIPointerTypesCount = 0;
+
+di_const_type *DIConstTypes;
+u32 DIConstTypesCount = 0;
 
 di_struct_member *DIStructMembers = 0x0;
 u32 DIStructMembersCount = 0;

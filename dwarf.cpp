@@ -98,6 +98,16 @@ FindUnderlayingType(size_t BTDIEOffset)
         }
     }
     
+    for(u32 I = 0; I < DIConstTypesCount; I++)
+    {
+        if(DIConstTypes[I].DIEOffset == BTDIEOffset)
+        {
+            Result = FindUnderlayingType(DIConstTypes[I].ActualTypeOffset);
+            Result.Flags |= TYPE_IS_CONST;
+            return Result;
+        }
+    }
+    
     for(u32 I = 0; I < DIArrayTypesCount; I++)
     {
         if(DIArrayTypes[I].DIEOffset == BTDIEOffset)
@@ -896,7 +906,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             bool ignored = AttrTag == DW_AT_decl_file ||
                                 AttrTag == DW_AT_decl_line ||
-                                AttrTag == DW_AT_decl_column;
+                                AttrTag == DW_AT_decl_column ||
+                                AttrTag == DW_AT_sibling;
                             
                             if(!ignored)
                             {
@@ -1050,6 +1061,42 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                 }
             }
             
+        }break;
+        case DW_TAG_const_type:
+        {
+            //printf("libdwarf: Const Type\n");
+            
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            // NOTE(mateusz): Some DW_TAG_const_type are empty
+            if(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error) == DW_DLV_OK)
+            {
+                di_const_type *CType = &DIConstTypes[DIConstTypesCount++];
+                Dwarf_Off DIEOffset = 0;
+                DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+                CType->DIEOffset = DIEOffset;
+                
+                for(u32 I = 0; I < AttrCount; I++)
+                {
+                    Dwarf_Attribute Attribute = AttrList[I];
+                    Dwarf_Half AttrTag = 0;
+                    DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                    switch(AttrTag)
+                    {
+                        case DW_AT_type:
+                        {
+                            Dwarf_Off Offset = 0;
+                            DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                            
+                            CType->ActualTypeOffset = Offset;
+                        }break;
+                        default:
+                        {
+                            assert(!"Not expected TAG!");
+                        }break;
+                    }
+                }
+            }
         }break;
         case DW_TAG_structure_type:
         {
@@ -1379,6 +1426,7 @@ DWARFRead()
     DIBaseTypes = (di_base_type *)calloc(CountTable[DW_TAG_base_type], sizeof(di_base_type));
     DITypedefs = (di_typedef *)calloc(CountTable[DW_TAG_typedef], sizeof(di_typedef));
     DIPointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
+    DIConstTypes = (di_const_type *)calloc(CountTable[DW_TAG_const_type], sizeof(di_const_type));
     DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
     DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
     DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
