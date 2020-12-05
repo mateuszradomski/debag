@@ -55,7 +55,7 @@ int main()
     
     float array[16] = { 1.0f, 0.0f, 2.0f };
     struct vec2 myVec2s[3] = { 1.0f };
-    struct swarray stresstest = {};
+    struct swarray stresstest[2] = {};
     
     real32 Result = X * ssss;
 }
