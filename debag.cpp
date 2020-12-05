@@ -116,6 +116,24 @@ CharInString(char *String, char C)
     return false;
 }
 
+static char *
+StringFindLastChar(char *String, char C)
+{
+    char *Result = 0;
+    
+    while(String[0])
+    {
+        if(String[0] == C)
+        {
+            Result = String;
+        }
+        
+        String++;
+    }
+    
+    return Result;
+}
+
 static u32
 StringCountChar(char *String, char C)
 {
@@ -1112,16 +1130,26 @@ DebugerMain()
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
-        if(ImGui::BeginTabBar("Source lines", TBFlags))
+        if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            if(ImGui::BeginTabItem("Source"))
+            di_src_line *Line = LineTableFindByAddress(Regs.rip);
+            for(u32 SrcFileIndex = 0; SrcFileIndex < DISourceFilesCount; SrcFileIndex++)
             {
-                ImGui::BeginChild("srcfile");
-                di_src_line *Line = LineTableFindByAddress(Regs.rip);
-                
-                if(Line)
+                ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
+                if(SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
                 {
-                    di_src_file *Src = &DISourceFiles[Line->SrcFileIndex];
+                    TIFlags = ImGuiTabItemFlags_SetSelected;
+                }
+                
+                (void)TIFlags;
+                
+                char *FileName = StringFindLastChar(DISourceFiles[SrcFileIndex].Path, '/') + 1;
+                if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
+                {
+                    //printf("child on %u\n", SrcFileIndex);
+                    ImGui::BeginChild("srcfile");
+                    
+                    di_src_file *Src = &DISourceFiles[SrcFileIndex];
                     di_src_line *DrawingLine = 0x0;
                     char *LinePtr = Src->Content;
                     char *Prev = 0x0;
@@ -1132,7 +1160,7 @@ DebugerMain()
                         u32 LineLength = (u64)LinePtr - (u64)Prev;
                         
                         // NOTE(mateusz): Lines are indexed from 1
-                        if(Line->LineNum == I + 1)
+                        if(SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                         {
                             DrawingLine = Line;
                             ImGui::TextColored(CurrentLineColor, "%.*s", LineLength, Prev);
@@ -1144,13 +1172,18 @@ DebugerMain()
                         }
                         else
                         {
-                            di_src_line *TempLine = LineFindByNumber(I + 1);
+                            di_src_line *TempLine = LineFindByNumber(I + 1, SrcFileIndex);
                             if(TempLine)
                             {
                                 DrawingLine = TempLine;
                             }
                             
-                            if(DrawingLine && BreakpointEnabled(BreakpointFind(DrawingLine->Address, Debuger.DebugeePID))){
+                            breakpoint *BP = 0x0;
+                            
+                            if(DrawingLine &&
+                               (BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID)) &&
+                               BreakpointEnabled(BP)){
+                                //printf("[%u] = DrawingLine->Address = %lx\n", SrcFileIndex, DrawingLine->Address);
                                 ImGui::TextColored(BreakpointLineColor, "%.*s",
                                                    LineLength, Prev);
                             }
@@ -1162,29 +1195,33 @@ DebugerMain()
                         
                         if(ImGui::IsItemClicked())
                         {
-                            assert(DrawingLine);
-                            breakpoint *BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID);
-                            if(BreakpointEnabled(BP))
+                            // TODO(mateusz): This NEEDS to be better and not settings breakpoints
+                            // at comments and other garbage
+                            if(DrawingLine)
                             {
-                                BreakpointDisable(BP);
-                            }
-                            else
-                            {
-                                if(BP)
+                                breakpoint *BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID);
+                                if(BreakpointEnabled(BP))
                                 {
-                                    BreakpointEnable(BP);
+                                    BreakpointDisable(BP);
                                 }
                                 else
                                 {
-                                    BreakpointPushAtSourceLine(Src, DrawingLine->LineNum, Breakpoints, &BreakpointCount);
+                                    if(BP)
+                                    {
+                                        BreakpointEnable(BP);
+                                    }
+                                    else
+                                    {
+                                        BreakpointPushAtSourceLine(Src, DrawingLine->LineNum, Breakpoints, &BreakpointCount);
+                                    }
                                 }
                             }
                         }
                     }
+                    
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
                 }
-                
-                ImGui::EndChild();
-                ImGui::EndTabItem();
             }
             
             ImGui::EndTabBar();

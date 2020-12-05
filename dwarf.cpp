@@ -19,11 +19,11 @@ LineTableFindByAddress(size_t Address)
 }
 
 static di_src_line *
-LineFindByNumber(u32 LineNum)
+LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
 {
     for(u32 I = 0; I < DISourceLinesCount; I++)
     {
-        if(DISourceLines[I].LineNum == LineNum)
+        if(DISourceLines[I].LineNum == LineNum && DISourceLines[I].SrcFileIndex == SrcFileIndex)
         {
             return &DISourceLines[I];
         }

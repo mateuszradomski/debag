@@ -36,7 +36,7 @@ struct di_src_line
 {
     size_t Address;
     u32 LineNum;
-    i32 SrcFileIndex;
+    u32 SrcFileIndex;
 };
 
 struct di_variable

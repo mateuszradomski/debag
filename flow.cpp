@@ -142,8 +142,8 @@ BreakpointDisable(breakpoint *BP)
 static void
 BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *Count)
 {
-    (void)Src;
-    di_src_line *Line = LineFindByNumber(LineNum);
+    u32 SrcFileIndex = Src - DISourceFiles;
+    di_src_line *Line = LineFindByNumber(LineNum, SrcFileIndex);
     
     if(Line)
     {
