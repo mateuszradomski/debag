@@ -142,6 +142,18 @@ FindUnderlayingType(size_t BTDIEOffset)
         }
     }
     
+    for(u32 I = 0; I < DIUnionTypesCount; I++)
+    {
+        if(DIUnionTypes[I].DIEOffset == BTDIEOffset)
+        {
+            Result.Flags |= TYPE_IS_STRUCT;
+            Result.Union = &DIUnionTypes[I];
+            Result.Name = DIUnionTypes[I].Name;
+            
+            return Result;
+        }
+    }
+    
     for(u32 I = 0; I < DIBaseTypesCount; I++)
     {
         if(DIBaseTypes[I].DIEOffset == BTDIEOffset)
@@ -421,6 +433,12 @@ GetDebugeeLoadAddress(i32 DebugeePID)
     return Result;
 }
 
+
+// TODO(mateusz): The bigest hack of all time, fix this, record when Struct is read
+// and when Union is read
+bool WasStruct = false;
+bool WasUnion = false;
+
 static void
 DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
 {
@@ -617,7 +635,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             AttrTag == DW_AT_GNU_all_call_sites ||
                             AttrTag == DW_AT_external ||
                             AttrTag == DW_AT_GNU_all_tail_call_sites ||
-                            AttrTag == DW_AT_sibling;
+                            AttrTag == DW_AT_sibling ||
+                            AttrTag == DW_AT_noreturn;
                         if(!ignored)
                         {
                             const char *AttrName = 0x0;
@@ -823,7 +842,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             bool ignored = AttrTag == DW_AT_decl_file ||
                                 AttrTag == DW_AT_decl_line ||
                                 AttrTag == DW_AT_decl_column ||
-                                AttrTag == DW_AT_sibling;
+                                AttrTag == DW_AT_sibling ||
+                                AttrTag == DW_AT_artificial;
                             
                             if(!ignored)
                             {
@@ -1156,6 +1176,9 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             StructType->DIEOffset = DIEOffset;
             
+            WasUnion = false;
+            WasStruct = true;
+            
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -1202,28 +1225,21 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                 }
             }
         }break;
-        case DW_TAG_member:
+        case DW_TAG_union_type:
         {
-            //printf("libdwarf: Strcture member\n");
+            //printf("libdwarf: Union Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            if(DIStructTypesCount == 0)
-            {
-                printf("Unhandled class type\n");
-                return;
-            }
+            di_union_type *UnionType = &DIUnionTypes[DIUnionTypesCount++];
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            UnionType->DIEOffset = DIEOffset;
+            UnionType->Name = "";
             
-            di_struct_member *Member = &DIStructMembers[DIStructMembersCount++];
-            
-            di_struct_type *Struct = &DIStructTypes[DIStructTypesCount - 1];
-            if(Struct->MembersCount == 0)
-            {
-                Struct->Members = Member;
-            }
-            
-            Struct->MembersCount += 1;
+            WasUnion = true;
+            WasStruct = false;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1238,35 +1254,160 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Member->Name = ArrayPush(DIArena, char, Size);
-                        StringCopy(Member->Name, Name);
+                        UnionType->Name = ArrayPush(DIArena, char, Size);
+                        StringCopy(UnionType->Name, Name);
                     }break;
-                    case DW_AT_type:
+                    case DW_AT_byte_size:
                     {
-                        Dwarf_Off Offset = 0;
-                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        Dwarf_Unsigned ByteSize = 0;
+                        DWARF_CALL(dwarf_formudata(Attribute, &ByteSize, Error));
                         
-                        Member->ActualTypeOffset = Offset;
+                        UnionType->ByteSize = ByteSize;
                     }break;
-                    case DW_AT_data_member_location:
+                    case DW_AT_declaration:
                     {
-                        Dwarf_Unsigned Location = 0;
-                        DWARF_CALL(dwarf_formudata(Attribute, &Location, Error));
-                        
-                        Member->ByteLocation = Location;
+                        // TODO(mateusz): I have not way to really represent that in a way that is formal
+                        // I have to create a test program for that and see how it behaves
+                        UnionType->Members = 0x0;
+                        UnionType->MembersCount = 0;
                     }break;
                     default:
                     {
                         bool ignored = AttrTag == DW_AT_decl_file ||
                             AttrTag == DW_AT_decl_line ||
-                            AttrTag == DW_AT_decl_column;
+                            AttrTag == DW_AT_decl_column ||
+                            AttrTag == DW_AT_sibling;
                         if(!ignored)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Structure member unhandled Attribute: %s\n", AttrName);
+                            printf("Union type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
+                }
+            }
+        }break;
+        case DW_TAG_member:
+        {
+            //printf("libdwarf: Strcture/Union member\n");
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            if(!WasStruct && !WasUnion)
+            {
+                printf("Unhandled class type\n");
+                return;
+            }
+            
+            if(WasStruct)
+            {
+                di_struct_member *Member = &DIStructMembers[DIStructMembersCount++];
+                
+                di_struct_type *Struct = &DIStructTypes[DIStructTypesCount - 1];
+                if(Struct->MembersCount == 0)
+                {
+                    Struct->Members = Member;
+                }
+                
+                Struct->MembersCount += 1;
+                Member->Name = "";
+                
+                for(u32 I = 0; I < AttrCount; I++)
+                {
+                    Dwarf_Attribute Attribute = AttrList[I];
+                    Dwarf_Half AttrTag = 0;
+                    DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                    switch(AttrTag)
+                    {
+                        case DW_AT_name:
+                        {
+                            char *Name = 0x0;
+                            DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                            
+                            u32 Size = strlen(Name) + 1;
+                            Member->Name = ArrayPush(DIArena, char, Size);
+                            StringCopy(Member->Name, Name);
+                        }break;
+                        case DW_AT_type:
+                        {
+                            Dwarf_Off Offset = 0;
+                            DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                            
+                            Member->ActualTypeOffset = Offset;
+                        }break;
+                        case DW_AT_data_member_location:
+                        {
+                            Dwarf_Unsigned Location = 0;
+                            DWARF_CALL(dwarf_formudata(Attribute, &Location, Error));
+                            
+                            Member->ByteLocation = Location;
+                        }break;
+                        default:
+                        {
+                            bool ignored = AttrTag == DW_AT_decl_file ||
+                                AttrTag == DW_AT_decl_line ||
+                                AttrTag == DW_AT_decl_column;
+                            if(!ignored)
+                            {
+                                const char *AttrName = 0x0;
+                                DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                                printf("Structure member unhandled Attribute: %s\n", AttrName);
+                            }
+                        }break;
+                    }
+                }
+            }
+            else if(WasUnion)
+            {
+                di_union_member *Member = &DIUnionMembers[DIUnionMembersCount++];
+                
+                di_union_type *Union = &DIUnionTypes[DIUnionTypesCount - 1];
+                if(Union->MembersCount == 0)
+                {
+                    Union->Members = Member;
+                }
+                
+                Union->MembersCount += 1;
+                Member->ByteLocation = 0;
+                Member->Name = "";
+                
+                for(u32 I = 0; I < AttrCount; I++)
+                {
+                    Dwarf_Attribute Attribute = AttrList[I];
+                    Dwarf_Half AttrTag = 0;
+                    DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                    switch(AttrTag)
+                    {
+                        case DW_AT_name:
+                        {
+                            char *Name = 0x0;
+                            DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
+                            
+                            u32 Size = strlen(Name) + 1;
+                            Member->Name = ArrayPush(DIArena, char, Size);
+                            StringCopy(Member->Name, Name);
+                        }break;
+                        case DW_AT_type:
+                        {
+                            Dwarf_Off Offset = 0;
+                            DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                            
+                            Member->ActualTypeOffset = Offset;
+                        }break;
+                        default:
+                        {
+                            bool ignored = AttrTag == DW_AT_decl_file ||
+                                AttrTag == DW_AT_decl_line ||
+                                AttrTag == DW_AT_decl_column;
+                            if(!ignored)
+                            {
+                                const char *AttrName = 0x0;
+                                DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
+                                printf("Unionure member unhandled Attribute: %s\n", AttrName);
+                            }
+                        }break;
+                    }
                 }
             }
         }break;
@@ -1479,6 +1620,8 @@ DWARFRead()
     DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
     DIStructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
     DIStructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
+    DIUnionMembers = (di_union_member *)calloc(CountTable[DW_TAG_member], sizeof(di_union_member));
+    DIUnionTypes = (di_union_type *)calloc(CountTable[DW_TAG_union_type], sizeof(di_union_type));
     DIArrayTypes = (di_array_type *)calloc(CountTable[DW_TAG_array_type], sizeof(di_array_type));
 #if 0
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)

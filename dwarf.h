@@ -93,7 +93,8 @@ enum
     TYPE_IS_CONST = (1 << 3),
     TYPE_IS_RESTRICT = (1 << 4),
     TYPE_IS_STRUCT = (1 << 5),
-    TYPE_IS_ARRAY = (1 << 6),
+    TYPE_IS_UNION = (1 << 6),
+    TYPE_IS_ARRAY = (1 << 7),
 };
 
 typedef i32 type_flags;
@@ -149,6 +150,24 @@ struct di_struct_type
     u32 MembersCount;
 };
 
+struct di_union_member
+{
+    char *Name;
+    
+    size_t ActualTypeOffset;
+    u32 ByteLocation;
+};
+
+struct di_union_type
+{
+    char *Name;
+    
+    size_t DIEOffset;
+    size_t ByteSize;
+    di_union_member *Members;
+    u32 MembersCount;
+};
+
 struct di_array_type
 {
     size_t DIEOffset;
@@ -165,6 +184,7 @@ struct di_underlaying_type
     {
         void *Ptr;
         di_struct_type *Struct;
+        di_union_type *Union;
         di_base_type *Type;
     };
     
@@ -215,6 +235,12 @@ u32 DIStructMembersCount = 0;
 
 di_struct_type *DIStructTypes = 0x0;
 u32 DIStructTypesCount = 0;
+
+di_union_member *DIUnionMembers = 0x0;
+u32 DIUnionMembersCount = 0;
+
+di_union_type *DIUnionTypes = 0x0;
+u32 DIUnionTypesCount = 0;
 
 di_array_type *DIArrayTypes = 0x0;
 u32 DIArrayTypesCount = 0;

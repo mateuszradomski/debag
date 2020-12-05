@@ -166,16 +166,19 @@ StringCopy(char *Dest, char *Src)
 static void
 StringConcat(char *Dest, char *Src)
 {
-    while(Dest[0])
+    if(Dest && Src)
     {
-        Dest++;
-    }
-    
-    while(Src[0])
-    {
-        Dest[0] = Src[0];
-        Dest++;
-        Src++;
+        while(Dest[0])
+        {
+            Dest++;
+        }
+        
+        while(Src[0])
+        {
+            Dest[0] = Src[0];
+            Dest++;
+            Src++;
+        }
     }
 }
 
@@ -570,7 +573,7 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
     size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
     
     char TypeName[128] = {};
-    strcat(TypeName, Underlaying.Name);
+    StringConcat(TypeName, Underlaying.Name);
     
     // TODO(mateusz): Stacked pointers dereference, like (void **)
     if(Underlaying.Flags & TYPE_IS_POINTER)
@@ -593,6 +596,7 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
         {
             di_struct_member *Member = &Struct->Members[MemberIndex];
             size_t MemberAddress = VarAddress + Member->ByteLocation;
+            assert(Member->Name);
             
             ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
         }
@@ -638,7 +642,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
         {
             //size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
             
-            if(Underlaying.Flags & TYPE_IS_STRUCT)
+            if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
             {
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
@@ -675,8 +679,12 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     {
         ImGuiShowArrayType(Underlaying, VarAddress, VarName);
     }
-    else if(Underlaying.Flags & TYPE_IS_STRUCT)
+    else if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
     {
+        // NOTE(mateusz): We are treating unions and struct as the same thing, but with ByteLocation = 0
+        assert(sizeof(di_union_type) == sizeof(di_struct_type));
+        assert(sizeof(di_union_member) == sizeof(di_struct_member));
+        
         ImGuiShowStructType(Underlaying, VarAddress, VarName);
     }
     else if(Underlaying.Flags & TYPE_IS_BASE)
