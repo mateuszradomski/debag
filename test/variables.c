@@ -8,6 +8,12 @@ struct vec2
     float y;
 };
 
+struct swarray
+{
+    real32 index;
+    int inside_array[12];
+};
+
 struct asssss
 {
     
@@ -49,6 +55,7 @@ int main()
     
     float array[16] = { 1.0f, 0.0f, 2.0f };
     struct vec2 myVec2s[3] = { 1.0f };
+    struct swarray stresstest = {};
     
     real32 Result = X * ssss;
 }
