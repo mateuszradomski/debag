@@ -108,6 +108,16 @@ FindUnderlayingType(size_t BTDIEOffset)
         }
     }
     
+    for(u32 I = 0; I < DIRestrictTypesCount; I++)
+    {
+        if(DIRestrictTypes[I].DIEOffset == BTDIEOffset)
+        {
+            Result = FindUnderlayingType(DIRestrictTypes[I].ActualTypeOffset);
+            Result.Flags |= TYPE_IS_RESTRICT;
+            return Result;
+        }
+    }
+    
     for(u32 I = 0; I < DIArrayTypesCount; I++)
     {
         if(DIArrayTypes[I].DIEOffset == BTDIEOffset)
@@ -710,13 +720,14 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                     {
                         bool ignored = AttrTag == DW_AT_decl_file ||
                             AttrTag == DW_AT_decl_line ||
-                            AttrTag == DW_AT_decl_column;
+                            AttrTag == DW_AT_decl_column ||
+                            AttrTag == DW_AT_sibling;
                         
                         if(!ignored)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Variable Unhandled Attribute: %s\n", AttrName);
+                            printf("Lexical Scope Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1098,6 +1109,41 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                 }
             }
         }break;
+        case DW_TAG_restrict_type:
+        {
+            //printf("libdwarf: Restrict Type\n");
+            
+            Dwarf_Signed AttrCount = 0;
+            Dwarf_Attribute *AttrList = {};
+            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            
+            di_restrict_type *RType = &DIRestrictTypes[DIRestrictTypesCount++];
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            RType->DIEOffset = DIEOffset;
+            
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+                switch(AttrTag)
+                {
+                    case DW_AT_type:
+                    {
+                        Dwarf_Off Offset = 0;
+                        DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
+                        
+                        RType->ActualTypeOffset = Offset;
+                    }break;
+                    default:
+                    {
+                        assert(!"Not expected TAG!");
+                    }break;
+                }
+            }
+            
+        }break;
         case DW_TAG_structure_type:
         {
             //printf("libdwarf: Strcture Type\n");
@@ -1427,6 +1473,7 @@ DWARFRead()
     DITypedefs = (di_typedef *)calloc(CountTable[DW_TAG_typedef], sizeof(di_typedef));
     DIPointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
     DIConstTypes = (di_const_type *)calloc(CountTable[DW_TAG_const_type], sizeof(di_const_type));
+    DIRestrictTypes = (di_restrict_type *)calloc(CountTable[DW_TAG_restrict_type], sizeof(di_restrict_type));
     DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
     DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
     DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));

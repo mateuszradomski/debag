@@ -91,8 +91,9 @@ enum
     TYPE_IS_TYPEDEF = (1 << 1),
     TYPE_IS_POINTER = (1 << 2),
     TYPE_IS_CONST = (1 << 3),
-    TYPE_IS_STRUCT = (1 << 4),
-    TYPE_IS_ARRAY = (1 << 5),
+    TYPE_IS_RESTRICT = (1 << 4),
+    TYPE_IS_STRUCT = (1 << 5),
+    TYPE_IS_ARRAY = (1 << 6),
 };
 
 typedef i32 type_flags;
@@ -119,6 +120,12 @@ struct di_pointer_type
 };
 
 struct di_const_type
+{
+    size_t DIEOffset;
+    size_t ActualTypeOffset;
+};
+
+struct di_restrict_type
 {
     size_t DIEOffset;
     size_t ActualTypeOffset;
@@ -194,11 +201,14 @@ u32 DIBaseTypesCount = 0;
 di_typedef *DITypedefs = 0x0;
 u32 DITypedefsCount = 0;
 
-di_pointer_type *DIPointerTypes;
+di_pointer_type *DIPointerTypes = 0x0;
 u32 DIPointerTypesCount = 0;
 
-di_const_type *DIConstTypes;
+di_const_type *DIConstTypes = 0x0;
 u32 DIConstTypesCount = 0;
+
+di_restrict_type *DIRestrictTypes = 0x0;
+u32 DIRestrictTypesCount = 0;
 
 di_struct_member *DIStructMembers = 0x0;
 u32 DIStructMembersCount = 0;
