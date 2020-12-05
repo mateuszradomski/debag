@@ -393,10 +393,54 @@ ImGuiShowRegisters(user_regs_struct Regs)
 }
 
 static void
-ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, size_t MachineWord, char *VarName)
+ImGuiShowValueAsString(size_t DereferencedAddress)
+{
+    char Temp[256] = {};
+    u32 TIndex = 0;
+    
+    Temp[TIndex++] = '\"';
+    if(DereferencedAddress)
+    {
+        size_t MachineWord = PeekDebugeeMemory(DereferencedAddress, Debuger.DebugeePID);
+        char *PChar = (char *)&MachineWord;
+        
+        int RemainingBytes = sizeof(MachineWord);
+        while(PChar[0])
+        {
+            Temp[TIndex++] = PChar[0];
+            PChar += 1;
+            
+            RemainingBytes -= 1;
+            if(RemainingBytes == 0)
+            {
+                RemainingBytes = sizeof(MachineWord);
+                DereferencedAddress += sizeof(MachineWord);
+                
+                MachineWord = PeekDebugeeMemory(DereferencedAddress, Debuger.DebugeePID);
+                PChar = (char *)&MachineWord;
+            }
+        }
+    }
+    Temp[TIndex++] = '\"';
+    assert(TIndex < sizeof(Temp));
+    
+    char AddrTemp[21] = {};
+    sprintf(AddrTemp, " (%p)", (void *)DereferencedAddress);
+    
+    for(u32 I = 0; I < sizeof(AddrTemp); I++)
+    {
+        Temp[TIndex++] = AddrTemp[I];
+    }
+    assert(TIndex < sizeof(Temp));
+    
+    ImGui::Text("%s", Temp);
+}
+
+static void
+ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_base_type *BType = Underlaying.Type;
-    (void)VarAddress;
+    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
     
     ImGui::Text("%s", VarName);
     ImGui::NextColumn();
@@ -415,7 +459,15 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, size_t Mac
     
     if(Underlaying.Flags & TYPE_IS_POINTER)
     {
-        ImGui::Text("%p", TypesPtrs.Void);
+        if(BType->Encoding == DW_ATE_signed_char)
+        {
+            size_t DereferencedAddress = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+            ImGuiShowValueAsString(DereferencedAddress);
+        }
+        else
+        {
+            ImGui::Text("%p", TypesPtrs.Void);
+        }
     }
     else
     {
@@ -494,9 +546,10 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, size_t Mac
 }
 
 static void
-ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, size_t MachineWord, char *VarName)
+ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_struct_type *Struct = Underlaying.Struct;
+    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
     
     char TypeName[128] = {};
     strcat(TypeName, Underlaying.Name);
@@ -532,10 +585,11 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, size_t M
 }
 
 static void
-ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, size_t MachineWord, char *VarName)
+ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     char TypeName[128] = {};
     strcat(TypeName, Underlaying.Name);
+    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
     
     // TODO(mateusz): Stacked pointers dereference, like (void **)
     if(Underlaying.Flags & TYPE_IS_POINTER)
@@ -547,7 +601,15 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, size_t Ma
     
     bool Open = ImGui::TreeNode(VarName, "%s", VarName);
     ImGui::NextColumn();
-    ImGui::Text("0x%lx", VarAddress);
+    if(Underlaying.Type->Encoding == DW_ATE_signed_char)
+    {
+        ImGuiShowValueAsString(VarAddress);
+    }
+    else
+    {
+        ImGui::Text("0x%lx", VarAddress);
+    }
+    
     ImGui::NextColumn();
     ImGui::Text("%s", TypeName);
     ImGui::NextColumn();
@@ -556,14 +618,14 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, size_t Ma
     {
         for(u32 I = 0; I <= Underlaying.ArrayUpperBound; I++)
         {
-            size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+            //size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
             
             if(Underlaying.Flags & TYPE_IS_STRUCT)
             {
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
                 
-                ImGuiShowStructType(Underlaying, VarAddress, MachineWord, VarNameWI);
+                ImGuiShowStructType(Underlaying, VarAddress, VarNameWI);
                 
                 VarAddress += Underlaying.Struct->ByteSize;
             }
@@ -572,7 +634,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, size_t Ma
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
                 
-                ImGuiShowBaseType(Underlaying, VarAddress, MachineWord, VarNameWI);
+                ImGuiShowBaseType(Underlaying, VarAddress, VarNameWI);
                 
                 VarAddress += Underlaying.Type->ByteSize;
             }
@@ -591,19 +653,17 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
     di_underlaying_type Underlaying = FindUnderlayingType(TypeOffset);
     
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-    
     if(Underlaying.Flags & TYPE_IS_ARRAY)
     {
-        ImGuiShowArrayType(Underlaying, VarAddress, MachineWord, VarName);
+        ImGuiShowArrayType(Underlaying, VarAddress, VarName);
     }
     else if(Underlaying.Flags & TYPE_IS_STRUCT)
     {
-        ImGuiShowStructType(Underlaying, VarAddress, MachineWord, VarName);
+        ImGuiShowStructType(Underlaying, VarAddress, VarName);
     }
     else if(Underlaying.Flags & TYPE_IS_BASE)
     {
-        ImGuiShowBaseType(Underlaying, VarAddress, MachineWord, VarName);
+        ImGuiShowBaseType(Underlaying, VarAddress, VarName);
     }
     else
     {
