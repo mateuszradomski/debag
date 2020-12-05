@@ -39,6 +39,7 @@ struct button
     u8 Down : 1;
     u8 Last : 1;
     u8 Pressed : 1;
+    u8 Repeat : 1;
 };
 
 struct breakpoint

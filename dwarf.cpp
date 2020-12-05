@@ -164,13 +164,13 @@ BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
         {
             case 1:
             {
-                if(Type->Encoding == DW_ATE_signed)
+                if(Type->Encoding == DW_ATE_signed_char)
                 {
                     Result = "%c";
                 }
                 else
                 {
-                    Result = "%d";
+                    Result = "%u";
                 }
             }break;
             case 2:

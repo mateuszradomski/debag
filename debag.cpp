@@ -36,7 +36,10 @@ KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, in
     
     if(Action == GLFW_PRESS) {
         KeyboardButtons[Key].Down = true;
+    } else if(Action == GLFW_REPEAT) {
+        KeyboardButtons[Key].Repeat = true;
     } else if(Action == GLFW_RELEASE) {
+        KeyboardButtons[Key].Repeat = false;
         KeyboardButtons[Key].Down = false;
     }
     
@@ -398,25 +401,83 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, size_t Mac
     ImGui::Text("%s", VarName);
     ImGui::NextColumn();
     
-    char FormatStr[64] = {};
-    StringConcat(FormatStr, BaseTypeToFormatStr(BType, Underlaying.Flags));
-    
-    float *FloatPtr = (float *)&MachineWord;
-    double *DoublePtr = (double *)&MachineWord;
-    
-    bool IsPointer = Underlaying.Flags & TYPE_IS_POINTER;
-    
-    if(BaseTypeIsFloat(BType) && !IsPointer)
+    union types_ptrs
     {
-        ImGui::Text(FormatStr, *FloatPtr);
-    }
-    else if(BaseTypeIsDoubleFloat(BType) && !IsPointer)
+        void *Void;
+        float *Float;
+        double *Double;
+        char *Char;
+        short *Short;
+        int *Int;
+        long long *Long;
+    } TypesPtrs;
+    TypesPtrs.Void = &MachineWord;
+    
+    if(Underlaying.Flags & TYPE_IS_POINTER)
     {
-        ImGui::Text(FormatStr, *DoublePtr);
+        ImGui::Text("%p", TypesPtrs.Void);
     }
     else
     {
-        ImGui::Text(FormatStr, MachineWord);
+        switch(BType->ByteSize)
+        {
+            case 1:
+            {
+                if(BType->Encoding == DW_ATE_signed_char)
+                {
+                    ImGui::Text("%c", *TypesPtrs.Char);
+                }
+                else
+                {
+                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Char);
+                }
+            }break;
+            case 2:
+            {
+                if(BType->Encoding == DW_ATE_signed)
+                {
+                    ImGui::Text("%d", *TypesPtrs.Short);
+                }
+                else
+                {
+                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Short);
+                }
+            }break;
+            case 4:
+            {
+                if(BType->Encoding == DW_ATE_unsigned)
+                {
+                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Int);
+                }
+                else if(BType->Encoding == DW_ATE_float)
+                {
+                    ImGui::Text("%f", *TypesPtrs.Float);
+                }
+                else
+                {
+                    ImGui::Text("%d", *TypesPtrs.Int);
+                }
+            }break;
+            case 8:
+            {
+                if(BType->Encoding == DW_ATE_unsigned)
+                {
+                    ImGui::Text("%llu", (unsigned long long)*TypesPtrs.Long);
+                }
+                else if(BType->Encoding == DW_ATE_float)
+                {
+                    ImGui::Text("%f", *TypesPtrs.Double);
+                }
+                else
+                {
+                    ImGui::Text("%lld", *TypesPtrs.Long);
+                }
+            }break;
+            default:
+            {
+                printf("Unsupported byte size = %d", BType->ByteSize);
+            }break;
+        }
     }
     
     char TypeName[128] = {};
@@ -918,13 +979,13 @@ DebugStart()
             UpdateInfo();
         }
         
-        if(KeyboardButtons[GLFW_KEY_F10].Pressed)
+        if(KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat)
         {
             ToNextLine(Debuger.DebugeePID, false);
             UpdateInfo();
         }
         
-        if(KeyboardButtons[GLFW_KEY_F11].Pressed)
+        if(KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat)
         {
             ToNextLine(Debuger.DebugeePID, true);
             UpdateInfo();
