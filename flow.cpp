@@ -196,7 +196,14 @@ ContinueProgram(i32 DebugeePID)
 {
     if(BreakpointCount > 0)
     {
+        size_t OldPC = Regs.rip;
         StepInstruction(DebugeePID);
+        
+        breakpoint *BP = BreakpointFind(OldPC, DebugeePID);
+        if(BP)
+        {
+            BP->ExectuedSavedOpCode = false;
+        }
     }
     
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;
@@ -333,12 +340,33 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                             //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
                             
                             //printf("Break condition branch in jump instrs: %lX\n", OperandAddress);
-                            
-                            breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
-                            BreakpointEnable(&BP);
-                            TempBreakpoints[TempBreakpointsCount++] = BP;
+                            if(OperandAddress != Range.Start)
+                            {
+                                breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
+                                BreakpointEnable(&BP);
+                                TempBreakpoints[TempBreakpointsCount++] = BP;
+                            }
                         }
                     }
+                    
+                    if(Type & INST_TYPE_RET)
+                    {
+                        size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
+                        
+                        for(u32 I = 0; I < DICompileUnitsCount; I++)
+                        {
+                            if(AddressBetween(ReturnAddress, DICompileUnits[I].LowPC, DICompileUnits[I].HighPC))
+                            {
+                                breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
+                                BreakpointEnable(&BP);
+                                TempBreakpoints[TempBreakpointsCount++] = BP;
+                                
+                                //printf("Breaking because of return: %lX\n", ReturnAddress);
+                                break;
+                            }
+                        }
+                    }
+                    
                     // TODO(mateusz): This isn't that safe I guess
                     // It's created upon a feeling I have of programs, nothing
                     // doc/spec based
