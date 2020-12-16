@@ -259,15 +259,21 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             
             for(u32 I = 0; I < DICompileUnitsCount; I++)
             {
-                if(AddressBetween(CallAddress, DICompileUnits[I].LowPC, DICompileUnits[I].HighPC))
+                di_compile_unit *CU = &DICompileUnits[I];
+                for(u32 RI = 0; RI < CU->RangesCount; RI++)
                 {
-                    breakpoint BP = BreakpointCreate(CallAddress, DebugeePID);
-                    BreakpointEnable(&BP);
-                    TempBreakpoints[TempBreakpointsCount++] = BP;
-                    break;
+                    if(AddressBetween(CallAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))
+                    {
+                        breakpoint BP = BreakpointCreate(CallAddress, DebugeePID);
+                        BreakpointEnable(&BP);
+                        TempBreakpoints[TempBreakpointsCount++] = BP;
+                        goto END_TYPE_CALL;
+                    }
                 }
             }
         }
+        
+        END_TYPE_CALL:;
         
         if(Type & INST_TYPE_RET)
         {
@@ -275,17 +281,23 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             
             for(u32 I = 0; I < DICompileUnitsCount; I++)
             {
-                if(AddressBetween(ReturnAddress, DICompileUnits[I].LowPC, DICompileUnits[I].HighPC))
+                di_compile_unit *CU = &DICompileUnits[I];
+                for(u32 RI = 0; RI < CU->RangesCount; RI++)
                 {
-                    breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
-                    BreakpointEnable(&BP);
-                    TempBreakpoints[TempBreakpointsCount++] = BP;
-                    
-                    //printf("Breaking because of return: %lX\n", ReturnAddress);
-                    break;
+                    if(AddressBetween(ReturnAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))
+                    {
+                        breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
+                        BreakpointEnable(&BP);
+                        TempBreakpoints[TempBreakpointsCount++] = BP;
+                        
+                        //printf("Breaking because of return: %lX\n", ReturnAddress);
+                        goto END_TYPE_RET;
+                    }
                 }
             }
         }
+        
+        END_TYPE_RET:;
         
         if((Type & INST_TYPE_RELATIVE_BRANCH) && (Type & INST_TYPE_JUMP))
         {
@@ -355,17 +367,23 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                         
                         for(u32 I = 0; I < DICompileUnitsCount; I++)
                         {
-                            if(AddressBetween(ReturnAddress, DICompileUnits[I].LowPC, DICompileUnits[I].HighPC))
+                            di_compile_unit *CU = &DICompileUnits[I];
+                            for(u32 RI = 0; RI < CU->RangesCount; RI++)
                             {
-                                breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
-                                BreakpointEnable(&BP);
-                                TempBreakpoints[TempBreakpointsCount++] = BP;
-                                
-                                //printf("Breaking because of return: %lX\n", ReturnAddress);
-                                break;
+                                if(AddressBetween(ReturnAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))
+                                {
+                                    breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
+                                    BreakpointEnable(&BP);
+                                    TempBreakpoints[TempBreakpointsCount++] = BP;
+                                    
+                                    //printf("Breaking because of return: %lX\n", ReturnAddress);
+                                    goto END_TYPE_RET_DEEP;
+                                }
                             }
                         }
                     }
+                    
+                    END_TYPE_RET_DEEP:;
                     
                     // TODO(mateusz): This isn't that safe I guess
                     // It's created upon a feeling I have of programs, nothing

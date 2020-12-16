@@ -445,7 +445,7 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
     Temp[TIndex++] = '\"';
     assert(TIndex < sizeof(Temp));
     
-    char AddrTemp[21] = {};
+    char AddrTemp[24] = {};
     sprintf(AddrTemp, " (%p)", (void *)DereferencedAddress);
     
     for(u32 I = 0; I < sizeof(AddrTemp); I++)
@@ -480,7 +480,7 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
     
     if(Underlaying.Flags & TYPE_IS_POINTER)
     {
-        if(BType->Encoding == DW_ATE_signed_char)
+        if(BType->Encoding == DW_ATE_signed_char && Underlaying.PointerCount == 1)
         {
             size_t DereferencedAddress = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
             ImGuiShowValueAsString(DereferencedAddress);
@@ -693,7 +693,7 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     }
     else
     {
-        //printf("Var [%s] doesn't have a type\n", VarName);
+        printf("Var [%s] doesn't have a type\n", VarName);
         //assert(false);
     }
 }
@@ -792,6 +792,8 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
         // TODO(mateusz): In the tests_bin/variables program there are weird bytes
         // between instructions, looks kinda like padding. I guess to get around it
         // I have to disassemble between CU LowPC and HighPC.
+        // NOTE(mateusz): Comments are always out of date, i feel like it's already solved
+        // 2020.12.16
         if(Count == 0) { break; }
         
         DisasmInst[I].Address = InstructionAddress;
@@ -879,6 +881,7 @@ UpdateInfo()
     di_function *Func = FindFunctionConfiningAddress(Regs.rip);
     if(Func)
     {
+        assert(Func->FuncLexScope.RangesCount == 0);
         address_range LexScopeRange = {};
         LexScopeRange.Start = Func->FuncLexScope.LowPC;
         LexScopeRange.End = Func->FuncLexScope.HighPC;

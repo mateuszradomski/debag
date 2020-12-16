@@ -18,9 +18,9 @@ struct di_compile_unit
 {
     char *Name;
     
-    size_t LowPC;
-    size_t HighPC;
-    //address_range *AddressRanges;
+    size_t *RangesLowPCs;
+    size_t *RangesHighPCs;
+    u32 RangesCount = 0;
     
     di_compile_unit_flags Flags;
 };
@@ -189,6 +189,7 @@ struct di_underlaying_type
     };
     
     size_t ArrayUpperBound; // STUPID!!
+    u32 PointerCount;
     type_flags Flags;
 };
 

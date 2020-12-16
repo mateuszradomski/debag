@@ -94,6 +94,7 @@ FindUnderlayingType(size_t BTDIEOffset)
         {
             Result = FindUnderlayingType(DIPointerTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_POINTER;
+            Result.PointerCount += 1;
             return Result;
         }
     }
@@ -478,24 +479,68 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                     }break;
                     case DW_AT_low_pc:
                     {
-                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->LowPC;
+                        CompUnit->RangesLowPCs = ArrayPush(DIArena, size_t, 1);
+                        CompUnit->RangesCount = 1;
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->RangesLowPCs;
                         DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
                     }break;
                     case DW_AT_high_pc:
                     {
-                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->HighPC;
+                        CompUnit->RangesHighPCs = ArrayPush(DIArena, size_t, 1);
+                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesHighPCs;
                         
                         Dwarf_Half Form = 0;
                         Dwarf_Form_Class FormType = {};
                         DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
                         if (FormType == DW_FORM_CLASS_CONSTANT) {
-                            CompUnit->HighPC += CompUnit->LowPC;
+                            CompUnit->RangesHighPCs[0] += CompUnit->RangesLowPCs[0];
                         }
                         
                     }break;
                     case DW_AT_ranges:
                     {
-                        assert(false);
+                        Dwarf_Ranges *Ranges = 0x0;
+                        Dwarf_Signed RangesCount = 0;
+                        Dwarf_Unsigned ByteCount = 0;
+                        
+                        Dwarf_Off DebugRangesOffset = 0;
+                        DWARF_CALL(dwarf_global_formref(Attribute, &DebugRangesOffset, Error));
+                        
+                        DWARF_CALL(dwarf_get_ranges_a(Debug, DebugRangesOffset, DIE, &Ranges,
+                                                      &RangesCount, &ByteCount, Error));
+                        
+                        CompUnit->RangesLowPCs = ArrayPush(DIArena, size_t, RangesCount);
+                        CompUnit->RangesHighPCs = ArrayPush(DIArena, size_t, RangesCount);
+                        
+                        size_t SelectedAddress = 0x0;
+                        for(u32 I = 0; I < RangesCount; I++)
+                        {
+                            switch(Ranges[I].dwr_type)
+                            {
+                                case DW_RANGES_ENTRY:
+                                {
+                                    size_t RLowPC = Ranges[I].dwr_addr1 + SelectedAddress;
+                                    size_t RHighPC = Ranges[I].dwr_addr2 + SelectedAddress;
+                                    
+                                    u32 RIndex = CompUnit->RangesCount++;
+                                    CompUnit->RangesLowPCs[RIndex] = RLowPC;
+                                    CompUnit->RangesHighPCs[RIndex] = RHighPC;
+                                }break;
+                                case DW_RANGES_ADDRESS_SELECTION:
+                                {
+                                    SelectedAddress = Ranges[I].dwr_addr2;
+                                }break;
+                                case DW_RANGES_END:
+                                {
+                                    break;
+                                }break;
+                                default:
+                                {
+                                    assert(false);
+                                };
+                            }
+                        }
+                        
                         CompUnit->Flags |= DI_COMP_UNIT_HAS_RANGES;
                     }break;
                     default:
@@ -697,8 +742,9 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             {
                                 case DW_RANGES_ENTRY:
                                 {
-                                    size_t RLowPC = CU->LowPC + Ranges[I].dwr_addr1 + SelectedAddress;
-                                    size_t RHighPC = CU->LowPC + Ranges[I].dwr_addr2 + SelectedAddress;
+                                    assert(CU->RangesCount == 1);
+                                    size_t RLowPC = CU->RangesLowPCs[0] + Ranges[I].dwr_addr1 + SelectedAddress;
+                                    size_t RHighPC = CU->RangesLowPCs[0] + Ranges[I].dwr_addr2 + SelectedAddress;
                                     
                                     u32 RIndex = LexScope->RangesCount++;
                                     LexScope->RangesLowPCs[RIndex] = RLowPC;
@@ -843,7 +889,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                                 AttrTag == DW_AT_decl_line ||
                                 AttrTag == DW_AT_decl_column ||
                                 AttrTag == DW_AT_sibling ||
-                                AttrTag == DW_AT_artificial;
+                                AttrTag == DW_AT_artificial ||
+                                AttrTag == DW_AT_specification;
                             
                             if(!ignored)
                             {
@@ -938,13 +985,14 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             bool ignored = AttrTag == DW_AT_decl_file ||
                                 AttrTag == DW_AT_decl_line ||
                                 AttrTag == DW_AT_decl_column ||
-                                AttrTag == DW_AT_sibling;
+                                AttrTag == DW_AT_sibling ||
+                                AttrTag == DW_AT_specification;
                             
                             if(!ignored)
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                printf("Variable Unhandled Attribute: %s\n", AttrName);
+                                printf("Formal Parameter Unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
