@@ -4,7 +4,9 @@
 #define DWARF_H
 
 // NOTE(mateusz): With DWARF5 and non-platform specifc it's DW_TAG_immutable_type
-#define DWARF_TAGS_COUNT 0x4b
+// TODO(mateusz): Yea but GCC and Clang are going to stick their shitty ideas about things
+// to this and we really need a hashmap
+#define DWARF_TAGS_COUNT 0xffff
 
 enum
 {
@@ -196,6 +198,7 @@ struct di_underlaying_type
 #define MAX_DI_SOURCE_FILES 8
 di_src_file *DISourceFiles = 0x0;
 u32 DISourceFilesCount = 0;
+u32 DISourceFilesInExec = 0;
 
 #define MAX_DI_SOURCE_LINES (1 << 15)
 di_src_line *DISourceLines = 0x0;

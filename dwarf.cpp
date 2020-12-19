@@ -440,6 +440,8 @@ GetDebugeeLoadAddress(i32 DebugeePID)
 bool WasStruct = false;
 bool WasUnion = false;
 
+#define LOG_UNHANDLED(...) do { } while (0)
+
 static void
 DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
 {
@@ -454,7 +456,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
     {
         case DW_TAG_compile_unit:
         {
-            //printf("libdwarf: Compile Unit\n");
+            //LOG_UNHANDLED("libdwarf: Compile Unit\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -479,21 +481,60 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                     }break;
                     case DW_AT_low_pc:
                     {
-                        CompUnit->RangesLowPCs = ArrayPush(DIArena, size_t, 1);
-                        CompUnit->RangesCount = 1;
-                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->RangesLowPCs;
-                        DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
+                        /* NOTE(mateusz):
+
+Taken from glfwFramework:
+
+< 0><0x0000000b>  DW_TAG_compile_unit
+                    DW_AT_producer              GNU C++14 10.2.1 20201016 (Red Hat 10.2.1-6) -mtune=generic -march=x86-64 -g -std=gnu++14
+                    DW_AT_language              DW_LANG_C_plus_plus
+                    DW_AT_name                  /home/mateusz/src/cpp/opengl/glfwFramework/main.cc
+                    DW_AT_comp_dir              /home/mateusz/src/cpp/opengl/glfwFramework/build
+                    DW_AT_ranges                0x00000150
+                ranges: 4 at .debug_ranges offset 336 (0x00000150) (64 bytes)
+                        [ 0] range entry    0x0042c7e6 0x00444e61
+                        [ 1] range entry    0x00444e61 0x00444e84
+                        [ 2] range entry    0x00444e84 0x00444eac
+                        [ 3] range end      0x00000000 0x00000000
+                    DW_AT_low_pc                0x00000000
+                    DW_AT_stmt_list             0x00000000
+
+sometimes there are ranges which also have a low_pc which I guess is always zero
+it's weird so I'm just going to assume that it's always zero and if already
+ranges have been read then don't read the low-high
+
+*/
+                        if(CompUnit->RangesCount == 0)
+                        {
+                            CompUnit->RangesLowPCs = ArrayPush(DIArena, size_t, 1);
+                            CompUnit->RangesCount = 1;
+                            Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->RangesLowPCs;
+                            DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
+                        }
+                        else
+                        {
+                            Dwarf_Addr WritePoint;
+                            DWARF_CALL(dwarf_formaddr(Attribute, &WritePoint, Error));
+                            assert(WritePoint == 0x0);
+                        }
                     }break;
                     case DW_AT_high_pc:
                     {
-                        CompUnit->RangesHighPCs = ArrayPush(DIArena, size_t, 1);
-                        Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesHighPCs;
-                        
-                        Dwarf_Half Form = 0;
-                        Dwarf_Form_Class FormType = {};
-                        DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
-                        if (FormType == DW_FORM_CLASS_CONSTANT) {
-                            CompUnit->RangesHighPCs[0] += CompUnit->RangesLowPCs[0];
+                        if(CompUnit->RangesCount == 0 || (CompUnit->RangesCount == 1 && CompUnit->RangesLowPCs))
+                        {
+                            CompUnit->RangesHighPCs = ArrayPush(DIArena, size_t, 1);
+                            Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesHighPCs;
+                            
+                            Dwarf_Half Form = 0;
+                            Dwarf_Form_Class FormType = {};
+                            DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
+                            if (FormType == DW_FORM_CLASS_CONSTANT) {
+                                CompUnit->RangesHighPCs[0] += CompUnit->RangesLowPCs[0];
+                            }
+                        }
+                        else
+                        {
+                            assert(!"READ THE NOTE ABOVE");
                         }
                         
                     }break;
@@ -502,7 +543,8 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         Dwarf_Ranges *Ranges = 0x0;
                         Dwarf_Signed RangesCount = 0;
                         Dwarf_Unsigned ByteCount = 0;
-                        
+                        CompUnit->RangesCount = 0;
+                        printf("ranges\n");
                         Dwarf_Off DebugRangesOffset = 0;
                         DWARF_CALL(dwarf_global_formref(Attribute, &DebugRangesOffset, Error));
                         
@@ -552,16 +594,27 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("CompUnit Unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("CompUnit Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
+            }
+            
+            if(CompUnit->RangesCount >= 1)
+            {
+                assert(CompUnit->RangesLowPCs && CompUnit->RangesHighPCs);
             }
             
             Dwarf_Unsigned Version = 0;
             Dwarf_Small TableType = 0;
             Dwarf_Line_Context LineCtx = 0;
             DWARF_CALL(dwarf_srclines_b(DIE, &Version, &TableType, &LineCtx, Error));
+            
+            Dwarf_Signed SrcFilesCount = 0;
+            dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
+            DISourceFilesInExec += SrcFilesCount;
+            
+            printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
             
             Dwarf_Line *LineBuffer = 0;
             Dwarf_Signed LineCount = 0;
@@ -590,7 +643,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_subprogram:
         {
-            //printf("Subprogram\n");
+            //LOG_UNHANDLED("Subprogram\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -666,7 +719,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             Dwarf_Unsigned OffsetBranch = 0;
                             DWARF_CALL(dwarf_get_location_op_value_c(IDK, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
                             
-                            //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                            //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                             
                             assert(AtomOut == DW_OP_call_frame_cfa);
                             Func->FrameBaseIsCFA = true;
@@ -686,7 +739,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Func Unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Func Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -694,7 +747,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_lexical_block:
         {
-            //printf("libdwarf: Lexical block\n");
+            //LOG_UNHANDLED("libdwarf: Lexical block\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -742,7 +795,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             {
                                 case DW_RANGES_ENTRY:
                                 {
-                                    assert(CU->RangesCount == 1);
+                                    assert(CU->RangesCount >= 1);
                                     size_t RLowPC = CU->RangesLowPCs[0] + Ranges[I].dwr_addr1 + SelectedAddress;
                                     size_t RHighPC = CU->RangesLowPCs[0] + Ranges[I].dwr_addr2 + SelectedAddress;
                                     
@@ -792,7 +845,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Lexical Scope Unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Lexical Scope Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -800,7 +853,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_variable:
         {
-            //printf("libdwarf: Variable\n");
+            //LOG_UNHANDLED("libdwarf: Variable\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -877,7 +930,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                                 Dwarf_Unsigned OffsetBranch = 0;
                                 DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
                                 
-                                //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                                //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                                 
                                 Var->LocationAtom = AtomOut;
                                 Var->Offset = Operand1;
@@ -896,7 +949,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                printf("Variable Unhandled Attribute: %s\n", AttrName);
+                                LOG_UNHANDLED("Variable Unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -906,7 +959,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         case DW_TAG_formal_parameter:
         {
             // NOTE(mateusz): This is copy pasta from the variable code higher up
-            //printf("Variable\n");
+            //LOG_UNHANDLED("Variable\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -974,7 +1027,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                                 Dwarf_Unsigned OffsetBranch = 0;
                                 DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
                                 
-                                //printf("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                                //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                                 
                                 Param->LocationAtom = AtomOut;
                                 Param->Offset = Operand1;
@@ -992,7 +1045,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                printf("Formal Parameter Unhandled Attribute: %s\n", AttrName);
+                                LOG_UNHANDLED("Formal Parameter Unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -1001,7 +1054,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_base_type:
         {
-            //printf("libdwarf: Base Type\n");
+            //LOG_UNHANDLED("libdwarf: Base Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1044,7 +1097,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                     {
                         const char *AttrName = 0x0;
                         DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                        printf("Base Type Unhandled Attribute: %s\n", AttrName);
+                        LOG_UNHANDLED("Base Type Unhandled Attribute: %s\n", AttrName);
                     }break;
                 }
             }
@@ -1093,7 +1146,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Base Type Unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Base Type Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1101,7 +1154,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_pointer_type:
         {
-            //printf("libdwarf: Pointer Type\n");
+            //LOG_UNHANDLED("libdwarf: Pointer Type\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1143,7 +1196,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_const_type:
         {
-            //printf("libdwarf: Const Type\n");
+            //LOG_UNHANDLED("libdwarf: Const Type\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1179,7 +1232,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_restrict_type:
         {
-            //printf("libdwarf: Restrict Type\n");
+            //LOG_UNHANDLED("libdwarf: Restrict Type\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1214,7 +1267,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_structure_type:
         {
-            //printf("libdwarf: Strcture Type\n");
+            //LOG_UNHANDLED("libdwarf: Strcture Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1267,7 +1320,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Structure type unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Structure type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1275,7 +1328,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_union_type:
         {
-            //printf("libdwarf: Union Type\n");
+            //LOG_UNHANDLED("libdwarf: Union Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1329,7 +1382,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Union type unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Union type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1337,14 +1390,14 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_member:
         {
-            //printf("libdwarf: Strcture/Union member\n");
+            //LOG_UNHANDLED("libdwarf: Strcture/Union member\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             if(!WasStruct && !WasUnion)
             {
-                printf("Unhandled class type\n");
+                LOG_UNHANDLED("Unhandled class type\n");
                 return;
             }
             
@@ -1400,7 +1453,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                printf("Structure member unhandled Attribute: %s\n", AttrName);
+                                LOG_UNHANDLED("Structure member unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -1452,7 +1505,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                printf("Unionure member unhandled Attribute: %s\n", AttrName);
+                                LOG_UNHANDLED("Unionure member unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -1461,7 +1514,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_array_type:
         {
-            //printf("libdwarf: Array type\n");
+            //LOG_UNHANDLED("libdwarf: Array type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1493,7 +1546,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Array type unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Array type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1501,7 +1554,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         }break;
         case DW_TAG_subrange_type:
         {
-            //printf("libdwarf: Subrange type\n");
+            //LOG_UNHANDLED("libdwarf: Subrange type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1537,7 +1590,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            printf("Array type unhandled Attribute: %s\n", AttrName);
+                            LOG_UNHANDLED("Array type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1547,7 +1600,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
         {
             const char *TagName = 0x0;
             DWARF_CALL(dwarf_get_TAG_name(Tag, &TagName));
-            printf("Unhandled Tag: %s\n", TagName);
+            LOG_UNHANDLED("Unhandled Tag: %s\n", TagName);
         }break;
     }
     
@@ -1632,7 +1685,7 @@ DWARFRead()
     Dwarf_Half AddressSize = 0;
     Dwarf_Unsigned NextCUHeader = 0;
     
-    DIArena = ArenaCreate(Kilobytes(16));
+    DIArena = ArenaCreate(Kilobytes(256));
     u32 CountTable[DWARF_TAGS_COUNT] = {};
     
     for(i32 CUCount = 0;;++CUCount) {
