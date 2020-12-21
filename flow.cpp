@@ -6,11 +6,11 @@ AddressInDiffrentLine(size_t Address)
     di_src_line *Current = LineTableFindByAddress(Regs.rip);
     assert(Current);
     
-    for(u32 I = 0; I < DISourceLinesCount; I++)
+    for(u32 I = 0; I < DI->SourceLinesCount; I++)
     {
-        if(Current->Address != DISourceLines[I].Address &&
-           Current->LineNum != DISourceLines[I].LineNum &&
-           DISourceLines[I].Address == Address)
+        if(Current->Address != DI->SourceLines[I].Address &&
+           Current->LineNum != DI->SourceLines[I].LineNum &&
+           DI->SourceLines[I].Address == Address)
         {
             return true;
         }
@@ -142,7 +142,7 @@ BreakpointDisable(breakpoint *BP)
 static void
 BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *Count)
 {
-    u32 SrcFileIndex = Src - DISourceFiles;
+    u32 SrcFileIndex = Src - DI->SourceFiles;
     di_src_line *Line = LineFindByNumber(LineNum, SrcFileIndex);
     
     if(Line)
@@ -257,9 +257,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             //printf("Breaking because of call\n");
             size_t CallAddress = Instruction->detail->x86.operands[0].imm;
             
-            for(u32 I = 0; I < DICompileUnitsCount; I++)
+            for(u32 I = 0; I < DI->CompileUnitsCount; I++)
             {
-                di_compile_unit *CU = &DICompileUnits[I];
+                di_compile_unit *CU = &DI->CompileUnits[I];
                 for(u32 RI = 0; RI < CU->RangesCount; RI++)
                 {
                     if(AddressBetween(CallAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))
@@ -279,9 +279,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         {
             size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
             
-            for(u32 I = 0; I < DICompileUnitsCount; I++)
+            for(u32 I = 0; I < DI->CompileUnitsCount; I++)
             {
-                di_compile_unit *CU = &DICompileUnits[I];
+                di_compile_unit *CU = &DI->CompileUnits[I];
                 for(u32 RI = 0; RI < CU->RangesCount; RI++)
                 {
                     if(AddressBetween(ReturnAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))
@@ -365,9 +365,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     {
                         size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
                         
-                        for(u32 I = 0; I < DICompileUnitsCount; I++)
+                        for(u32 I = 0; I < DI->CompileUnitsCount; I++)
                         {
-                            di_compile_unit *CU = &DICompileUnits[I];
+                            di_compile_unit *CU = &DI->CompileUnits[I];
                             for(u32 RI = 0; RI < CU->RangesCount; RI++)
                             {
                                 if(AddressBetween(ReturnAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))

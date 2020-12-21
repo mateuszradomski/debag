@@ -190,68 +190,72 @@ struct di_underlaying_type
         di_base_type *Type;
     };
     
-    size_t ArrayUpperBound; // STUPID!!
+    size_t ArrayUpperBound;
     u32 PointerCount;
     type_flags Flags;
 };
 
 #define MAX_DI_SOURCE_FILES 8
-di_src_file *DISourceFiles = 0x0;
-u32 DISourceFilesCount = 0;
-u32 DISourceFilesInExec = 0;
-
 #define MAX_DI_SOURCE_LINES (1 << 15)
-di_src_line *DISourceLines = 0x0;
-u32 DISourceLinesCount = 0;
 
-di_variable *DIVariables = 0x0;
-u32 DIVariablesCount = 0;
-
-di_variable *DIParams = 0x0;
-u32 DIParamsCount = 0;
-
-di_lexical_scope *DILexScopes = 0x0;
-u32 DILexScopesCount;
-
-di_function *DIFunctions = 0x0;
-u32 DIFuctionsCount = 0;
-
-di_compile_unit *DICompileUnits = 0x0;
-u32 DICompileUnitsCount = 0;
-
-di_base_type *DIBaseTypes = 0x0;
-u32 DIBaseTypesCount = 0;
-
-di_typedef *DITypedefs = 0x0;
-u32 DITypedefsCount = 0;
-
-di_pointer_type *DIPointerTypes = 0x0;
-u32 DIPointerTypesCount = 0;
-
-di_const_type *DIConstTypes = 0x0;
-u32 DIConstTypesCount = 0;
-
-di_restrict_type *DIRestrictTypes = 0x0;
-u32 DIRestrictTypesCount = 0;
-
-di_struct_member *DIStructMembers = 0x0;
-u32 DIStructMembersCount = 0;
-
-di_struct_type *DIStructTypes = 0x0;
-u32 DIStructTypesCount = 0;
-
-di_union_member *DIUnionMembers = 0x0;
-u32 DIUnionMembersCount = 0;
-
-di_union_type *DIUnionTypes = 0x0;
-u32 DIUnionTypesCount = 0;
-
-di_array_type *DIArrayTypes = 0x0;
-u32 DIArrayTypesCount = 0;
-
-di_frame_info DIFrameInfo = {};
-Dwarf_Debug Debug = 0;
-
-arena *DIArena = 0x0;
+struct debug_info
+{
+    arena *Arena;
+    
+    di_src_file *SourceFiles;
+    u32 SourceFilesCount;
+    u32 SourceFilesInExec;
+    
+    di_src_line *SourceLines;
+    u32 SourceLinesCount;
+    
+    di_variable *Variables;
+    u32 VariablesCount;
+    
+    di_variable *Params;
+    u32 ParamsCount;
+    
+    di_lexical_scope *LexScopes;
+    u32 LexScopesCount;
+    
+    di_function *Functions;
+    u32 FuctionsCount;
+    
+    di_compile_unit *CompileUnits;
+    u32 CompileUnitsCount;
+    
+    di_base_type *BaseTypes;
+    u32 BaseTypesCount;
+    
+    di_typedef *Typedefs;
+    u32 TypedefsCount;
+    
+    di_pointer_type *PointerTypes;
+    u32 PointerTypesCount;
+    
+    di_const_type *ConstTypes;
+    u32 ConstTypesCount;
+    
+    di_restrict_type *RestrictTypes;
+    u32 RestrictTypesCount;
+    
+    di_struct_member *StructMembers;
+    u32 StructMembersCount;
+    
+    di_struct_type *StructTypes;
+    u32 StructTypesCount;
+    
+    di_union_member *UnionMembers;
+    u32 UnionMembersCount;
+    
+    di_union_type *UnionTypes;
+    u32 UnionTypesCount;
+    
+    di_array_type *ArrayTypes;
+    u32 ArrayTypesCount;
+    
+    di_frame_info FrameInfo;
+    Dwarf_Debug Debug;
+};
 
 #endif //DWARF_H

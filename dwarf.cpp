@@ -1,17 +1,20 @@
+
+debug_info *DI = 0x0;
+
 static di_src_line *
 LineTableFindByAddress(size_t Address)
 {
-    for(u32 I = 0; I < DISourceLinesCount; I++)
+    for(u32 I = 0; I < DI->SourceLinesCount; I++)
     {
-        if(DISourceLines[I].Address == Address)
+        if(DI->SourceLines[I].Address == Address)
         {
-            return &DISourceLines[I];
+            return &DI->SourceLines[I];
         }
-        else if(I + 1 < DISourceLinesCount &&
-                (DISourceLines[I].Address < Address) &&
-                (DISourceLines[I + 1].Address > Address))
+        else if(I + 1 < DI->SourceLinesCount &&
+                (DI->SourceLines[I].Address < Address) &&
+                (DI->SourceLines[I + 1].Address > Address))
         {
-            return &DISourceLines[I];
+            return &DI->SourceLines[I];
         }
     }
     
@@ -21,11 +24,11 @@ LineTableFindByAddress(size_t Address)
 static di_src_line *
 LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
 {
-    for(u32 I = 0; I < DISourceLinesCount; I++)
+    for(u32 I = 0; I < DI->SourceLinesCount; I++)
     {
-        if(DISourceLines[I].LineNum == LineNum && DISourceLines[I].SrcFileIndex == SrcFileIndex)
+        if(DI->SourceLines[I].LineNum == LineNum && DI->SourceLines[I].SrcFileIndex == SrcFileIndex)
         {
-            return &DISourceLines[I];
+            return &DI->SourceLines[I];
         }
     }
     
@@ -48,12 +51,12 @@ FindFunctionConfiningAddress(size_t Address)
 {
     di_function *Result = 0x0;
     
-    for(u32 I = 0; I < DIFuctionsCount; I++)
+    for(u32 I = 0; I < DI->FuctionsCount; I++)
     {
-        di_function *Func = &DIFunctions[I];
+        di_function *Func = &DI->Functions[I];
         if(AddressBetween(Address, Func->FuncLexScope.LowPC, Func->FuncLexScope.HighPC))
         {
-            Result = &DIFunctions[I];
+            Result = &DI->Functions[I];
             break;
         }
     }
@@ -76,92 +79,92 @@ FindUnderlayingType(size_t BTDIEOffset)
 {
     di_underlaying_type Result = {};
     
-    for(u32 I = 0; I < DITypedefsCount; I++)
+    for(u32 I = 0; I < DI->TypedefsCount; I++)
     {
-        if(DITypedefs[I].DIEOffset == BTDIEOffset)
+        if(DI->Typedefs[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DITypedefs[I].ActualTypeOffset);
+            Result = FindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_TYPEDEF;
-            Result.Name = DITypedefs[I].Name;
+            Result.Name = DI->Typedefs[I].Name;
             
             return Result;
         }
     }
     
-    for(u32 I = 0; I < DIPointerTypesCount; I++)
+    for(u32 I = 0; I < DI->PointerTypesCount; I++)
     {
-        if(DIPointerTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->PointerTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DIPointerTypes[I].ActualTypeOffset);
+            Result = FindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_POINTER;
             Result.PointerCount += 1;
             return Result;
         }
     }
     
-    for(u32 I = 0; I < DIConstTypesCount; I++)
+    for(u32 I = 0; I < DI->ConstTypesCount; I++)
     {
-        if(DIConstTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->ConstTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DIConstTypes[I].ActualTypeOffset);
+            Result = FindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_CONST;
             return Result;
         }
     }
     
-    for(u32 I = 0; I < DIRestrictTypesCount; I++)
+    for(u32 I = 0; I < DI->RestrictTypesCount; I++)
     {
-        if(DIRestrictTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->RestrictTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DIRestrictTypes[I].ActualTypeOffset);
+            Result = FindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_RESTRICT;
             return Result;
         }
     }
     
-    for(u32 I = 0; I < DIArrayTypesCount; I++)
+    for(u32 I = 0; I < DI->ArrayTypesCount; I++)
     {
-        if(DIArrayTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->ArrayTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DIArrayTypes[I].ActualTypeOffset);
-            Result.ArrayUpperBound = DIArrayTypes[I].UpperBound;
+            Result = FindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
+            Result.ArrayUpperBound = DI->ArrayTypes[I].UpperBound;
             Result.Flags |= TYPE_IS_ARRAY;
             return Result;
         }
     }
     
     // Underlaying types
-    for(u32 I = 0; I < DIStructTypesCount; I++)
+    for(u32 I = 0; I < DI->StructTypesCount; I++)
     {
-        if(DIStructTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->StructTypes[I].DIEOffset == BTDIEOffset)
         {
             Result.Flags |= TYPE_IS_STRUCT;
-            Result.Struct = &DIStructTypes[I];
-            Result.Name = DIStructTypes[I].Name;
+            Result.Struct = &DI->StructTypes[I];
+            Result.Name = DI->StructTypes[I].Name;
             
             return Result;
         }
     }
     
-    for(u32 I = 0; I < DIUnionTypesCount; I++)
+    for(u32 I = 0; I < DI->UnionTypesCount; I++)
     {
-        if(DIUnionTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->UnionTypes[I].DIEOffset == BTDIEOffset)
         {
             Result.Flags |= TYPE_IS_STRUCT;
-            Result.Union = &DIUnionTypes[I];
-            Result.Name = DIUnionTypes[I].Name;
+            Result.Union = &DI->UnionTypes[I];
+            Result.Name = DI->UnionTypes[I].Name;
             
             return Result;
         }
     }
     
-    for(u32 I = 0; I < DIBaseTypesCount; I++)
+    for(u32 I = 0; I < DI->BaseTypesCount; I++)
     {
-        if(DIBaseTypes[I].DIEOffset == BTDIEOffset)
+        if(DI->BaseTypes[I].DIEOffset == BTDIEOffset)
         {
             Result.Flags |= TYPE_IS_BASE;
-            Result.Type = &DIBaseTypes[I];
-            Result.Name = DIBaseTypes[I].Name;
+            Result.Type = &DI->BaseTypes[I];
+            Result.Name = DI->BaseTypes[I].Name;
             
             return Result;
         }
@@ -279,11 +282,11 @@ FindSourceFile(char *Path)
 {
     di_src_file *Result = 0x0;
     
-    for(u32 I = 0; I < DISourceFilesCount; I++)
+    for(u32 I = 0; I < DI->SourceFilesCount; I++)
     {
-        if(StringsMatch(Path, DISourceFiles[I].Path))
+        if(StringsMatch(Path, DI->SourceFiles[I].Path))
         {
-            Result = &DISourceFiles[I];
+            Result = &DI->SourceFiles[I];
             break;
         }
     }
@@ -296,7 +299,7 @@ PushSourceFile(char *Path)
 {
     di_src_file *Result = 0x0;
     
-    Result = &DISourceFiles[DISourceFilesCount++];
+    Result = &DI->SourceFiles[DI->SourceFilesCount++];
     
     Result->Path = strdup(Path);
     Result->Content = DumpFile(Path);
@@ -326,19 +329,19 @@ SrcFileAssociatePath(char *Path)
     u32 Result = MAX_DI_SOURCE_FILES + 1;
     
     assert(Path);
-    for(u32 I = 0; I < DISourceFilesCount; I++)
+    for(u32 I = 0; I < DI->SourceFilesCount; I++)
     {
-        if(StringsMatch(Path, DISourceFiles[I].Path))
+        if(StringsMatch(Path, DI->SourceFiles[I].Path))
         {
             Result = I;
             break;
         }
     }
     
-    if(DISourceFilesCount == 0 || Result == MAX_DI_SOURCE_FILES + 1)
+    if(DI->SourceFilesCount == 0 || Result == MAX_DI_SOURCE_FILES + 1)
     {
         PushSourceFile(Path);
-        Result = DISourceFilesCount - 1;
+        Result = DI->SourceFilesCount - 1;
     }
     
     return Result;
@@ -350,13 +353,13 @@ AddressRangeCurrentAndNextLine()
     address_range Result = {};
     
     di_src_line *Current = LineTableFindByAddress(Regs.rip);
-    for(u32 I = 0; I < DISourceLinesCount; I++)
+    for(u32 I = 0; I < DI->SourceLinesCount; I++)
     {
-        if(DISourceLines[I].Address == Current->Address)
+        if(DI->SourceLines[I].Address == Current->Address)
         {
             for(;;I++)
             {
-                if(DISourceLinesCount == I + 1)
+                if(DI->SourceLinesCount == I + 1)
                 {
                     di_function *Func = FindFunctionConfiningAddress(Current->Address);
                     Result.Start = Current->Address;
@@ -367,7 +370,7 @@ AddressRangeCurrentAndNextLine()
                 }
                 else
                 {
-                    di_src_line *Next = &DISourceLines[I];
+                    di_src_line *Next = &DI->SourceLines[I];
                     if(Next->LineNum != Current->LineNum)
                     {
                         //printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
@@ -390,12 +393,12 @@ FindEntryPointAddress()
 {
     size_t Result = 0;
     
-    for(u32 I = 0; I < DIFuctionsCount; I++)
+    for(u32 I = 0; I < DI->FuctionsCount; I++)
     {
-        if(StringsMatch(DIFunctions[I].Name, "main"))
+        if(StringsMatch(DI->Functions[I].Name, "main"))
         {
-            printf("entrypoint: %s\n", DIFunctions[I].Name);
-            Result = DIFunctions[I].FuncLexScope.LowPC;
+            printf("entrypoint: %s\n", DI->Functions[I].Name);
+            Result = DI->Functions[I].FuncLexScope.LowPC;
             break;
         }
     }
@@ -443,7 +446,7 @@ bool WasUnion = false;
 #define LOG_UNHANDLED(...) do { } while (0)
 
 static void
-DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
+DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
 {
     Dwarf_Error Error_ = {};
     Dwarf_Error *Error = &Error_;
@@ -461,7 +464,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_compile_unit *CompUnit = &DICompileUnits[DICompileUnitsCount++];
+            di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount++];
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -476,7 +479,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE, arena *DIArena)
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        CompUnit->Name = ArrayPush(DIArena, char, Size);
+                        CompUnit->Name = ArrayPush(DI->Arena, char, Size);
                         StringCopy(CompUnit->Name, Name);
                     }break;
                     case DW_AT_low_pc:
@@ -506,7 +509,7 @@ ranges have been read then don't read the low-high
 */
                         if(CompUnit->RangesCount == 0)
                         {
-                            CompUnit->RangesLowPCs = ArrayPush(DIArena, size_t, 1);
+                            CompUnit->RangesLowPCs = ArrayPush(DI->Arena, size_t, 1);
                             CompUnit->RangesCount = 1;
                             Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->RangesLowPCs;
                             DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
@@ -522,7 +525,7 @@ ranges have been read then don't read the low-high
                     {
                         if(CompUnit->RangesCount == 0 || (CompUnit->RangesCount == 1 && CompUnit->RangesLowPCs))
                         {
-                            CompUnit->RangesHighPCs = ArrayPush(DIArena, size_t, 1);
+                            CompUnit->RangesHighPCs = ArrayPush(DI->Arena, size_t, 1);
                             Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesHighPCs;
                             
                             Dwarf_Half Form = 0;
@@ -551,8 +554,8 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_get_ranges_a(Debug, DebugRangesOffset, DIE, &Ranges,
                                                       &RangesCount, &ByteCount, Error));
                         
-                        CompUnit->RangesLowPCs = ArrayPush(DIArena, size_t, RangesCount);
-                        CompUnit->RangesHighPCs = ArrayPush(DIArena, size_t, RangesCount);
+                        CompUnit->RangesLowPCs = ArrayPush(DI->Arena, size_t, RangesCount);
+                        CompUnit->RangesHighPCs = ArrayPush(DI->Arena, size_t, RangesCount);
                         
                         size_t SelectedAddress = 0x0;
                         for(u32 I = 0; I < RangesCount; I++)
@@ -612,7 +615,7 @@ ranges have been read then don't read the low-high
             
             Dwarf_Signed SrcFilesCount = 0;
             dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
-            DISourceFilesInExec += SrcFilesCount;
+            DI->SourceFilesInExec += SrcFilesCount;
             
             printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
             
@@ -635,7 +638,7 @@ ranges have been read then don't read the low-high
                 DWARF_CALL(dwarf_lineaddr(LineBuffer[I], &LineAddr, Error));
                 DWARF_CALL(dwarf_linesrc(LineBuffer[I], &LineSrcFile, Error));
                 
-                di_src_line *LTEntry = &DISourceLines[DISourceLinesCount++];
+                di_src_line *LTEntry = &DI->SourceLines[DI->SourceLinesCount++];
                 LTEntry->Address = LineAddr;
                 LTEntry->LineNum = LineNum;
                 LTEntry->SrcFileIndex = SrcFileAssociatePath(LineSrcFile);
@@ -648,7 +651,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_function *Func = &DIFunctions[DIFuctionsCount++];
+            di_function *Func = &DI->Functions[DI->FuctionsCount++];
             assert(Func->LexScopesCount == 0);
             di_lexical_scope *LexScope = &Func->FuncLexScope;
             for(u32 I = 0; I < AttrCount; I++)
@@ -665,7 +668,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Func->Name = ArrayPush(DIArena, char, Size);
+                        Func->Name = ArrayPush(DI->Arena, char, Size);
                         StringCopy(Func->Name, Name);
                     }break;
                     case DW_AT_type:
@@ -753,10 +756,10 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            assert(DIFuctionsCount);
+            assert(DI->FuctionsCount);
             
-            di_lexical_scope *LexScope = &DILexScopes[DILexScopesCount++];
-            di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+            di_lexical_scope *LexScope = &DI->LexScopes[DI->LexScopesCount++];
+            di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
             if(!Func->LexScopes)
             {
                 Func->LexScopes = LexScope;
@@ -784,10 +787,10 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_get_ranges_a(Debug, DebugRangesOffset, DIE, &Ranges,
                                                       &RangesCount, &ByteCount, Error));
                         
-                        LexScope->RangesLowPCs = ArrayPush(DIArena, size_t, RangesCount);
-                        LexScope->RangesHighPCs = ArrayPush(DIArena, size_t, RangesCount);
+                        LexScope->RangesLowPCs = ArrayPush(DI->Arena, size_t, RangesCount);
+                        LexScope->RangesHighPCs = ArrayPush(DI->Arena, size_t, RangesCount);
                         
-                        di_compile_unit *CU = &DICompileUnits[DICompileUnitsCount - 1];
+                        di_compile_unit *CU = &DI->CompileUnits[DI->CompileUnitsCount - 1];
                         size_t SelectedAddress = 0x0;
                         for(u32 I = 0; I < RangesCount; I++)
                         {
@@ -858,15 +861,15 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_variable *Var = &DIVariables[DIVariablesCount++];
+            di_variable *Var = &DI->Variables[DI->VariablesCount++];
             
             // NOTE(mateusz): Globals
-            if(DIFuctionsCount)
+            if(DI->FuctionsCount)
             {
-                if(DIFuctionsCount)
+                if(DI->FuctionsCount)
                 {
                     
-                    di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+                    di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
                     bool HasLexScopes = Func->LexScopesCount != 0;
                     di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
                     if(!LexScope->Variables)
@@ -891,7 +894,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Var->Name = ArrayPush(DIArena, char, Size);
+                            Var->Name = ArrayPush(DI->Arena, char, Size);
                             StringCopy(Var->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -965,15 +968,15 @@ ranges have been read then don't read the low-high
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             // TODO(mateusz): Globals
-            if(DIFuctionsCount)
+            if(DI->FuctionsCount)
             {
-                di_function *Func = &DIFunctions[DIFuctionsCount - 1];
+                di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
                 if(Func->ParamCount == 0)
                 {
-                    Func->Params = &DIParams[DIParamsCount];
+                    Func->Params = &DI->Params[DI->ParamsCount];
                 }
                 Func->ParamCount += 1;
-                di_variable *Param = &DIParams[DIParamsCount++];
+                di_variable *Param = &DI->Params[DI->ParamsCount++];
                 for(u32 I = 0; I < AttrCount; I++)
                 {
                     Dwarf_Attribute Attribute = AttrList[I];
@@ -988,7 +991,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Param->Name = ArrayPush(DIArena, char, Size);
+                            Param->Name = ArrayPush(DI->Arena, char, Size);
                             StringCopy(Param->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -1059,7 +1062,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_base_type *Type = (di_base_type *)&DIBaseTypes[DIBaseTypesCount++];
+            di_base_type *Type = (di_base_type *)&DI->BaseTypes[DI->BaseTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             Type->DIEOffset = DIEOffset;
@@ -1077,7 +1080,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Type->Name = ArrayPush(DIArena, char, Size);
+                        Type->Name = ArrayPush(DI->Arena, char, Size);
                         StringCopy(Type->Name, Name);
                     }break;
                     case DW_AT_encoding:
@@ -1108,7 +1111,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_typedef *Typedef = &DITypedefs[DITypedefsCount++];
+            di_typedef *Typedef = &DI->Typedefs[DI->TypedefsCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             Typedef->DIEOffset = DIEOffset;
@@ -1126,7 +1129,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Typedef->Name = ArrayPush(DIArena, char, Size);
+                        Typedef->Name = ArrayPush(DI->Arena, char, Size);
                         StringCopy(Typedef->Name, Name);
                     }break;
                     case DW_AT_type:
@@ -1160,7 +1163,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_pointer_type *PType = &DIPointerTypes[DIPointerTypesCount++];
+            di_pointer_type *PType = &DI->PointerTypes[DI->PointerTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             PType->DIEOffset = DIEOffset;
@@ -1203,7 +1206,7 @@ ranges have been read then don't read the low-high
             // NOTE(mateusz): Some DW_TAG_const_type are empty
             if(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error) == DW_DLV_OK)
             {
-                di_const_type *CType = &DIConstTypes[DIConstTypesCount++];
+                di_const_type *CType = &DI->ConstTypes[DI->ConstTypesCount++];
                 Dwarf_Off DIEOffset = 0;
                 DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
                 CType->DIEOffset = DIEOffset;
@@ -1238,7 +1241,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_restrict_type *RType = &DIRestrictTypes[DIRestrictTypesCount++];
+            di_restrict_type *RType = &DI->RestrictTypes[DI->RestrictTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             RType->DIEOffset = DIEOffset;
@@ -1272,7 +1275,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_struct_type *StructType = &DIStructTypes[DIStructTypesCount++];
+            di_struct_type *StructType = &DI->StructTypes[DI->StructTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             StructType->DIEOffset = DIEOffset;
@@ -1293,7 +1296,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        StructType->Name = ArrayPush(DIArena, char, Size);
+                        StructType->Name = ArrayPush(DI->Arena, char, Size);
                         StringCopy(StructType->Name, Name);
                     }break;
                     case DW_AT_byte_size:
@@ -1333,7 +1336,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_union_type *UnionType = &DIUnionTypes[DIUnionTypesCount++];
+            di_union_type *UnionType = &DI->UnionTypes[DI->UnionTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             UnionType->DIEOffset = DIEOffset;
@@ -1355,7 +1358,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        UnionType->Name = ArrayPush(DIArena, char, Size);
+                        UnionType->Name = ArrayPush(DI->Arena, char, Size);
                         StringCopy(UnionType->Name, Name);
                     }break;
                     case DW_AT_byte_size:
@@ -1403,9 +1406,9 @@ ranges have been read then don't read the low-high
             
             if(WasStruct)
             {
-                di_struct_member *Member = &DIStructMembers[DIStructMembersCount++];
+                di_struct_member *Member = &DI->StructMembers[DI->StructMembersCount++];
                 
-                di_struct_type *Struct = &DIStructTypes[DIStructTypesCount - 1];
+                di_struct_type *Struct = &DI->StructTypes[DI->StructTypesCount - 1];
                 if(Struct->MembersCount == 0)
                 {
                     Struct->Members = Member;
@@ -1427,7 +1430,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Member->Name = ArrayPush(DIArena, char, Size);
+                            Member->Name = ArrayPush(DI->Arena, char, Size);
                             StringCopy(Member->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -1461,9 +1464,9 @@ ranges have been read then don't read the low-high
             }
             else if(WasUnion)
             {
-                di_union_member *Member = &DIUnionMembers[DIUnionMembersCount++];
+                di_union_member *Member = &DI->UnionMembers[DI->UnionMembersCount++];
                 
-                di_union_type *Union = &DIUnionTypes[DIUnionTypesCount - 1];
+                di_union_type *Union = &DI->UnionTypes[DI->UnionTypesCount - 1];
                 if(Union->MembersCount == 0)
                 {
                     Union->Members = Member;
@@ -1486,7 +1489,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Member->Name = ArrayPush(DIArena, char, Size);
+                            Member->Name = ArrayPush(DI->Arena, char, Size);
                             StringCopy(Member->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -1519,7 +1522,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_array_type *AType = &DIArrayTypes[DIArrayTypesCount++];
+            di_array_type *AType = &DI->ArrayTypes[DI->ArrayTypesCount++];
             
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
@@ -1559,8 +1562,8 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            assert(DIArrayTypesCount);
-            di_array_type *AType = &DIArrayTypes[DIArrayTypesCount - 1];
+            assert(DI->ArrayTypesCount);
+            di_array_type *AType = &DI->ArrayTypes[DI->ArrayTypesCount - 1];
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1609,7 +1612,7 @@ ranges have been read then don't read the low-high
     
     if(Result == DW_DLV_OK)
     { 
-        DWARFReadDIEs(Debug, ChildDIE, DIArena);
+        DWARFReadDIEs(Debug, ChildDIE);
         Dwarf_Die SiblingDIE = ChildDIE;
         while(Result == DW_DLV_OK)
         {
@@ -1617,7 +1620,7 @@ ranges have been read then don't read the low-high
             Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, Error);
             if(Result == DW_DLV_OK)
             {
-                DWARFReadDIEs(Debug, SiblingDIE, DIArena);
+                DWARFReadDIEs(Debug, SiblingDIE);
             }
             else
             {
@@ -1677,7 +1680,7 @@ DWARFRead()
     Dwarf_Ptr ErrorArg = 0;
     Dwarf_Error *Error  = 0;
     
-    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &Debug, Error) == DW_DLV_OK);
+    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &DI->Debug, Error) == DW_DLV_OK);
     
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -1685,12 +1688,12 @@ DWARFRead()
     Dwarf_Half AddressSize = 0;
     Dwarf_Unsigned NextCUHeader = 0;
     
-    DIArena = ArenaCreate(Kilobytes(256));
-    u32 CountTable[DWARF_TAGS_COUNT] = {};
+    DI->Arena = ArenaCreate(Kilobytes(256));
+    u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
     
     for(i32 CUCount = 0;;++CUCount) {
         // NOTE(mateusz): I don't know what it does
-        i32 Result = dwarf_next_cu_header(Debug, &CUHeaderLength,
+        i32 Result = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
                                           &Version, &AbbrevOffset, &AddressSize,
                                           &NextCUHeader, Error);
         
@@ -1701,29 +1704,29 @@ DWARFRead()
         
         /* The CU will have a single sibling, a cu_die. */
         Dwarf_Die CurrentDIE = 0;
-        Result = dwarf_siblingof(Debug, 0, &CurrentDIE, Error);
+        Result = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
         assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
         
-        DWARFCountTags(Debug, CurrentDIE, CountTable);
+        DWARFCountTags(DI->Debug, CurrentDIE, CountTable);
     }
     
     //TIMER_START(0);
     
-    DICompileUnits = (di_compile_unit *)calloc(CountTable[DW_TAG_compile_unit], sizeof(di_compile_unit));
-    DIFunctions = (di_function *)calloc(CountTable[DW_TAG_subprogram], sizeof(di_function));
-    DIBaseTypes = (di_base_type *)calloc(CountTable[DW_TAG_base_type], sizeof(di_base_type));
-    DITypedefs = (di_typedef *)calloc(CountTable[DW_TAG_typedef], sizeof(di_typedef));
-    DIPointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
-    DIConstTypes = (di_const_type *)calloc(CountTable[DW_TAG_const_type], sizeof(di_const_type));
-    DIRestrictTypes = (di_restrict_type *)calloc(CountTable[DW_TAG_restrict_type], sizeof(di_restrict_type));
-    DIVariables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
-    DIParams = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
-    DILexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
-    DIStructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
-    DIStructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
-    DIUnionMembers = (di_union_member *)calloc(CountTable[DW_TAG_member], sizeof(di_union_member));
-    DIUnionTypes = (di_union_type *)calloc(CountTable[DW_TAG_union_type], sizeof(di_union_type));
-    DIArrayTypes = (di_array_type *)calloc(CountTable[DW_TAG_array_type], sizeof(di_array_type));
+    DI->CompileUnits = (di_compile_unit *)calloc(CountTable[DW_TAG_compile_unit], sizeof(di_compile_unit));
+    DI->Functions = (di_function *)calloc(CountTable[DW_TAG_subprogram], sizeof(di_function));
+    DI->BaseTypes = (di_base_type *)calloc(CountTable[DW_TAG_base_type], sizeof(di_base_type));
+    DI->Typedefs = (di_typedef *)calloc(CountTable[DW_TAG_typedef], sizeof(di_typedef));
+    DI->PointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
+    DI->ConstTypes = (di_const_type *)calloc(CountTable[DW_TAG_const_type], sizeof(di_const_type));
+    DI->RestrictTypes = (di_restrict_type *)calloc(CountTable[DW_TAG_restrict_type], sizeof(di_restrict_type));
+    DI->Variables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
+    DI->Params = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
+    DI->LexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
+    DI->StructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
+    DI->StructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
+    DI->UnionMembers = (di_union_member *)calloc(CountTable[DW_TAG_member], sizeof(di_union_member));
+    DI->UnionTypes = (di_union_type *)calloc(CountTable[DW_TAG_union_type], sizeof(di_union_type));
+    DI->ArrayTypes = (di_array_type *)calloc(CountTable[DW_TAG_array_type], sizeof(di_array_type));
 #if 0
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
     {
@@ -1740,7 +1743,7 @@ DWARFRead()
     
     for(i32 CUCount = 0;;++CUCount) {
         // NOTE(mateusz): I don't know what it does
-        i32 Result = dwarf_next_cu_header(Debug, &CUHeaderLength,
+        i32 Result = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
                                           &Version, &AbbrevOffset, &AddressSize,
                                           &NextCUHeader, Error);
         
@@ -1751,35 +1754,36 @@ DWARFRead()
         
         /* The CU will have a single sibling, a cu_die. */
         Dwarf_Die CurrentDIE = 0;
-        Result = dwarf_siblingof(Debug, 0, &CurrentDIE, Error);
+        Result = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
         assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
         
-        DWARFReadDIEs(Debug, CurrentDIE, DIArena);
+        DWARFReadDIEs(DI->Debug, CurrentDIE);
     }
     
-    assert(dwarf_finish(Debug, Error) == DW_DLV_OK);
+    assert(dwarf_finish(DI->Debug, Error) == DW_DLV_OK);
     
     // NOTE(mateusz): This time without finish to preserve it
-    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &Debug, Error) == DW_DLV_OK);
+    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &DI->Debug, Error) == DW_DLV_OK);
     Dwarf_Cie *CIEs;
     Dwarf_Signed CIECount;
     Dwarf_Fde *FDEs;
     Dwarf_Signed FDECount;
-    DWARF_CALL(dwarf_get_fde_list_eh(Debug, &CIEs, &CIECount, &FDEs, &FDECount, Error));
+    DWARF_CALL(dwarf_get_fde_list_eh(DI->Debug, &CIEs, &CIECount, &FDEs, &FDECount, Error));
     
-    di_frame_info *Frame = &DIFrameInfo;
+    di_frame_info *Frame = &DI->FrameInfo;
     Frame->CIECount = CIECount;
     Frame->FDECount = FDECount;
     Frame->CIEs = CIEs;
     Frame->FDEs = FDEs;
     
+    free(CountTable);
     close(Fd);
 }
 
 static size_t
 DWARFGetCFA(size_t PC)
 {
-    di_frame_info *Frame = &DIFrameInfo;
+    di_frame_info *Frame = &DI->FrameInfo;
     for(u32 J = 0; J < Frame->FDECount; J++)
     {
         Dwarf_Error *Error  = 0;

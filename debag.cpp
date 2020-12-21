@@ -22,7 +22,9 @@
 #include <libs/imgui/imgui_impl_opengl3.h>
 
 #include "debag.h"
+#include "utils.h"
 #include "dwarf.h"
+#include "utils.cpp"
 #include "dwarf.cpp"
 #include "flow.cpp"
 
@@ -960,54 +962,55 @@ static void
 DeallocDebugInfo()
 {
     Dwarf_Error Error;
-    if(Debug)
+    if(DI->Debug)
     {
-        DWARF_CALL(dwarf_finish(Debug, &Error));
+        DWARF_CALL(dwarf_finish(DI->Debug, &Error));
     }
-    Debug = 0;
+    DI->Debug = 0;
     
     memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
-    memset(DISourceFiles, 0, sizeof(di_src_file) * DISourceFilesCount);
-    memset(DISourceLines, 0, sizeof(di_src_line) * DISourceLinesCount);
-    memset(DIFunctions, 0, sizeof(di_function) * DIFuctionsCount);
-    memset(DICompileUnits, 0, sizeof(di_compile_unit) * DICompileUnitsCount);
-    memset(DIVariables, 0, sizeof(di_variable) * DIVariablesCount);
-    memset(DIParams, 0, sizeof(di_variable) * DIParamsCount);
-    memset(DIBaseTypes, 0, sizeof(di_base_type) * DIBaseTypesCount);
-    memset(DITypedefs, 0, sizeof(di_typedef) * DITypedefsCount);
-    memset(DIPointerTypes, 0, sizeof(di_pointer_type) * DIPointerTypesCount);
-    memset(DIStructMembers, 0, sizeof(di_struct_member) * DIStructMembersCount);
-    memset(DIStructTypes, 0, sizeof(di_struct_type) * DIStructTypesCount);
-    memset(DIArrayTypes, 0, sizeof(di_array_type) * DIArrayTypesCount);
-    memset(DILexScopes, 0, sizeof(di_lexical_scope) * DILexScopesCount);
+    memset(DI->SourceFiles, 0, sizeof(di_src_file) * DI->SourceFilesCount);
+    memset(DI->SourceLines, 0, sizeof(di_src_line) * DI->SourceLinesCount);
+    memset(DI->Functions, 0, sizeof(di_function) * DI->FuctionsCount);
+    memset(DI->CompileUnits, 0, sizeof(di_compile_unit) * DI->CompileUnitsCount);
+    memset(DI->Variables, 0, sizeof(di_variable) * DI->VariablesCount);
+    memset(DI->Params, 0, sizeof(di_variable) * DI->ParamsCount);
+    memset(DI->BaseTypes, 0, sizeof(di_base_type) * DI->BaseTypesCount);
+    memset(DI->Typedefs, 0, sizeof(di_typedef) * DI->TypedefsCount);
+    memset(DI->PointerTypes, 0, sizeof(di_pointer_type) * DI->PointerTypesCount);
+    memset(DI->StructMembers, 0, sizeof(di_struct_member) * DI->StructMembersCount);
+    memset(DI->StructTypes, 0, sizeof(di_struct_type) * DI->StructTypesCount);
+    memset(DI->ArrayTypes, 0, sizeof(di_array_type) * DI->ArrayTypesCount);
+    memset(DI->LexScopes, 0, sizeof(di_lexical_scope) * DI->LexScopesCount);
     
     BreakpointCount = 0;
     DisasmInstCount = 0;
     Regs = {};
-    DISourceFilesCount = 0;
-    DISourceLinesCount = 0;
-    DIVariablesCount = 0;
-    DIParamsCount = 0;
-    DIFuctionsCount = 0;
-    DICompileUnitsCount = 0;
-    DIBaseTypesCount = 0;
-    DITypedefsCount = 0;
-    DIPointerTypesCount = 0;
-    DIStructMembersCount = 0;
-    DIStructTypesCount = 0;
-    DIArrayTypesCount = 0;
-    DILexScopesCount = 0;
-    DIFrameInfo = {};
-    ArenaDestroy(DIArena);
-    DIArena = 0x0;
+    DI->SourceFilesCount = 0;
+    DI->SourceLinesCount = 0;
+    DI->VariablesCount = 0;
+    DI->ParamsCount = 0;
+    DI->FuctionsCount = 0;
+    DI->CompileUnitsCount = 0;
+    DI->BaseTypesCount = 0;
+    DI->TypedefsCount = 0;
+    DI->PointerTypesCount = 0;
+    DI->StructMembersCount = 0;
+    DI->StructTypesCount = 0;
+    DI->ArrayTypesCount = 0;
+    DI->LexScopesCount = 0;
+    DI->FrameInfo = {};
+    ArenaDestroy(DI->Arena);
+    DI->Arena = 0x0;
 }
 
 static void
 DebugerMain()
 {
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
-    DISourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
-    DISourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
+    DI = (debug_info *)calloc(1, sizeof(debug_info));
+    DI->SourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
+    DI->SourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(WindowWidth, WindowHeight, "debag", NULL, NULL);
@@ -1144,7 +1147,7 @@ DebugerMain()
         if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
             di_src_line *Line = LineTableFindByAddress(Regs.rip);
-            for(u32 SrcFileIndex = 0; SrcFileIndex < DISourceFilesCount; SrcFileIndex++)
+            for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
                 if(SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
@@ -1154,13 +1157,13 @@ DebugerMain()
                 
                 (void)TIFlags;
                 
-                char *FileName = StringFindLastChar(DISourceFiles[SrcFileIndex].Path, '/') + 1;
+                char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
                 if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
                 {
                     //printf("child on %u\n", SrcFileIndex);
                     ImGui::BeginChild("srcfile");
                     
-                    di_src_file *Src = &DISourceFiles[SrcFileIndex];
+                    di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
                     di_src_line *DrawingLine = 0x0;
                     char *LinePtr = Src->Content;
                     char *Prev = 0x0;
@@ -1360,9 +1363,9 @@ DebugerMain()
                 
                 if(ImGui::Button("BreakFunc"))
                 {
-                    for(u32 I = 0; I < DIFuctionsCount; I++)
+                    for(u32 I = 0; I < DI->FuctionsCount; I++)
                     {
-                        di_function *Func = &DIFunctions[I];
+                        di_function *Func = &DI->Functions[I];
                         if(strcmp(TextBuff2, Func->Name) == 0)
                         {
                             breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
