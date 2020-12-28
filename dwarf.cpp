@@ -35,7 +35,9 @@ LineTableFindByAddress(size_t Address)
             {
                 return &File->Lines[J];
             }
-            else if(J + 1 < File->SrcLineCount && AddressBetween(Address, LineAddress + 1, File->Lines[J + 1].Address - 1))
+            else if(J + 1 < File->SrcLineCount &&
+                    Address > LineAddress &&
+                    Address < File->Lines[J + 1].Address)
             {
                 return &File->Lines[J];
             }
@@ -473,6 +475,11 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
             Line.Address = Addr;
             Line.LineNum = LineNO;
 
+            Dwarf_Signed LineOffset = 0;
+            DWARF_CALL(dwarf_lineoff(Lines[I], &LineOffset, 0x0));
+            
+            //printf("Pair Addr - LineNO => %llx - %llu, with offset = %llx\n", Addr, LineNO, LineOffset);
+
             File->Lines[File->SrcLineCount++] = Line;
         }
     }
@@ -580,27 +587,28 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                         NewFileIndex = I;
                     }
                     
-                    if(Address < LineAddr)
+                    if(Address == LineAddr)
                     {
                         // Dump this file into memory
                         printf("NewFileIndex = %d, PrevLineAddr = %llx, PrevFileNum = %llu, PrevLineNum = %llu\n", NewFileIndex, PrevLineAddr, PrevFileNum, PrevLineNum);
                         
-                        Dwarf_Addr LineAddr = 0;
-                        Dwarf_Unsigned FileNum = 0;
-                        Dwarf_Unsigned LineNum = 0;
+                        //Dwarf_Addr LineAddr = 0;
+                        //Dwarf_Unsigned FileNum = 0;
+                        //Dwarf_Unsigned LineNum = 0;
                         
-                        DWARF_CALL(dwarf_lineaddr(LineBuffer[NewFileIndex], &LineAddr, Error));
-                        DWARF_CALL(dwarf_lineno(LineBuffer[NewFileIndex], &LineNum, Error));
-                        DWARF_CALL(dwarf_line_srcfileno(LineBuffer[NewFileIndex], &FileNum, Error));
+                        //DWARF_CALL(dwarf_lineaddr(LineBuffer[I], &LineAddr, Error));
+                        //DWARF_CALL(dwarf_lineno(LineBuffer[I], &LineNum, Error));
+                        //DWARF_CALL(dwarf_line_srcfileno(LineBuffer[I], &FileNum, Error));
                         
                         // Dump this file into memory
-                        printf("LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", LineAddr, FileNum, LineNum);
+                        printf("Address = %lx, LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", Address, LineAddr, FileNum, LineNum);
 
                         char *FileName = 0x0;
                         DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
                         u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, FileNum);
 
                         di_src_file *File = PushSourceFile(FileName, LinesMatching);
+                        printf("Pushing source file %s\n", FileName);
 
                         DumpLinesMatchingIndex(LineBuffer, LineCount, File, FileNum, LineNum, LineIdxOut);
 
@@ -609,6 +617,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                         Result = true;
                         return Result;
                     }
+                    
                     PrevLineAddr = LineAddr;
                     PrevFileNum = FileNum;
                     PrevLineNum = LineNum;

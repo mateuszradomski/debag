@@ -1,5 +1,3 @@
-// TODO(mateusz): This is utter shit, please, PLEASE!!!!
-// Do something about!!!
 static bool
 AddressInDiffrentLine(size_t Address)
 {
@@ -8,9 +6,14 @@ AddressInDiffrentLine(size_t Address)
     assert(Current);
     assert(Diff);
 
-    if(Current->LineNum != Diff->LineNum && Current->Address != Diff->Address)
+    printf("LineNum: Current = %u, Diff = %u / Address: Current = %lx, Diff = %lx\n", Current->LineNum, Diff->LineNum, Current->Address, Diff->Address);
+
+    bool SameLineDiffFiles = (Current->LineNum == Diff->LineNum) && (Current->SrcFileIndex != Diff->SrcFileIndex);
+    bool SameFileDiffLines = (Current->LineNum != Diff->LineNum) && (Current->Address != Diff->Address);
+    if(SameLineDiffFiles || SameFileDiffLines)
     {
         assert(Current != Diff);
+        printf("We are true\n");
         return true;
     }
         
@@ -215,7 +218,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine();
     
-    printf("Regs.rip = %lX, Range.Start = %lX, Range.End = %lX\n", Regs.rip, Range.Start, Range.End);
+    printf("Regs.rip = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.rip, Range.Start, Range.End);
     
     breakpoint TempBreakpoints[8] = {};
     u32 TempBreakpointsCount = 0;
@@ -307,13 +310,13 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
             size_t JumpAddress = Instruction->detail->x86.operands[0].imm;
-            //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
+            printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
             
             bool Between = AddressBetween(JumpAddress, Range.Start, Range.End);
             bool DiffrentLine = AddressInDiffrentLine(JumpAddress);
             if(!Between && DiffrentLine)
             {
-                //printf("Breaking rel branch: %lX\n", JumpAddress);
+                printf("Breaking rel branch: %lX\n", JumpAddress);
                 
                 breakpoint BP = BreakpointCreate(JumpAddress, DebugeePID);
                 BreakpointEnable(&BP);
@@ -347,9 +350,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                         size_t OperandAddress = Instruction->detail->x86.operands[0].imm;
                         if(!BreakpointFind(OperandAddress, DebugeePID, TempBreakpoints, TempBreakpointsCount))
                         {
-                            //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
+                            printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
                             
-                            //printf("Break condition branch in jump instrs: %lX\n", OperandAddress);
+                            printf("Break condition branch in jump instrs: %lX\n", OperandAddress);
                             if(OperandAddress != Range.Start)
                             {
                                 breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
@@ -386,8 +389,18 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     // TODO(mateusz): This isn't that safe I guess
                     // It's created upon a feeling I have of programs, nothing
                     // doc/spec based
-                    if(Instruction->id == X86_INS_JMP)
+                    if(Instruction->id == X86_INS_JMP || Instruction->id == X86_INS_JB)
                     {
+                        if(Instruction) { cs_free(Instruction, 1); }
+                        i32 Count = cs_disasm(DisAsmHandle, (const u8 *)&DeepOpcodes, 
+                                              sizeof(DeepOpcodes), CurrentAddress, 1, &Instruction);
+                        if(Count == 0) { break; }
+                        CurrentAddress += Instruction->size;
+
+                        breakpoint BP = BreakpointCreate(CurrentAddress, DebugeePID);
+                        BreakpointEnable(&BP);
+                        TempBreakpoints[TempBreakpointsCount++] = BP;
+
                         break;
                     }
                 }
@@ -399,10 +412,10 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
     ContinueProgram(DebugeePID);
     
-    //printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
+    printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
     {
-        //printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
+        printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
     

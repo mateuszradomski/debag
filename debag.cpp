@@ -695,7 +695,7 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     }
     else
     {
-        printf("Var [%s] doesn't have a type\n", VarName);
+        //printf("Var [%s] doesn't have a type\n", VarName);
         //assert(false);
     }
 }
