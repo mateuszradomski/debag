@@ -216,8 +216,8 @@ struct debug_info
     u32 SourceFilesCount;
     u32 SourceFilesInExec;
     
-    di_src_line *SourceLines;
-    u32 SourceLinesCount;
+//    di_src_line *SourceLines;
+//    u32 SourceLinesCount;
     
     di_variable *Variables;
     u32 VariablesCount;

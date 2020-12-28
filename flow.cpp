@@ -4,18 +4,16 @@ static bool
 AddressInDiffrentLine(size_t Address)
 {
     di_src_line *Current = LineTableFindByAddress(Regs.rip);
+    di_src_line *Diff = LineTableFindByAddress(Address);
     assert(Current);
-    
-    for(u32 I = 0; I < DI->SourceLinesCount; I++)
+    assert(Diff);
+
+    if(Current->LineNum != Diff->LineNum && Current->Address != Diff->Address)
     {
-        if(Current->Address != DI->SourceLines[I].Address &&
-           Current->LineNum != DI->SourceLines[I].LineNum &&
-           DI->SourceLines[I].Address == Address)
-        {
-            return true;
-        }
+        assert(Current != Diff);
+        return true;
     }
-    
+        
     return false;
 }
 

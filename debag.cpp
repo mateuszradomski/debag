@@ -970,7 +970,7 @@ DeallocDebugInfo()
     
     memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
     memset(DI->SourceFiles, 0, sizeof(di_src_file) * DI->SourceFilesCount);
-    memset(DI->SourceLines, 0, sizeof(di_src_line) * DI->SourceLinesCount);
+//    memset(DI->SourceLines, 0, sizeof(di_src_line) * DI->SourceLinesCount);
     memset(DI->Functions, 0, sizeof(di_function) * DI->FuctionsCount);
     memset(DI->CompileUnits, 0, sizeof(di_compile_unit) * DI->CompileUnitsCount);
     memset(DI->Variables, 0, sizeof(di_variable) * DI->VariablesCount);
@@ -987,7 +987,7 @@ DeallocDebugInfo()
     DisasmInstCount = 0;
     Regs = {};
     DI->SourceFilesCount = 0;
-    DI->SourceLinesCount = 0;
+//    DI->SourceLinesCount = 0;
     DI->VariablesCount = 0;
     DI->ParamsCount = 0;
     DI->FuctionsCount = 0;
@@ -1010,7 +1010,7 @@ DebugerMain()
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     DI = (debug_info *)calloc(1, sizeof(debug_info));
     DI->SourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
-    DI->SourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
+//    DI->SourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(WindowWidth, WindowHeight, "debag", NULL, NULL);

@@ -35,7 +35,7 @@ LineTableFindByAddress(size_t Address)
             {
                 return &File->Lines[J];
             }
-            else if(I + 1 < DI->SourceLinesCount && AddressBetween(Address, LineAddress, DI->SourceLines[I + 1].Address))
+            else if(J + 1 < File->SrcLineCount && AddressBetween(Address, LineAddress, File->Lines[J + 1].Address))
             {
                 return &File->Lines[J];
             }
@@ -63,14 +63,18 @@ LineTableFindByAddress(size_t Address)
 static di_src_line *
 LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
 {
-    for(u32 I = 0; I < DI->SourceLinesCount; I++)
     {
-        if(DI->SourceLines[I].LineNum == LineNum && DI->SourceLines[I].SrcFileIndex == SrcFileIndex)
+        di_src_file *File = &DI->SourceFiles[SrcFileIndex];
+        for(u32 J = 0; J < File->SrcLineCount; J++)
         {
-            return &DI->SourceLines[I];
+            size_t LineAddress = File->Lines[J].Address;
+            if(LineAddress == LineNum)
+            {
+                return &File->Lines[J];
+            }
         }
     }
-    
+
     return 0x0;
 }
 
@@ -455,7 +459,7 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
         if(CheckFileNum == FileIdx)
         {
             di_src_line Line = {};
-            Line.SrcFileIndex = FileIdx;
+            Line.SrcFileIndex = DI->SourceFiles - File;
             Dwarf_Unsigned Addr = 0;
             Dwarf_Unsigned LineNO = 0;
             DWARF_CALL(dwarf_lineaddr(Lines[I], &Addr, 0x0));
@@ -626,32 +630,31 @@ AddressRangeCurrentAndNextLine()
     address_range Result = {};
     
     di_src_line *Current = LineTableFindByAddress(Regs.rip);
-    for(u32 I = 0; I < DI->SourceLinesCount; I++)
+    di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
+
+    u32 LineIdx = Current - File->Lines;
+    //printf("Current->Address = %d, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex, LineIdx);
+
+    for(u32 I = LineIdx; I < File->SrcLineCount; I++)
     {
-        if(DI->SourceLines[I].Address == Current->Address)
+        if(File->SrcLineCount == I + 1)
         {
-            for(;;I++)
+            di_function *Func = FindFunctionConfiningAddress(Current->Address);
+            Result.Start = Current->Address;
+            // TODO(mateusz): I think this will be different, in that it will use 
+            // the lexical scopes
+            Result.End = Func->FuncLexScope.HighPC;
+            goto end;
+        }
+        else
+        {
+            di_src_line *Next = &File->Lines[I];
+            if(Next->LineNum != Current->LineNum)
             {
-                if(DI->SourceLinesCount == I + 1)
-                {
-                    di_function *Func = FindFunctionConfiningAddress(Current->Address);
-                    Result.Start = Current->Address;
-                    // TODO(mateusz): I think this will be different, in that it will use 
-                    // the lexical scopes
-                    Result.End = Func->FuncLexScope.HighPC;
-                    goto end;
-                }
-                else
-                {
-                    di_src_line *Next = &DI->SourceLines[I];
-                    if(Next->LineNum != Current->LineNum)
-                    {
-                        //printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
-                        //printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
-                        Result = LineAddressRangeBetween(Current, Next);
-                        goto end;
-                    }
-                }
+                //printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
+                //printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
+                Result = LineAddressRangeBetween(Current, Next);
+                goto end;
             }
         }
     }
