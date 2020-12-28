@@ -1,21 +1,60 @@
 
 debug_info *DI = 0x0;
 
+static bool
+OpenDwarfSymbolsHandle()
+{
+    DI->DwarfFd = open(Debuger.DebugeeProgramPath, O_RDONLY);
+    assert(DI->DwarfFd != -1);
+    
+    bool Result = dwarf_init(DI->DwarfFd, DW_DLC_READ, 0, 0, &DI->Debug, 0x0) == DW_DLV_OK;
+    
+    return Result;
+}
+
+static void
+CloseDwarfSymbolsHandle()
+{
+    assert(dwarf_finish(DI->Debug, 0x0) == DW_DLV_OK);
+    close(DI->DwarfFd);
+}
+
+static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
+
 static di_src_line *
 LineTableFindByAddress(size_t Address)
 {
-    for(u32 I = 0; I < DI->SourceLinesCount; I++)
+    // Try to find it in what we have
+    for(u32 I = 0; I < DI->SourceFilesCount; I++)
     {
-        if(DI->SourceLines[I].Address == Address)
+        di_src_file *File = &DI->SourceFiles[I];
+        for(u32 J = 0; J < File->SrcLineCount; J++)
         {
-            return &DI->SourceLines[I];
+            size_t LineAddress = File->Lines[J].Address;
+            if(LineAddress == Address)
+            {
+                return &File->Lines[J];
+            }
+            else if(I + 1 < DI->SourceLinesCount && AddressBetween(Address, LineAddress, DI->SourceLines[I + 1].Address))
+            {
+                return &File->Lines[J];
+            }
         }
-        else if(I + 1 < DI->SourceLinesCount &&
-                (DI->SourceLines[I].Address < Address) &&
-                (DI->SourceLines[I + 1].Address > Address))
-        {
-            return &DI->SourceLines[I];
-        }
+    }
+
+    // If we don't have it, call Dwarf parsing, and search for it
+    u32 LineIdx = 0;
+    u32 FileIdx = 0;
+    bool Found = LoadSourceContaingAddress(Address, &FileIdx, &LineIdx);
+    
+    if(Found)
+    {
+        assert(FileIdx < DI->SourceFilesCount);
+        di_src_file *File = &DI->SourceFiles[FileIdx];
+        assert(LineIdx < File->SrcLineCount);
+        di_src_line *Line = &File->Lines[LineIdx];
+        
+        return Line;
     }
     
     return 0x0;
@@ -295,6 +334,22 @@ FindSourceFile(char *Path)
 }
 
 static di_src_file *
+PushSourceFile(char *Path, u32 SrcLineCount)
+{
+    di_src_file *Result = 0x0;
+    
+    Result = &DI->SourceFiles[DI->SourceFilesCount++];
+    
+    Result->Path = strdup(Path);
+    Result->Content = DumpFile(Path);
+    Result->ContentLineCount = StringCountChar(Result->Content, '\n');
+    Result->SrcLineCount = 0;
+    Result->Lines = ArrayPush(DI->Arena, di_src_line, SrcLineCount);
+    
+    return Result;
+}
+
+static di_src_file *
 PushSourceFile(char *Path)
 {
     di_src_file *Result = 0x0;
@@ -303,22 +358,7 @@ PushSourceFile(char *Path)
     
     Result->Path = strdup(Path);
     Result->Content = DumpFile(Path);
-    Result->LineCount = StringCountChar(Result->Content, '\n');
-    
-    return Result;
-}
-
-static di_src_file *
-GetSourceFile(char *Path)
-{
-    di_src_file *Result = 0x0;
-    
-    Result = FindSourceFile(Path);
-    
-    if(!Result)
-    {
-        Result = PushSourceFile(Path);
-    }
+    Result->ContentLineCount = StringCountChar(Result->Content, '\n');
     
     return Result;
 }
@@ -343,6 +383,239 @@ SrcFileAssociatePath(char *Path)
         PushSourceFile(Path);
         Result = DI->SourceFilesCount - 1;
     }
+    
+    return Result;
+}
+
+static Dwarf_Die
+FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
+{
+    Dwarf_Off DIEOffset = 0;
+    DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, 0x0));
+    
+    if(DIEOffset == Offset)
+    {
+        return DIE;
+    }
+    else
+    {
+        Dwarf_Die ChildDIE = 0;
+        i32 Result = dwarf_child(DIE, &ChildDIE, 0x0);
+        
+        if(Result == DW_DLV_OK)
+        { 
+            return FindDIEWithOffset(Debug, ChildDIE, Offset);
+            Dwarf_Die SiblingDIE = ChildDIE;
+            while(Result == DW_DLV_OK)
+            {
+                DIE = SiblingDIE;
+                Result = dwarf_siblingof(Debug, DIE, &SiblingDIE, 0x0);
+                if(Result == DW_DLV_OK)
+                {
+                    return FindDIEWithOffset(Debug, SiblingDIE, Offset);
+                }
+                else
+                {
+                    return 0x0;
+                }
+            };
+        }
+    }
+    
+    return 0x0;
+}
+
+static u32
+CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx)
+{
+    u32 Result = 0;
+
+    for(u32 I = 0; I < LineCount; I++)
+    {
+        Dwarf_Unsigned CheckFileNum = 0;
+        DWARF_CALL(dwarf_line_srcfileno(Lines[I], &CheckFileNum, 0x0));
+
+        if(CheckFileNum == FileIdx)
+        {
+            Result += 1;
+        }
+    }
+
+    return Result;
+}
+
+static void
+DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum, u32 *LineIdxOut)
+{
+    for(u32 I = 0; I < LineCount; I++)
+    {
+        Dwarf_Unsigned CheckFileNum = 0;
+        DWARF_CALL(dwarf_line_srcfileno(Lines[I], &CheckFileNum, 0x0));
+
+        if(CheckFileNum == FileIdx)
+        {
+            di_src_line Line = {};
+            Line.SrcFileIndex = FileIdx;
+            Dwarf_Unsigned Addr = 0;
+            Dwarf_Unsigned LineNO = 0;
+            DWARF_CALL(dwarf_lineaddr(Lines[I], &Addr, 0x0));
+            DWARF_CALL(dwarf_lineno(Lines[I], &LineNO, 0x0));
+
+            if(LineNO == LineNum)
+            {
+                *LineIdxOut = File->SrcLineCount;
+            }
+
+            Line.Address = Addr;
+            Line.LineNum = LineNO;
+
+            File->Lines[File->SrcLineCount++] = Line;
+        }
+    }
+}
+
+static bool
+LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
+{
+    bool Result = false;
+    
+    assert(OpenDwarfSymbolsHandle());
+    
+    Dwarf_Unsigned CUHeaderLength = 0;
+    Dwarf_Half Version = 0;
+    Dwarf_Unsigned AbbrevOffset = 0;
+    Dwarf_Half AddressSize = 0;
+    Dwarf_Unsigned NextCUHeader = 0;
+    Dwarf_Error *Error = 0x0;
+    
+    size_t CUDIEOffset = 0;
+    if(DI->CompileUnitsCount > 0)
+    {
+        for(u32 I = 0; I < DI->CompileUnitsCount; I++)
+        {
+            di_compile_unit *CompUnit = &DI->CompileUnits[I];
+            for(u32 RI = 0; RI < CompUnit->RangesCount; RI++)
+            {
+                printf("%lx, %lx, Address = %lx\n", CompUnit->RangesLowPCs[RI], CompUnit->RangesHighPCs[RI], Address);
+                ssize_t LowPC = CompUnit->RangesLowPCs[RI];
+                ssize_t HighPC = CompUnit->RangesHighPCs[RI];
+                printf("compunit, LOWPC, HIGHPC = %lx, %lx, Address = %lx\n", LowPC, HighPC, Address);
+                
+                if(AddressBetween(Address, LowPC, HighPC))
+                {
+                    CUDIEOffset = CompUnit->DIEOffset;
+                }
+            }
+        }
+        
+        if(CUDIEOffset)
+        {
+            Dwarf_Die SearchDie = 0x0;
+            
+            for(;;)
+            {
+                i32 ResultI = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
+                                                   &Version, &AbbrevOffset, &AddressSize,
+                                                   &NextCUHeader, Error);
+                
+                assert(ResultI != DW_DLV_ERROR);
+                
+                Dwarf_Die CurrentDIE = 0;
+                Result = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
+                assert(ResultI != DW_DLV_ERROR && ResultI != DW_DLV_NO_ENTRY);
+                
+                SearchDie = FindDIEWithOffset(DI->Debug, CurrentDIE, CUDIEOffset);
+                if(SearchDie)
+                {
+                    break;
+                }
+            }
+            
+            if(SearchDie)
+            {
+                Dwarf_Half Tag = 0;
+                DWARF_CALL(dwarf_tag(SearchDie, &Tag, 0x0));
+                assert(Tag == DW_TAG_compile_unit);
+                
+                Dwarf_Unsigned Version = 0;
+                Dwarf_Small TableType = 0;
+                Dwarf_Line_Context LineCtx = 0;
+                DWARF_CALL(dwarf_srclines_b(SearchDie, &Version, &TableType, &LineCtx, 0x0));
+                
+                Dwarf_Signed SrcFilesCount = 0;
+                dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
+                DI->SourceFilesInExec += SrcFilesCount;
+                
+                printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
+                
+                Dwarf_Line *LineBuffer = 0;
+                Dwarf_Signed LineCount = 0;
+                DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
+                
+                printf("There are %lld source lines\n", LineCount);
+                
+                Dwarf_Addr PrevLineAddr = 0;
+                Dwarf_Unsigned PrevFileNum = 0;
+                Dwarf_Unsigned PrevLineNum = 0;
+                
+                i32 NewFileIndex = 0;
+                
+                for(i32 I = 0; I < LineCount; ++I)
+                {
+                    Dwarf_Addr LineAddr = 0;
+                    Dwarf_Unsigned FileNum = 0;
+                    Dwarf_Unsigned LineNum = 0;
+                    
+                    DWARF_CALL(dwarf_lineaddr(LineBuffer[I], &LineAddr, Error));
+                    DWARF_CALL(dwarf_lineno(LineBuffer[I], &LineNum, Error));
+                    DWARF_CALL(dwarf_line_srcfileno(LineBuffer[I], &FileNum, Error));
+                    
+                    if(PrevFileNum != FileNum)
+                    {
+                        printf("Changing NewFileIndex, because PrevFileNum = %llu and FileNum = %llu\n", PrevFileNum, FileNum);
+                        NewFileIndex = I;
+                    }
+                    
+                    if(Address < LineAddr)
+                    {
+                        // Dump this file into memory
+                        printf("NewFileIndex = %d, PrevLineAddr = %llx, PrevFileNum = %llu, PrevLineNum = %llu\n", NewFileIndex, PrevLineAddr, PrevFileNum, PrevLineNum);
+                        
+                        Dwarf_Addr LineAddr = 0;
+                        Dwarf_Unsigned FileNum = 0;
+                        Dwarf_Unsigned LineNum = 0;
+                        
+                        DWARF_CALL(dwarf_lineaddr(LineBuffer[NewFileIndex], &LineAddr, Error));
+                        DWARF_CALL(dwarf_lineno(LineBuffer[NewFileIndex], &LineNum, Error));
+                        DWARF_CALL(dwarf_line_srcfileno(LineBuffer[NewFileIndex], &FileNum, Error));
+                        
+                        // Dump this file into memory
+                        printf("LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", LineAddr, FileNum, LineNum);
+
+                        char *FileName = 0x0;
+                        DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
+                        u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, FileNum);
+
+                        di_src_file *File = PushSourceFile(FileName, LinesMatching);
+
+                        DumpLinesMatchingIndex(LineBuffer, LineCount, File, FileNum, LineNum, LineIdxOut);
+
+                        *FileIdxOut = DI->SourceFilesCount - 1;
+
+                        Result = true;
+                        return Result;
+                    }
+                    PrevLineAddr = LineAddr;
+                    PrevFileNum = FileNum;
+                    PrevLineNum = LineNum;
+                }
+
+                return Result;
+            }
+        }
+    }
+    
+    CloseDwarfSymbolsHandle();
     
     return Result;
 }
@@ -465,6 +738,11 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount++];
+            
+            Dwarf_Off DIEOffset = 0;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
+            CompUnit->DIEOffset = DIEOffset;
+            
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -511,7 +789,7 @@ ranges have been read then don't read the low-high
                         {
                             CompUnit->RangesLowPCs = ArrayPush(DI->Arena, size_t, 1);
                             CompUnit->RangesCount = 1;
-                            Dwarf_Addr *WritePoint = (Dwarf_Addr *)&CompUnit->RangesLowPCs;
+                            Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesLowPCs;
                             DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
                         }
                         else
@@ -608,6 +886,7 @@ ranges have been read then don't read the low-high
                 assert(CompUnit->RangesLowPCs && CompUnit->RangesHighPCs);
             }
             
+#if 0            
             Dwarf_Unsigned Version = 0;
             Dwarf_Small TableType = 0;
             Dwarf_Line_Context LineCtx = 0;
@@ -643,6 +922,7 @@ ranges have been read then don't read the low-high
                 LTEntry->LineNum = LineNum;
                 LTEntry->SrcFileIndex = SrcFileAssociatePath(LineSrcFile);
             }
+#endif
         }break;
         case DW_TAG_subprogram:
         {
@@ -1673,26 +1953,19 @@ DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT
 static void
 DWARFRead()
 {
-    i32 Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
-    assert(Fd != -1);
-    
-    Dwarf_Handler ErrorHandle = 0;
-    Dwarf_Ptr ErrorArg = 0;
-    Dwarf_Error *Error  = 0;
-    
-    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &DI->Debug, Error) == DW_DLV_OK);
-    
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
     Dwarf_Unsigned AbbrevOffset = 0;
     Dwarf_Half AddressSize = 0;
     Dwarf_Unsigned NextCUHeader = 0;
+    Dwarf_Error *Error = 0x0;
+    
+    OpenDwarfSymbolsHandle();
     
     DI->Arena = ArenaCreate(Kilobytes(256));
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
     
     for(i32 CUCount = 0;;++CUCount) {
-        // NOTE(mateusz): I don't know what it does
         i32 Result = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
                                           &Version, &AbbrevOffset, &AddressSize,
                                           &NextCUHeader, Error);
@@ -1760,10 +2033,10 @@ DWARFRead()
         DWARFReadDIEs(DI->Debug, CurrentDIE);
     }
     
-    assert(dwarf_finish(DI->Debug, Error) == DW_DLV_OK);
+    CloseDwarfSymbolsHandle();
     
     // NOTE(mateusz): This time without finish to preserve it
-    assert(dwarf_init(Fd, DW_DLC_READ, ErrorHandle, ErrorArg, &DI->Debug, Error) == DW_DLV_OK);
+    OpenDwarfSymbolsHandle();
     Dwarf_Cie *CIEs;
     Dwarf_Signed CIECount;
     Dwarf_Fde *FDEs;
@@ -1777,7 +2050,6 @@ DWARFRead()
     Frame->FDEs = FDEs;
     
     free(CountTable);
-    close(Fd);
 }
 
 static size_t

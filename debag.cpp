@@ -1167,7 +1167,7 @@ DebugerMain()
                     di_src_line *DrawingLine = 0x0;
                     char *LinePtr = Src->Content;
                     char *Prev = 0x0;
-                    for(u32 I = 0; I < Src->LineCount + 1; I++)
+                    for(u32 I = 0; I < Src->ContentLineCount + 1; I++)
                     {
                         Prev = LinePtr;
                         LinePtr = strchr(LinePtr, '\n') + 1;

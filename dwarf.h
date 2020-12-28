@@ -19,6 +19,7 @@ typedef i32 di_compile_unit_flags;
 struct di_compile_unit
 {
     char *Name;
+    size_t DIEOffset;
     
     size_t *RangesLowPCs;
     size_t *RangesHighPCs;
@@ -27,11 +28,11 @@ struct di_compile_unit
     di_compile_unit_flags Flags;
 };
 
-struct di_src_file
+struct di_src_line_loc
 {
-    char *Path;
-    char *Content;
-    u32 LineCount;
+    size_t Address;
+    i32 FileNumber;
+    u32 NOInFile;
 };
 
 struct di_src_line
@@ -39,6 +40,15 @@ struct di_src_line
     size_t Address;
     u32 LineNum;
     u32 SrcFileIndex;
+};
+
+struct di_src_file
+{
+    char *Path;
+    char *Content;
+    u32 ContentLineCount;
+    di_src_line *Lines;
+    u32 SrcLineCount;
 };
 
 struct di_variable
@@ -256,6 +266,7 @@ struct debug_info
     
     di_frame_info FrameInfo;
     Dwarf_Debug Debug;
+    int DwarfFd;
 };
 
 #endif //DWARF_H
