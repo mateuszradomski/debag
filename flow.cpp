@@ -215,7 +215,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine();
     
-    //printf("Range.Start = %lX, Range.End = %lX\n", Range.Start, Range.End);
+    printf("Regs.rip = %lX, Range.Start = %lX, Range.End = %lX\n", Regs.rip, Range.Start, Range.End);
     
     breakpoint TempBreakpoints[8] = {};
     u32 TempBreakpointsCount = 0;

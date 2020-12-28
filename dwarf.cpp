@@ -35,7 +35,7 @@ LineTableFindByAddress(size_t Address)
             {
                 return &File->Lines[J];
             }
-            else if(J + 1 < File->SrcLineCount && AddressBetween(Address, LineAddress, File->Lines[J + 1].Address))
+            else if(J + 1 < File->SrcLineCount && AddressBetween(Address, LineAddress + 1, File->Lines[J + 1].Address - 1))
             {
                 return &File->Lines[J];
             }
@@ -633,7 +633,7 @@ AddressRangeCurrentAndNextLine()
     di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
 
     u32 LineIdx = Current - File->Lines;
-    //printf("Current->Address = %d, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex, LineIdx);
+    printf("Current->Address = %lx, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex, LineIdx);
 
     for(u32 I = LineIdx; I < File->SrcLineCount; I++)
     {
