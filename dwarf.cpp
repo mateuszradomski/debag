@@ -628,11 +628,11 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 }
 
 static address_range
-AddressRangeCurrentAndNextLine()
+AddressRangeCurrentAndNextLine(size_t StartAddress)
 {
     address_range Result = {};
     
-    di_src_line *Current = LineTableFindByAddress(Regs.rip);
+    di_src_line *Current = LineTableFindByAddress(StartAddress);
     di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
 
     u32 LineIdx = Current - File->Lines;

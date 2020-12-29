@@ -218,19 +218,12 @@ ContinueProgram(i32 DebugeePID)
 }
 
 static void
-ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
+BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID, breakpoint *Breakpoints, u32 *BreakpointsCount)
 {
-    address_range Range = AddressRangeCurrentAndNextLine();
-    
-//    printf("Regs.rip = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.rip, Range.Start, Range.End);
-    
-    breakpoint TempBreakpoints[8] = {};
-    u32 TempBreakpointsCount = 0;
-    
     breakpoint BP = BreakpointCreate(Range.End, DebugeePID);
     BreakpointEnable(&BP);
-    TempBreakpoints[TempBreakpointsCount++] = BP;
-    
+    Breakpoints[(*BreakpointsCount)++] = BP;
+
     cs_insn *Instruction = 0x0;
     for(size_t CurrentAddress = Range.Start; CurrentAddress < Range.End;)
     {
@@ -253,7 +246,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         CurrentAddress += Instruction->size;
         inst_type Type = GetInstructionType(Instruction);
         
-        if((Type & INST_TYPE_CALL) && StepIntoFunctions)
+        if((Type & INST_TYPE_CALL) && BreakCalls)
         {
             // NOTE(mateusz): Should always be one, otherwise not a valid opcode
             assert(Instruction->detail->x86.op_count == 1);
@@ -269,7 +262,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             {
                 breakpoint BP = BreakpointCreate(CallAddress, DebugeePID);
                 BreakpointEnable(&BP);
-                TempBreakpoints[TempBreakpointsCount++] = BP;
+                Breakpoints[(*BreakpointsCount)++] = BP;
             }
         }
         
@@ -281,10 +274,10 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             {
                 breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
                 BreakpointEnable(&BP);
-                TempBreakpoints[TempBreakpointsCount++] = BP;
+                Breakpoints[(*BreakpointsCount)++] = BP;
             }
         }
-        
+
         if((Type & INST_TYPE_RELATIVE_BRANCH) && (Type & INST_TYPE_JUMP))
         {
             // NOTE(mateusz): Should always be one, otherwise not a valid opcode
@@ -295,117 +288,47 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
             size_t JumpAddress = Instruction->detail->x86.operands[0].imm;
-            printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
+            //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
             
             bool AddressWithoutBreakpoint = !BreakpointFind(JumpAddress, DebugeePID,
-                                                            TempBreakpoints, TempBreakpointsCount);
+                                                            Breakpoints, (*BreakpointsCount));
             if(AddressWithoutBreakpoint)
             {
                 bool Between = AddressBetween(JumpAddress, Range.Start, Range.End);
                 bool DiffrentLine = AddressInDiffrentLine(JumpAddress);
                 if(!Between && DiffrentLine)
                 {
-                    printf("Breaking rel branch: %lX\n", JumpAddress);
+                    //printf("Breaking rel branch: %lX\n", JumpAddress);
 
                     breakpoint BP = BreakpointCreate(JumpAddress, DebugeePID);
                     BreakpointEnable(&BP);
-                    TempBreakpoints[TempBreakpointsCount++] = BP;
+                    Breakpoints[(*BreakpointsCount)++] = BP;
                 }
                 else 
                 {
-                    size_t CurrentAddress = JumpAddress;
-                    while(true)
-                    {
-                        size_t DeepOpcodes = PeekDebugeeMemory(CurrentAddress, Debuger.DebugeePID);
+                    address_range JumpToNextLine = AddressRangeCurrentAndNextLine(JumpAddress);
 
-                        breakpoint *BP = BreakpointFind(CurrentAddress, DebugeePID);
-                        if(BreakpointEnabled(BP))
-                        {
-                            DeepOpcodes = (DeepOpcodes & ~0xff) | BP->SavedOpCode;
-                        }
-
-                        if(Instruction) { cs_free(Instruction, 1); }
-                        i32 Count = cs_disasm(DisAsmHandle, (const u8 *)&DeepOpcodes, 
-                                              sizeof(DeepOpcodes), CurrentAddress, 1, &Instruction);
-                        if(Count == 0) { break; }
-                        CurrentAddress += Instruction->size;
-
-                        inst_type DeepType = GetInstructionType(Instruction);
-                        if((DeepType & INST_TYPE_RELATIVE_BRANCH) && (DeepType & INST_TYPE_JUMP))
-                        {
-                            assert(Instruction->detail->x86.op_count == 1);
-                            assert(Instruction->detail->x86.operands[0].imm > 0x100);
-
-                            size_t OperandAddress = Instruction->detail->x86.operands[0].imm;
-                            if(!BreakpointFind(OperandAddress, DebugeePID, TempBreakpoints, TempBreakpointsCount))
-                            {
-                                printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", OperandAddress, Range.Start, Range.End);
-
-                                printf("Break condition branch in jump instrs: %lX\n", OperandAddress);
-                                if(OperandAddress != Range.Start)
-                                {
-                                    breakpoint BP = BreakpointCreate(OperandAddress, DebugeePID);
-                                    BreakpointEnable(&BP);
-                                    TempBreakpoints[TempBreakpointsCount++] = BP;
-                                }
-
-                            }
-                            //                        printf("Breaking one instruction after at addrexss = %lx\n", CurrentAddress);
-
-                            /*
-                               After we follow the jump address we need to also put a breakpoint at the address of
-                               the next instruction that would follow if this SECOND JUMP BACK TO WHERE WE CAME FROM
-                               didn't work and we would continue onwords
-                               */
-                            if(!BreakpointFind(CurrentAddress, DebugeePID, TempBreakpoints, TempBreakpointsCount) &&
-                               !BreakpointFind(CurrentAddress, DebugeePID))
-                            {
-                                breakpoint BP = BreakpointCreate(CurrentAddress, DebugeePID);
-                                BreakpointEnable(&BP);
-                                TempBreakpoints[TempBreakpointsCount++] = BP;
-                            }
-
-                            break;
-                        }
-
-                        if(Type & INST_TYPE_RET)
-                        {
-                            size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
-
-                            for(u32 I = 0; I < DI->CompileUnitsCount; I++)
-                            {
-                                di_compile_unit *CU = &DI->CompileUnits[I];
-                                for(u32 RI = 0; RI < CU->RangesCount; RI++)
-                                {
-                                    if(AddressBetween(ReturnAddress, CU->RangesLowPCs[RI], CU->RangesHighPCs[RI]))
-                                    {
-                                        breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
-                                        BreakpointEnable(&BP);
-                                        TempBreakpoints[TempBreakpointsCount++] = BP;
-
-                                        //printf("Breaking because of return: %lX\n", ReturnAddress);
-                                        goto END_TYPE_RET_DEEP;
-                                    }
-                                }
-                            }
-                        }
-
-END_TYPE_RET_DEEP:;
-
-                  // TODO(mateusz): This isn't that safe I guess
-                  // It's created upon a feeling I have of programs, nothing
-                  // doc/spec based
-                  if(Instruction->id == X86_INS_JMP || Instruction->id == X86_INS_JB)
-                  {
-                      break;
-                  }
-                    }
+                    BreakAtCurcialInstrsInRange(JumpToNextLine, false, DebugeePID,
+                                                Breakpoints, BreakpointsCount);
                 }
             }
         }
         
         if(Instruction) { cs_free(Instruction, 1); }
     }
+}
+
+static void
+ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
+{
+    address_range Range = AddressRangeCurrentAndNextLine(Regs.rip);
+    
+//    printf("Regs.rip = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.rip, Range.Start, Range.End);
+    
+    breakpoint TempBreakpoints[8] = {};
+    u32 TempBreakpointsCount = 0;
+    
+    BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, DebugeePID, TempBreakpoints, &TempBreakpointsCount);
     
     ContinueProgram(DebugeePID);
     
