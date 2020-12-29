@@ -364,7 +364,20 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                                 BreakpointEnable(&BP);
                                 TempBreakpoints[TempBreakpointsCount++] = BP;
                             }
+
                         }
+//                        printf("Breaking one instruction after at addrexss = %lx\n", CurrentAddress);
+
+                        /*
+                          After we follow the jump address we need to also put a breakpoint at the address of
+                          the next instruction that would follow if this SECOND JUMP BACK TO WHERE WE CAME FROM
+                          didn't work and we would continue onwords
+                         */
+                        breakpoint BP = BreakpointCreate(CurrentAddress, DebugeePID);
+                        BreakpointEnable(&BP);
+                        TempBreakpoints[TempBreakpointsCount++] = BP;
+
+                        break;
                     }
                     
                     if(Type & INST_TYPE_RET)
@@ -396,16 +409,6 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
                     // doc/spec based
                     if(Instruction->id == X86_INS_JMP || Instruction->id == X86_INS_JB)
                     {
-                        if(Instruction) { cs_free(Instruction, 1); }
-                        i32 Count = cs_disasm(DisAsmHandle, (const u8 *)&DeepOpcodes, 
-                                              sizeof(DeepOpcodes), CurrentAddress, 1, &Instruction);
-                        if(Count == 0) { break; }
-                        CurrentAddress += Instruction->size;
-
-                        breakpoint BP = BreakpointCreate(CurrentAddress, DebugeePID);
-                        BreakpointEnable(&BP);
-                        TempBreakpoints[TempBreakpointsCount++] = BP;
-
                         break;
                     }
                 }
