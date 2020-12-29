@@ -483,7 +483,7 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
         if(CheckFileNum == FileIdx)
         {
             di_src_line Line = {};
-            Line.SrcFileIndex = DI->SourceFiles - File;
+            Line.SrcFileIndex = File - DI->SourceFiles;
             Dwarf_Unsigned Addr = 0;
             Dwarf_Unsigned LineNO = 0;
             DWARF_CALL(dwarf_lineaddr(Lines[I], &Addr, 0x0));
@@ -529,10 +529,10 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
             di_compile_unit *CompUnit = &DI->CompileUnits[I];
             for(u32 RI = 0; RI < CompUnit->RangesCount; RI++)
             {
-                printf("%lx, %lx, Address = %lx\n", CompUnit->RangesLowPCs[RI], CompUnit->RangesHighPCs[RI], Address);
+                //printf("%lx, %lx, Address = %lx\n", CompUnit->RangesLowPCs[RI], CompUnit->RangesHighPCs[RI], Address);
                 ssize_t LowPC = CompUnit->RangesLowPCs[RI];
                 ssize_t HighPC = CompUnit->RangesHighPCs[RI];
-                printf("compunit, LOWPC, HIGHPC = %lx, %lx, Address = %lx\n", LowPC, HighPC, Address);
+                //printf("compunit, LOWPC, HIGHPC = %lx, %lx, Address = %lx\n", LowPC, HighPC, Address);
                 
                 if(AddressBetween(Address, LowPC, HighPC))
                 {
@@ -579,13 +579,13 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
                 DI->SourceFilesInExec += SrcFilesCount;
                 
-                printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
+                //printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
                 
                 Dwarf_Line *LineBuffer = 0;
                 Dwarf_Signed LineCount = 0;
                 DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
                 
-                printf("There are %lld source lines\n", LineCount);
+                //printf("There are %lld source lines\n", LineCount);
                 for(i32 I = 0; I < LineCount; ++I)
                 {
                     Dwarf_Addr LineAddr = 0;
@@ -599,7 +599,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                     if(Address == LineAddr)
                     {
                         // Dump this file into memory
-                        printf("Address = %lx, LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", Address, LineAddr, FileNum, LineNum);
+                        //printf("Address = %lx, LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", Address, LineAddr, FileNum, LineNum);
 
                         char *FileName = 0x0;
                         DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
@@ -633,11 +633,15 @@ AddressRangeCurrentAndNextLine(size_t StartAddress)
     address_range Result = {};
     
     di_src_line *Current = LineTableFindByAddress(StartAddress);
+    if(!Current)
+    {
+        printf("Didn't find line with address = %lx\n", StartAddress);
+        assert(false);
+    }
     di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
+printf("Current->Address = %lx, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex);
 
     u32 LineIdx = Current - File->Lines;
-//printf("Current->Address = %lx, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex, LineIdx);
-
     for(u32 I = LineIdx; I < File->SrcLineCount; I++)
     {
         if(File->SrcLineCount == I + 1)
@@ -690,9 +694,11 @@ GetDebugeeLoadAddress(i32 DebugeePID)
 {
     char Path[64] = {};
     sprintf(Path, "/proc/%d/maps", DebugeePID);
+    printf("Load Path is %s\n", Path);
     
     char AddrStr[16] = {};
     FILE *FileHandle = fopen(Path, "r");
+    assert(FileHandle);
     fread(AddrStr, sizeof(AddrStr), 1, FileHandle);
     
     u32 Length = sizeof(AddrStr);

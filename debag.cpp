@@ -988,7 +988,6 @@ DeallocDebugInfo()
     
     memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
     memset(DI->SourceFiles, 0, sizeof(di_src_file) * DI->SourceFilesCount);
-//    memset(DI->SourceLines, 0, sizeof(di_src_line) * DI->SourceLinesCount);
     memset(DI->Functions, 0, sizeof(di_function) * DI->FuctionsCount);
     memset(DI->CompileUnits, 0, sizeof(di_compile_unit) * DI->CompileUnitsCount);
     memset(DI->Variables, 0, sizeof(di_variable) * DI->VariablesCount);
@@ -1005,7 +1004,6 @@ DeallocDebugInfo()
     DisasmInstCount = 0;
     Regs = {};
     DI->SourceFilesCount = 0;
-//    DI->SourceLinesCount = 0;
     DI->VariablesCount = 0;
     DI->ParamsCount = 0;
     DI->FuctionsCount = 0;
@@ -1028,7 +1026,6 @@ DebugerMain()
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     DI = (debug_info *)calloc(1, sizeof(debug_info));
     DI->SourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
-//    DI->SourceLines = (di_src_line *)calloc(MAX_DI_SOURCE_LINES, sizeof(di_src_line));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(WindowWidth, WindowHeight, "debag", NULL, NULL);
@@ -1075,9 +1072,7 @@ DebugerMain()
     assert(cs_open(CS_ARCH_X86, CS_MODE_64, &DisAsmHandle) == CS_ERR_OK);
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
-    
-    //size_t Addr = GetDebugeeLoadAddress(Debuger.DebugeePID);
-    
+
     while(!glfwWindowShouldClose(Window))
     {
         //if(!Debuger.InputChange) { goto EndDraw; }
@@ -1107,22 +1102,28 @@ DebugerMain()
                 breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
                 BreakpointEnable(&BP);
                 Breakpoints[BreakpointCount++] = BP;
+
+                size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+                printf("LoadAddress = %lx\n", LoadAddress);
             }
             
             ContinueProgram(Debuger.DebugeePID);
             UpdateInfo();
         }
         
-        if(KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat)
+        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
         {
-            ToNextLine(Debuger.DebugeePID, false);
-            UpdateInfo();
-        }
-        
-        if(KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat)
-        {
-            ToNextLine(Debuger.DebugeePID, true);
-            UpdateInfo();
+            if(KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat)
+            {
+                ToNextLine(Debuger.DebugeePID, false);
+                UpdateInfo();
+            }
+            
+            if(KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat)
+            {
+                ToNextLine(Debuger.DebugeePID, true);
+                UpdateInfo();
+            }
         }
         
         ImGuiStartFrame();
@@ -1170,7 +1171,7 @@ DebugerMain()
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
-                if(SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                if(Line && SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
                 {
                     TIFlags = ImGuiTabItemFlags_SetSelected;
                 }
@@ -1197,7 +1198,7 @@ DebugerMain()
                         // NOTE(mateusz): Lines are indexed from 1
 //                        if(DrawingLine)
 
-                        if(SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
+                        if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                         {
                             DrawingLine = Line;
                             ImGui::TextColored(CurrentLineColor, "%.*s", LineLength, Prev);

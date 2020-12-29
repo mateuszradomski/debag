@@ -332,13 +332,12 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
     ContinueProgram(DebugeePID);
     
-//    printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
+    printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
     {
-//        printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
+        printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
     
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;
-    
 }
