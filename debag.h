@@ -143,6 +143,7 @@ static void BreakpointDisable(breakpoint *BP);
 static address_range AddressRangeCurrentAndNextLine();
 static void ImGuiShowRegisters(user_regs_struct Regs);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
+static void PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
 static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
 static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t FindEntryPointAddress();

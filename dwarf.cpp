@@ -78,17 +78,6 @@ LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
     return 0x0;
 }
 
-static address_range
-LineAddressRangeBetween(di_src_line *StartLine, di_src_line *EndLine)
-{
-    address_range Result = {};
-    
-    Result.Start = StartLine->Address;
-    Result.End = EndLine->Address;
-    
-    return Result;
-}
-
 static di_function *
 FindFunctionConfiningAddress(size_t Address)
 {
@@ -318,6 +307,41 @@ static bool
 BaseTypeIsDoubleFloat(di_base_type *Type)
 {
     return Type && Type->Encoding == DW_ATE_float && Type->ByteSize == 8;
+}
+
+static bool
+AddressInCompileUnit(di_compile_unit *CU, size_t Address)
+{
+    bool Result = false;
+
+    for(u32 I = 0; I < CU->RangesCount; I++)
+    {
+        if(AddressBetween(Address, CU->RangesLowPCs[I], CU->RangesHighPCs[I]))
+        {
+            Result = true;
+            break;
+        }
+    }
+
+    return Result;
+}
+
+static bool
+AddressInAnyCompileUnit(size_t Address)
+{
+    bool Result = false;
+
+    for(u32 I = 0; I < DI->CompileUnitsCount; I++)
+    {
+        di_compile_unit *CU = &DI->CompileUnits[I];
+        if(AddressInCompileUnit(CU, Address))
+        {
+            Result = true;
+            break;
+        }
+    }
+
+    return Result;
 }
 
 static di_src_file *
@@ -612,7 +636,7 @@ AddressRangeCurrentAndNextLine()
     di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
 
     u32 LineIdx = Current - File->Lines;
-    printf("Current->Address = %lx, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex, LineIdx);
+//printf("Current->Address = %lx, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex, LineIdx);
 
     for(u32 I = LineIdx; I < File->SrcLineCount; I++)
     {
@@ -623,7 +647,7 @@ AddressRangeCurrentAndNextLine()
             // TODO(mateusz): I think this will be different, in that it will use 
             // the lexical scopes
             Result.End = Func->FuncLexScope.HighPC;
-            goto end;
+            break;
         }
         else
         {
@@ -632,13 +656,13 @@ AddressRangeCurrentAndNextLine()
             {
                 //printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
                 //printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
-                Result = LineAddressRangeBetween(Current, Next);
-                goto end;
+                Result.Start = Current->Address;
+                Result.End = Next->Address;
+
+                break;
             }
         }
     }
-    end:;
-    
     
     return Result;
 }

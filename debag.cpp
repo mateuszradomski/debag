@@ -719,7 +719,25 @@ PeekDebugeeMemory(size_t Address, i32 DebugeePID)
     MachineWord = ptrace(PTRACE_PEEKDATA, DebugeePID, Address, 0x0);
     
     return MachineWord;
+}
+
+// Out array has be a multiple of 8 sized 
+static void
+PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead)
+{
+    size_t *MemoryPtr = (size_t *)OutArray;
     
+    size_t TempAddress = StartAddress;
+    for(u32 I = 0; I < BytesToRead / sizeof(size_t); I++)
+    {
+        *MemoryPtr = PeekDebugeeMemory(TempAddress, DebugeePID);
+        MemoryPtr += 1;
+        TempAddress += 1;
+        if(TempAddress >= EndAddress)
+        {
+            break;
+        }
+    }
 }
 
 static inst_type
@@ -768,24 +786,15 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
     for(int I = 0; I < MAX_DISASM_INSTRUCTIONS && InstructionAddress < AddrRange.End; I++)
     {
         u8 InstrInMemory[16] = {};
-        size_t *MemoryPtr = (size_t *)InstrInMemory;
-        
-        size_t TempAddress = InstructionAddress;
-        for(u32 I = 0; I < sizeof(InstrInMemory) / sizeof(size_t); I++)
+        PeekDebugeeMemoryArray(InstructionAddress, AddrRange.End,
+                               DebugeePID, InstrInMemory, sizeof(InstrInMemory));
+
         {
-            *MemoryPtr = PeekDebugeeMemory(TempAddress, DebugeePID);
-            MemoryPtr += 1;
-            TempAddress += 1;
-            if(TempAddress >= AddrRange.End)
+            breakpoint *BP = 0x0; ;
+            if((BP = BreakpointFind(InstructionAddress, DebugeePID)) && BreakpointEnabled(BP))
             {
-                break;
+                InstrInMemory[0] = BP->SavedOpCode;
             }
-        }
-        
-        breakpoint *BP = 0x0; ;
-        if((BP = BreakpointFind(InstructionAddress, DebugeePID)) && BreakpointEnabled(BP))
-        {
-            InstrInMemory[0] = BP->SavedOpCode;
         }
         
         int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
@@ -1049,6 +1058,8 @@ DebugerMain()
     char TextBuff2[64] = {};
     char TextBuff3[64] = {};
     strcpy(TextBuff3, Debuger.DebugeeProgramPath);
+    u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
+    strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
     
     Regs = PeekRegisters(Debuger.DebugeePID);
     
