@@ -29,6 +29,7 @@ WaitForSignal(i32 DebugeePID)
     
     if(WIFEXITED(WaitStatus))
     {
+        printf("Program finished it's execution\n");
         Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
         DeallocDebugInfo();
     }
@@ -60,9 +61,13 @@ WaitForSignal(i32 DebugeePID)
             }break;
         }
     }
-    if(SigInfo.si_signo == SIGSEGV)
+    else if(SigInfo.si_signo == SIGSEGV)
     {
         printf("Program seg faulted\n");
+    }
+    else
+    {
+        printf("Unhandled signal = [%s]", strsignal(SigInfo.si_signo));
     }
 }
 
@@ -163,12 +168,12 @@ static void
 StepInstruction(i32 DebugeePID)
 {
     breakpoint *BP = BreakpointFind(Regs.rip, DebugeePID);
-    if(BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
+    if(BP && BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
     ptrace(PTRACE_SINGLESTEP, DebugeePID, 0x0, 0x0);
     WaitForSignal(DebugeePID);
     
-    if(BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointEnable(BP); }
+    if(BP && !BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointEnable(BP); }
     if(BP) { BP->ExectuedSavedOpCode = !BP->ExectuedSavedOpCode; }
     
     Regs = PeekRegisters(DebugeePID);

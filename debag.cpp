@@ -947,6 +947,15 @@ DebugeeStart()
             
             CurrentChar++;
         }
+
+        if(Debuger.PathToRunIn && strlen(Debuger.PathToRunIn) != 0)
+        {
+            i32 Result = chdir(Debuger.PathToRunIn);
+            assert(Result == 0);
+
+            char CWDStr[128] = {};
+            printf("getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
+        }
         
         execv(Debuger.DebugeeProgramPath, ProgramArgs);
     }
@@ -1158,6 +1167,7 @@ DebugerMain()
                 (void)TIFlags;
                 
                 char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
+//                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
                 if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
                 {
                     //printf("child on %u\n", SrcFileIndex);
@@ -1174,6 +1184,8 @@ DebugerMain()
                         u32 LineLength = (u64)LinePtr - (u64)Prev;
                         
                         // NOTE(mateusz): Lines are indexed from 1
+//                        if(DrawingLine)
+
                         if(SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                         {
                             DrawingLine = Line;
@@ -1193,11 +1205,10 @@ DebugerMain()
                             }
                             
                             breakpoint *BP = 0x0;
-                            
+
                             if(DrawingLine &&
                                (BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID)) &&
                                BreakpointEnabled(BP)){
-                                //printf("[%u] = DrawingLine->Address = %lx\n", SrcFileIndex, DrawingLine->Address);
                                 ImGui::TextColored(BreakpointLineColor, "%.*s",
                                                    LineLength, Prev);
                             }
@@ -1334,6 +1345,7 @@ DebugerMain()
             {
                 ImGui::InputText("Program path", TextBuff3, 64, ITFlags);
                 ImGui::InputText("Program args", Debuger.ProgramArgs, 64, ITFlags);
+                ImGui::InputText("Path to run in", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn), ITFlags);
                 
                 ImGui::InputText("", TextBuff, 64, ITFlags);
                 ImGui::SameLine();

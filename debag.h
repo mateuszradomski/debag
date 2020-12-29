@@ -92,6 +92,7 @@ struct dbg
     char *DebugeeProgramPath;
     bool InputChange;
     char ProgramArgs[128];
+    char PathToRunIn[256];
 };
 
 struct arena
