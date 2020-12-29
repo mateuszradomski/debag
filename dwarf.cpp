@@ -639,7 +639,7 @@ AddressRangeCurrentAndNextLine(size_t StartAddress)
         assert(false);
     }
     di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
-printf("Current->Address = %lx, Current->SrcFileIndex = %d, LineIdx = %d\n", Current->Address, Current->SrcFileIndex);
+printf("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Address, Current->SrcFileIndex);
 
     u32 LineIdx = Current - File->Lines;
     for(u32 I = LineIdx; I < File->SrcLineCount; I++)

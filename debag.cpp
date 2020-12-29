@@ -209,6 +209,20 @@ StringsMatch(char *Str0, char *Str1)
     return Result;
 }
 
+static void
+StringReplaceChar(char *Str, char Find, char Replace)
+{
+    while(Str && Str[0])
+    {
+        if(Str[0] == Find)
+        {
+            Str[0] = Replace;
+        }
+
+        Str++;
+    }
+}
+
 static u64
 HexStringToInt(char *String)
 {
@@ -240,6 +254,170 @@ HexStringToInt(char *String)
     }
     
     return Result;
+}
+
+static u32
+StringLength(char *Str)
+{
+    return strlen(Str);
+}
+
+#define ARGV_MAX  255
+#define ARGV_TOKEN_MAX  255
+
+static void
+StringToArgv(char *Str, char **ArgvOut, u32 *Argc)
+{
+   bool InToken = false;
+   bool InContainer = false;
+   bool Escaped = false;
+   char ContainerStart = 0;
+
+   char *Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+
+   u32 StrLen = StringLength(Str);
+   for(u32 I = 0; I < StrLen; I++)
+   {
+       char C = Str[I];
+
+       switch (C)
+       {
+           /* Handle whitespace */
+           case ' ':
+           case '\t':
+           case '\n':
+           {
+               if (!InToken)
+               {
+                   continue;
+               }
+
+               if (InContainer)
+               {
+                   int Idx = StringLength(Token);
+                   assert(Idx < ARGV_TOKEN_MAX);
+
+                   Token[Idx] = C;
+                   continue;
+               }
+
+               if(Escaped)
+               {
+                   Escaped = false;
+                   int Idx = StringLength(Token);
+                   assert(Idx < ARGV_TOKEN_MAX);
+
+                   Token[Idx] = C;
+                   continue;
+               }
+
+               /* if reached here, we're at end of token */
+               InToken = false;
+               assert(*Argc < ARGV_MAX);
+
+               ArgvOut[(*Argc)++] = Token;
+               Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+            }break;
+           /* Handle quotes */
+           case '\'':
+           case '\"':
+           {
+
+               if(Escaped)
+               {
+                   int Idx = StringLength(Token);
+                   assert(Idx < ARGV_TOKEN_MAX);
+
+                   Token[Idx] = C;
+                   Escaped = false;
+                   continue;
+               }
+
+               if(!InToken)
+               {
+                   InToken = true;
+                   InContainer = true;
+                   ContainerStart = C;
+                   continue;
+               }
+
+               if(InContainer)
+               {
+                   if(C == ContainerStart)
+                   {
+                       InContainer = false;
+                       InToken = false;
+                       assert(*Argc < ARGV_MAX);
+
+                       ArgvOut[(*Argc)++] = Token;
+                       Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+                       continue;
+                   }
+                   else 
+                   {
+                       int Idx = StringLength(Token);
+                       assert(Idx < ARGV_TOKEN_MAX);
+
+                       Token[Idx] = C;
+                       continue;
+                   }
+               }
+
+               /* XXX in this case, we:
+                *    1. have a quote
+                *    2. are in a token
+                *    3. and not in a container
+                * e.g.
+                *    hell"o
+                *
+                * what's done here appears shell-dependent,
+                * but overall, it's an error.... i *think*
+                */
+               assert(!"Parse Error! Bad quotes\n");
+           }break;
+           case '\\':
+           {
+               if(InContainer && Str[I+1] != ContainerStart)
+               {
+                   int Idx = StringLength(Token);
+                   assert(Idx < ARGV_TOKEN_MAX);
+
+                   Token[Idx] = C;
+                   continue;
+               }
+               if(Escaped)
+               {
+                   int Idx = StringLength(Token);
+                   assert(Idx < ARGV_TOKEN_MAX);
+
+                   Token[Idx] = C;
+                   continue;
+               }
+
+               Escaped = true;
+           }break;
+           default:
+           {
+               if (!InToken) {
+                   InToken = true;
+               }
+
+               int Idx = StringLength(Token);
+               assert(Idx < ARGV_TOKEN_MAX);
+
+               Token[Idx] = C;
+           }break;
+       }
+   }
+
+   assert(!InContainer);
+   assert(!Escaped);
+   if(strlen(Token) != 0)
+   {
+       assert(*Argc < ARGV_MAX);
+
+       ArgvOut[(*Argc)++] = Token;
+   }
 }
 
 static arena *
@@ -904,33 +1082,6 @@ UpdateInfo()
 static void
 DebugeeStart()
 {
-#if 0    
-    char *ProgramArgs[16] = {};
-    ProgramArgs[0] = Debuger.DebugeeProgramPath;
-    ProgramArgs[1] = Debuger.ProgramArgs;
-    
-    char *CurrentChar = Debuger.ProgramArgs;
-    for(u32 I = 2; CurrentChar[0];)
-    {
-        if(CurrentChar[0] == ' ')
-        {
-            CurrentChar[0] = '\0';
-            CurrentChar++;
-            ProgramArgs[I++] = CurrentChar;
-        }
-        
-        CurrentChar++;
-    }
-    
-    char **WP = ProgramArgs;
-    while(*WP)
-    {
-        printf("%s\n", *WP);
-        WP++;
-    }
-    
-    assert(false);
-#endif
     i32 ProcessID = fork();
     
     // Child process
@@ -941,22 +1092,16 @@ DebugeeStart()
         prctl(PR_SET_PDEATHSIG, SIGHUP);
         
         char *ProgramArgs[16] = {};
+        u32 ArgsLen = 0;
         ProgramArgs[0] = Debuger.DebugeeProgramPath;
-        ProgramArgs[1] = Debuger.ProgramArgs;
-        
-        char *CurrentChar = Debuger.ProgramArgs;
-        for(u32 I = 2; CurrentChar[0];)
-        {
-            if(CurrentChar[0] == ' ')
-            {
-                CurrentChar[0] = '\0';
-                CurrentChar++;
-                ProgramArgs[I++] = CurrentChar;
-            }
-            
-            CurrentChar++;
-        }
+        StringToArgv(Debuger.ProgramArgs, &ProgramArgs[1], &ArgsLen);
 
+        printf("ArgsLen is = %d\n", ArgsLen);
+        for(u32 I = 0; I < ArgsLen + 1 + 2; I++)
+        {
+            printf("-> '%s'\n", ProgramArgs[I]);
+        }
+        
         if(Debuger.PathToRunIn && strlen(Debuger.PathToRunIn) != 0)
         {
             i32 Result = chdir(Debuger.PathToRunIn);
@@ -1113,7 +1258,7 @@ DebugerMain()
         
         if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
         {
-            if(KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat)
+        if(KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat)
             {
                 ToNextLine(Debuger.DebugeePID, false);
                 UpdateInfo();
