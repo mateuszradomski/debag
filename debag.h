@@ -40,20 +40,20 @@ static TimePoints TPoints[32] = {};
 
 struct button
 {
-    u8 Down : 1;
-    u8 Last : 1;
+    u8 Down    : 1;
+    u8 Last    : 1;
     u8 Pressed : 1;
-    u8 Repeat : 1;
+    u8 Repeat  : 1;
 };
 
 struct keyboard_modifiers
 {
-    u8 Shift : 1;
-    u8 Control : 1;
-    u8 Alt : 1;
-    u8 Super : 1;
+    u8 Shift    : 1;
+    u8 Control  : 1;
+    u8 Alt      : 1;
+    u8 Super    : 1;
     u8 CapsLock : 1;
-    u8 NumLock : 1;
+    u8 NumLock  : 1;
 };
 
 struct breakpoint
@@ -108,6 +108,7 @@ struct dbg
     char DebugeeProgramPath[256];
     char BreakFuncName[128];
     char BreakAddress[32];
+    void (* ModalFuncShow)();
 };
 
 struct arena
@@ -157,6 +158,7 @@ static void BreakpointEnable(breakpoint *BP);
 static void BreakpointDisable(breakpoint *BP);
 
 static address_range AddressRangeCurrentAndNextLine();
+static void UpdateInfo();
 static void ImGuiShowRegisters(user_regs_struct Regs);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
 static void PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);

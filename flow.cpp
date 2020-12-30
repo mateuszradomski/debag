@@ -163,6 +163,50 @@ BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *
     }
 }
 
+static bool
+BreakAtFunctionName(char *Name)
+{
+    bool Result = false;
+
+    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    {
+        di_function *Func = &DI->Functions[I];
+        if(StringsMatch(Name, Func->Name))
+        {
+            breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
+            BreakpointEnable(&BP);
+            Breakpoints[BreakpointCount++] = BP;
+            Result = true;
+        }
+    }
+
+    return Result;
+}
+
+static bool
+BreakAtAddress(char *Address)
+{
+    bool Result = false;
+
+    u64 Address = 0;
+
+    if(CharInString(Debuger.BreakAddress, 'x'))
+    {
+        Address = HexStringToInt(Debuger.BreakAddress);
+    }
+    else
+    {
+        Address = atol(Debuger.BreakAddress);
+    }
+
+    Result = true;
+    breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
+    BreakpointEnable(&BP);
+    Breakpoints[BreakpointCount++] = BP;
+
+    return Result;
+}
+
 static void
 StepInstruction(i32 DebugeePID)
 {
