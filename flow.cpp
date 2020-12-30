@@ -176,6 +176,8 @@ StepInstruction(i32 DebugeePID)
     if(BP) { BP->ExectuedSavedOpCode = !BP->ExectuedSavedOpCode; }
     
     Regs = PeekRegisters(DebugeePID);
+
+    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
 }
 
 static void
@@ -183,6 +185,7 @@ NextInstruction(i32 DebugeePID)
 {
     (void)DebugeePID;
     printf("Unimplemented method!");
+    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
 }
 
 static void

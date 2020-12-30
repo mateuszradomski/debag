@@ -28,6 +28,17 @@
 #include "dwarf.cpp"
 #include "flow.cpp"
 
+/*
+ * A big big TODO list:
+ * - StepInstruction has an option to not step into calls that are out of CU bounds.
+ * - When breaking at an function or address we need to have DebugInfo loaded about that file
+ * load it dynamicaly when the user asks for a breakpoint at that address before the program
+ * is running.
+ * - Break at Address allows you to insert arbirary chars, allow only hex and decimal ones
+ * - Better registers window / sort them
+ * - Better Breakpoints window, give information like Enabled, LineNO, FileName
+ */
+
 static void
 GLFWModsToKeyboardModifiers(int Mods)
 {
@@ -1251,8 +1262,6 @@ DebugerMain()
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
-    char TextBuff[64] = {};
-    char TextBuff2[64] = {};
     u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
     strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
     
@@ -1325,6 +1334,8 @@ DebugerMain()
         ImGuiStartFrame();
 
         f64 MenuBarHeight = 0.0;
+        bool BreakAtFunction = false;
+        bool BreakAtAddress = false;
         if (ImGui::BeginMainMenuBar())
         {
             auto MenuBarSize = ImGui::GetWindowSize();
@@ -1335,10 +1346,6 @@ DebugerMain()
                 ImGui::InputText("Program path", Debuger.DebugeeProgramPath, sizeof(Debuger.DebugeeProgramPath));
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
                 ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
-
-                ImGui::Separator();
-
-                if (ImGui::MenuItem("Break at function")) {}
 
                 ImGui::EndMenu();
             }
@@ -1382,6 +1389,18 @@ DebugerMain()
                     UpdateInfo();
                 }
 
+                ImGui::Separator();
+
+                if(ImGui::MenuItem("Break at function", 0x0, false, IsRunning))
+                {
+                    BreakAtFunction = true;
+                }
+
+                if (ImGui::MenuItem("Break at address", 0x0, false, IsRunning))
+                {
+                    BreakAtAddress = true;
+                }
+
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Help"))
@@ -1394,10 +1413,100 @@ DebugerMain()
             ImGui::EndMainMenuBar();
         }
 
+        char *FuncBreakLabel = "Function to break at"; 
+        if(BreakAtFunction)
+        {
+            ImGui::OpenPopup(FuncBreakLabel);
+            ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+            ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        }
+
+        if(ImGui::BeginPopupModal(FuncBreakLabel))
+        {
+            ImGui::Text("Enter the function name you wish to set a brekpoint");
+            ImGui::Separator();
+
+            ImGui::InputText("Name", Debuger.BreakFuncName, sizeof(Debuger.BreakFuncName));
+
+            if(ImGui::Button("OK", ImVec2(120, 0)))
+            {
+                for(u32 I = 0; I < DI->FuctionsCount; I++)
+                {
+                    di_function *Func = &DI->Functions[I];
+                    if(StringsMatch(Debuger.BreakFuncName, Func->Name))
+                    {
+                        breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
+                        BreakpointEnable(&BP);
+                        Breakpoints[BreakpointCount++] = BP;
+                    }
+                }
+
+                UpdateInfo();
+                ImGui::CloseCurrentPopup(); 
+                memset(Debuger.BreakFuncName, 0, sizeof(Debuger.BreakFuncName));
+            }
+
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if(ImGui::Button("Cancel", ImVec2(120, 0)))
+            {
+                ImGui::CloseCurrentPopup();
+                memset(Debuger.BreakFuncName, 0, sizeof(Debuger.BreakFuncName));
+            }
+            ImGui::EndPopup();
+        }
+
+        char *AddressBreakLabel = "Address to break at";
+        if(BreakAtAddress)
+        {
+            ImGui::OpenPopup(AddressBreakLabel);
+            ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+            ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        }
+
+        if(ImGui::BeginPopupModal(AddressBreakLabel))
+        {
+            ImGui::Text("Enter the address you wish to set a brekpoint, hex or decimal");
+            ImGui::Separator();
+
+            ImGui::InputText("Address", Debuger.BreakAddress, sizeof(Debuger.BreakAddress));
+
+            if(ImGui::Button("OK", ImVec2(120, 0)))
+            {
+                u64 Address;
+
+                if(CharInString(Debuger.BreakAddress, 'x'))
+                {
+                    Address = HexStringToInt(Debuger.BreakAddress);
+                }
+                else
+                {
+                    Address = atol(Debuger.BreakAddress);
+                }
+
+                breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
+                BreakpointEnable(&BP);
+                Breakpoints[BreakpointCount++] = BP;
+
+                UpdateInfo();
+                ImGui::CloseCurrentPopup(); 
+                memset(Debuger.BreakAddress, 0, sizeof(Debuger.BreakAddress));
+            }
+
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if(ImGui::Button("Cancel", ImVec2(120, 0)))
+            {
+                ImGui::CloseCurrentPopup();
+                memset(Debuger.BreakAddress, 0, sizeof(Debuger.BreakAddress));
+            }
+            ImGui::EndPopup();
+        }
+
         ImGui::Begin("Disassembly", 0x0, WinFlags);
 
         ImGui::SetWindowPos(ImVec2(WindowWidth / 2, MenuBarHeight));
-        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
+        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
         for(u32 I = 0; I < DisasmInstCount; I++)
@@ -1427,7 +1536,7 @@ DebugerMain()
         
         ImGui::Begin("Listings", 0x0, WinFlags);
         ImGui::SetWindowPos(ImVec2(0, MenuBarHeight));
-        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
+        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2 - MenuBarHeight));
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
@@ -1619,52 +1728,6 @@ DebugerMain()
                 ImGui::EndChild();
                 ImGui::EndTabItem();
             }
-            if(ImGui::BeginTabItem("Control panel"))
-            {
-                ImGui::InputText("", TextBuff, 64, ITFlags);
-                ImGui::SameLine();
-                
-                if(ImGui::Button("Break"))
-                {
-                    u64 Address;
-                    
-                    if(CharInString(TextBuff, 'x'))
-                    {
-                        Address = HexStringToInt(TextBuff);
-                    }
-                    else
-                    {
-                        Address = atol(TextBuff);
-                    }
-                    
-                    breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
-                    BreakpointEnable(&BP);
-                    Breakpoints[BreakpointCount++] = BP;
-                    
-                    UpdateInfo();
-                }
-                
-                ImGui::InputText("tbr", TextBuff2, 64, ITFlags);
-                ImGui::SameLine();
-                
-                if(ImGui::Button("BreakFunc"))
-                {
-                    for(u32 I = 0; I < DI->FuctionsCount; I++)
-                    {
-                        di_function *Func = &DI->Functions[I];
-                        if(strcmp(TextBuff2, Func->Name) == 0)
-                        {
-                            breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
-                            BreakpointEnable(&BP);
-                            Breakpoints[BreakpointCount++] = BP;
-                        }
-                    }
-                    
-                    UpdateInfo();
-                }
-                
-                ImGui::EndTabItem();
-            }
             if(ImGui::BeginTabItem("Breakpoints"))
             {
                 for(u32 I = 0; I < BreakpointCount; I++)
@@ -1676,7 +1739,6 @@ DebugerMain()
             }
             ImGui::EndTabBar();
         }
-        
         
         ImGui::End();
         

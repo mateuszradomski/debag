@@ -106,6 +106,8 @@ struct dbg
     char ProgramArgs[128];
     char PathToRunIn[256];
     char DebugeeProgramPath[256];
+    char BreakFuncName[128];
+    char BreakAddress[32];
 };
 
 struct arena
