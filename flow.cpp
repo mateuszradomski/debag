@@ -179,6 +179,13 @@ StepInstruction(i32 DebugeePID)
 }
 
 static void
+NextInstruction(i32 DebugeePID)
+{
+    (void)DebugeePID;
+    printf("Unimplemented method!");
+}
+
+static void
 StepLine(i32 DebugeePID)
 {
     di_src_line *LTEntry = LineTableFindByAddress(Regs.rip);

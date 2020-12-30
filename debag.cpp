@@ -29,13 +29,24 @@
 #include "flow.cpp"
 
 static void
+GLFWModsToKeyboardModifiers(int Mods)
+{
+    KeyMods.Shift = Mods & GLFW_MOD_SHIFT;
+    KeyMods.Control = Mods & GLFW_MOD_CONTROL;
+    KeyMods.Alt = Mods & GLFW_MOD_ALT;
+    KeyMods.Super = Mods & GLFW_MOD_SUPER;
+    KeyMods.CapsLock = Mods & GLFW_MOD_CAPS_LOCK;
+    KeyMods.NumLock = Mods & GLFW_MOD_NUM_LOCK;
+}
+
+static void
 KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, int Mods)
 {
 	assert(Key != GLFW_KEY_UNKNOWN);
     (void)Window; // That is unused.
-    (void)Mods; // NOTE(mateusz): I guess we would use it somewhere??
     (void)Scancode; // That is unused.
     
+    GLFWModsToKeyboardModifiers(Mods);
     if(Action == GLFW_PRESS) {
         KeyboardButtons[Key].Down = true;
     } else if(Action == GLFW_REPEAT) {
@@ -1118,6 +1129,33 @@ DebugeeStart()
 }
 
 static void
+DebugeeContinueOrStart()
+{
+    //Continue or start program
+    if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
+    {
+        DebugeeStart();
+        DWARFRead();
+
+        // NOTE(mateusz): For debug purpouses
+        size_t EntryPointAddress = FindEntryPointAddress();
+        printf("%lx\n", EntryPointAddress);
+        assert(EntryPointAddress);
+
+        breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+        BreakpointEnable(&BP);
+        Breakpoints[BreakpointCount++] = BP;
+
+        size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+        printf("LoadAddress = %lx\n", LoadAddress);
+    }
+
+    ContinueProgram(Debuger.DebugeePID);
+    UpdateInfo();
+}
+
+
+static void
 DeallocDebugInfo()
 {
     Dwarf_Error Error;
@@ -1162,6 +1200,27 @@ DeallocDebugInfo()
 }
 
 static void
+DebugeeRestart()
+{
+    if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+    {
+        //DebugeeStart();
+
+        // NOTE(mateusz): For debug purpouses
+        //size_t EntryPointAddress = FindEntryPointAddress();
+        //assert(EntryPointAddress);
+
+        //breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
+        //BreakpointEnable(&BP);
+        //Breakpoints[BreakpointCount++] = BP;
+
+        //DWARFRead();
+    }
+                
+    printf("Unimplemented method!");
+}
+
+static void
 DebugerMain()
 {
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
@@ -1194,8 +1253,6 @@ DebugerMain()
     
     char TextBuff[64] = {};
     char TextBuff2[64] = {};
-    char TextBuff3[64] = {};
-    strcpy(TextBuff3, Debuger.DebugeeProgramPath);
     u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
     strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
     
@@ -1229,41 +1286,39 @@ DebugerMain()
         
         if(KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
-            //Continue or start program
-            if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
-            {
-                DebugeeStart();
-                DWARFRead();
-                
-                // NOTE(mateusz): For debug purpouses
-                size_t EntryPointAddress = FindEntryPointAddress();
-                printf("%lx\n", EntryPointAddress);
-                assert(EntryPointAddress);
-                
-                breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
-                BreakpointEnable(&BP);
-                Breakpoints[BreakpointCount++] = BP;
-
-                size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
-                printf("LoadAddress = %lx\n", LoadAddress);
-            }
-            
-            ContinueProgram(Debuger.DebugeePID);
-            UpdateInfo();
+            DebugeeContinueOrStart();
         }
         
         if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
         {
-        if(KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat)
+            bool F10 = KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat;
+            bool F11 = KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat;
+
+            if(KeyMods.Shift)
             {
-                ToNextLine(Debuger.DebugeePID, false);
-                UpdateInfo();
+                if(F10)
+                {
+                    NextInstruction(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
+                if(F11)
+                {
+                    StepInstruction(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
             }
-            
-            if(KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat)
+            else
             {
-                ToNextLine(Debuger.DebugeePID, true);
-                UpdateInfo();
+                if(F10)
+                {
+                    ToNextLine(Debuger.DebugeePID, false);
+                    UpdateInfo();
+                }
+                if(F11)
+                {
+                    ToNextLine(Debuger.DebugeePID, true);
+                    UpdateInfo();
+                }
             }
         }
         
@@ -1275,7 +1330,7 @@ DebugerMain()
             auto MenuBarSize = ImGui::GetWindowSize();
             MenuBarHeight = MenuBarSize.y;
 
-            if (ImGui::BeginMenu("File"))
+            if(ImGui::BeginMenu("File"))
             {
                 ImGui::InputText("Program path", Debuger.DebugeeProgramPath, sizeof(Debuger.DebugeeProgramPath));
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
@@ -1287,16 +1342,55 @@ DebugerMain()
 
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Edit"))
+            if(ImGui::BeginMenu("Control"))
             {
-                if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
-                if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
+                bool IsRunning = Debuger.Flags & DEBUGEE_FLAG_RUNNING;
+
+                if (ImGui::MenuItem("Start process", "F5", false, !IsRunning))
+                {
+                    DebugeeContinueOrStart();
+                }
+                if (ImGui::MenuItem("Restart process", "Shift+F5", false, IsRunning))
+                {
+                    DebugeeRestart();
+                }
+
                 ImGui::Separator();
-                if (ImGui::MenuItem("Cut", "CTRL+X")) {}
-                if (ImGui::MenuItem("Copy", "CTRL+C")) {}
-                if (ImGui::MenuItem("Paste", "CTRL+V")) {}
+
+                if (ImGui::MenuItem("Continue", "F5", false, IsRunning))
+                {
+                    DebugeeContinueOrStart();
+                }
+                if (ImGui::MenuItem("Step next", "F10", false, IsRunning))
+                {
+                    ToNextLine(Debuger.DebugeePID, false);
+                    UpdateInfo();
+                }
+                if (ImGui::MenuItem("Step in", "F11", false, IsRunning))
+                {
+                    ToNextLine(Debuger.DebugeePID, true);
+                    UpdateInfo();
+                }
+                if (ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
+                {
+                    NextInstruction(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
+                if (ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
+                {
+                    StepInstruction(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
+
                 ImGui::EndMenu();
             }
+            if(ImGui::BeginMenu("Help"))
+            {
+                ImGui::Text("Debag is a C/C++ GUI debugger for Linux");
+                ImGui::Text("created by Mateusz Radomski.");
+
+                ImGui::EndMenu();
+            } 
             ImGui::EndMainMenuBar();
         }
 
@@ -1567,27 +1661,6 @@ DebugerMain()
                     }
                     
                     UpdateInfo();
-                }
-                
-                if(ImGui::Button("Single Step"))
-                {
-                    StepInstruction(Debuger.DebugeePID);
-                    UpdateInfo();
-                }
-                
-                if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING) && ImGui::Button("Restart process"))
-                {
-                    DebugeeStart();
-                    
-                    // NOTE(mateusz): For debug purpouses
-                    size_t EntryPointAddress = FindEntryPointAddress();
-                    assert(EntryPointAddress);
-                    
-                    breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
-                    BreakpointEnable(&BP);
-                    Breakpoints[BreakpointCount++] = BP;
-                    
-                    DWARFRead();
                 }
                 
                 ImGui::EndTabItem();

@@ -46,6 +46,16 @@ struct button
     u8 Repeat : 1;
 };
 
+struct keyboard_modifiers
+{
+    u8 Shift : 1;
+    u8 Control : 1;
+    u8 Alt : 1;
+    u8 Super : 1;
+    u8 CapsLock : 1;
+    u8 NumLock : 1;
+};
+
 struct breakpoint
 {
     u64 Address;
@@ -122,6 +132,7 @@ u32 WindowWidth = 1024;
 u32 WindowHeight = 768;
 
 button KeyboardButtons[GLFW_KEY_LAST] = {};
+keyboard_modifiers KeyMods = {};
 
 ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
