@@ -591,6 +591,8 @@ ImGuiShowRegisters(user_regs_struct Regs)
     ImGui::Text("fs: %lX", (u64)Regs.fs);
     ImGui::NextColumn();
     ImGui::Text("gs: %lX", (u64)Regs.gs);
+
+    ImGui::Columns(1);
 }
 
 static void
@@ -1095,12 +1097,6 @@ DebugeeStart()
         u32 ArgsLen = 0;
         ProgramArgs[0] = Debuger.DebugeeProgramPath;
         StringToArgv(Debuger.ProgramArgs, &ProgramArgs[1], &ArgsLen);
-
-        printf("ArgsLen is = %d\n", ArgsLen);
-        for(u32 I = 0; I < ArgsLen + 1 + 2; I++)
-        {
-            printf("-> '%s'\n", ProgramArgs[I]);
-        }
         
         if(Debuger.PathToRunIn && strlen(Debuger.PathToRunIn) != 0)
         {
@@ -1272,10 +1268,41 @@ DebugerMain()
         }
         
         ImGuiStartFrame();
-        
+
+        f64 MenuBarHeight = 0.0;
+        if (ImGui::BeginMainMenuBar())
+        {
+            auto MenuBarSize = ImGui::GetWindowSize();
+            MenuBarHeight = MenuBarSize.y;
+
+            if (ImGui::BeginMenu("File"))
+            {
+                ImGui::InputText("Program path", Debuger.DebugeeProgramPath, sizeof(Debuger.DebugeeProgramPath));
+                ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
+                ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
+
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Break at function")) {}
+
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Edit"))
+            {
+                if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
+                if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
+                ImGui::Separator();
+                if (ImGui::MenuItem("Cut", "CTRL+X")) {}
+                if (ImGui::MenuItem("Copy", "CTRL+C")) {}
+                if (ImGui::MenuItem("Paste", "CTRL+V")) {}
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
         ImGui::Begin("Disassembly", 0x0, WinFlags);
-        
-        ImGui::SetWindowPos(ImVec2(WindowWidth / 2, 0));
+
+        ImGui::SetWindowPos(ImVec2(WindowWidth / 2, MenuBarHeight));
         ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
@@ -1305,7 +1332,7 @@ DebugerMain()
         ImGui::End();
         
         ImGui::Begin("Listings", 0x0, WinFlags);
-        ImGui::SetWindowPos(ImVec2(0, 0));
+        ImGui::SetWindowPos(ImVec2(0, MenuBarHeight));
         ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2));
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
@@ -1500,10 +1527,6 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("Control panel"))
             {
-                ImGui::InputText("Program path", TextBuff3, 64, ITFlags);
-                ImGui::InputText("Program args", Debuger.ProgramArgs, 64, ITFlags);
-                ImGui::InputText("Path to run in", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn), ITFlags);
-                
                 ImGui::InputText("", TextBuff, 64, ITFlags);
                 ImGui::SameLine();
                 
@@ -1546,29 +1569,9 @@ DebugerMain()
                     UpdateInfo();
                 }
                 
-                if(ImGui::Button("Continue") || KeyboardButtons[GLFW_KEY_F5].Pressed)
-                {
-                    ContinueProgram(Debuger.DebugeePID);
-                    UpdateInfo();
-                }
-                
                 if(ImGui::Button("Single Step"))
                 {
                     StepInstruction(Debuger.DebugeePID);
-                    UpdateInfo();
-                }
-                
-                if(ImGui::Button("Next") || KeyboardButtons[GLFW_KEY_F10].Pressed)
-                {
-                    ToNextLine(Debuger.DebugeePID, false);
-                    UpdateInfo();
-                }
-                
-                ImGui::SameLine();
-                
-                if(ImGui::Button("Step") || KeyboardButtons[GLFW_KEY_F11].Pressed)
-                {
-                    ToNextLine(Debuger.DebugeePID, true);
                     UpdateInfo();
                 }
                 
@@ -1620,7 +1623,7 @@ main(i32 ArgCount, char **Args)
         return -1;
     }
     
-    Debuger.DebugeeProgramPath = Args[1];
+    StringCopy(Debuger.DebugeeProgramPath, Args[1]);
     DebugerMain();
     
     return 0;

@@ -24,6 +24,9 @@ typedef double f64;
 #define Kilobytes(x) ((x) * 1024)
 #define ArrayPush(a,T,c) ((T *)ArenaPush((a), sizeof(T)*(c)))
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #define TIMER_START(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].start);
 #define TIMER_END(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].end); printf("Timer %d finished in %ld us\n", (id), (TPoints[(id)].end.tv_nsec - TPoints[(id)].start.tv_nsec) / 1000);
 
@@ -89,10 +92,10 @@ struct dbg
 {
     debugee_flag Flags;
     i32 DebugeePID;
-    char *DebugeeProgramPath;
     bool InputChange;
     char ProgramArgs[128];
     char PathToRunIn[256];
+    char DebugeeProgramPath[256];
 };
 
 struct arena
