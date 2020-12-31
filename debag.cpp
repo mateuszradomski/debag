@@ -454,6 +454,17 @@ ArenaCreate(size_t Size)
     return Result;
 }
 
+static arena *
+ArenaCreateZeros(size_t Size)
+{
+    arena *Result = 0x0;
+
+    Result = ArenaCreate(Size);
+    memset(Result->BasePtr, 0, Size);
+
+    return Result;
+}
+
 static void
 ArenaDestroy(arena *Arena)
 {
@@ -482,6 +493,14 @@ ArenaPush(arena *Arena, size_t Size)
         }
     }
     
+    return Result;
+}
+
+static size_t
+ArenaFreeBytes(arena *Arena)
+{
+    size_t Result = Arena->Size - (Arena->CursorPtr - Arena->BasePtr);
+
     return Result;
 }
 
@@ -1307,45 +1326,10 @@ DebugeeContinueOrStart()
 static void
 DeallocDebugInfo()
 {
-    Dwarf_Error Error;
-    if(DI->Debug)
-    {
-        DWARF_CALL(dwarf_finish(DI->Debug, &Error));
-    }
-    DI->Debug = 0;
-    
-    memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
-    memset(DI->SourceFiles, 0, sizeof(di_src_file) * DI->SourceFilesCount);
-    memset(DI->Functions, 0, sizeof(di_function) * DI->FuctionsCount);
-    memset(DI->CompileUnits, 0, sizeof(di_compile_unit) * DI->CompileUnitsCount);
-    memset(DI->Variables, 0, sizeof(di_variable) * DI->VariablesCount);
-    memset(DI->Params, 0, sizeof(di_variable) * DI->ParamsCount);
-    memset(DI->BaseTypes, 0, sizeof(di_base_type) * DI->BaseTypesCount);
-    memset(DI->Typedefs, 0, sizeof(di_typedef) * DI->TypedefsCount);
-    memset(DI->PointerTypes, 0, sizeof(di_pointer_type) * DI->PointerTypesCount);
-    memset(DI->StructMembers, 0, sizeof(di_struct_member) * DI->StructMembersCount);
-    memset(DI->StructTypes, 0, sizeof(di_struct_type) * DI->StructTypesCount);
-    memset(DI->ArrayTypes, 0, sizeof(di_array_type) * DI->ArrayTypesCount);
-    memset(DI->LexScopes, 0, sizeof(di_lexical_scope) * DI->LexScopesCount);
-    
-    BreakpointCount = 0;
-    DisasmInstCount = 0;
-    Regs = {};
-    DI->SourceFilesCount = 0;
-    DI->VariablesCount = 0;
-    DI->ParamsCount = 0;
-    DI->FuctionsCount = 0;
-    DI->CompileUnitsCount = 0;
-    DI->BaseTypesCount = 0;
-    DI->TypedefsCount = 0;
-    DI->PointerTypesCount = 0;
-    DI->StructMembersCount = 0;
-    DI->StructTypesCount = 0;
-    DI->ArrayTypesCount = 0;
-    DI->LexScopesCount = 0;
-    DI->FrameInfo = {};
+    CloseDwarfSymbolsHandle();
     ArenaDestroy(DI->Arena);
-    DI->Arena = 0x0;
+
+    memset(DI, 0, sizeof(debug_info));
 }
 
 static void
@@ -1374,7 +1358,6 @@ DebugerMain()
 {
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     DI = (debug_info *)calloc(1, sizeof(debug_info));
-    DI->SourceFiles = (di_src_file *)calloc(MAX_DI_SOURCE_FILES, sizeof(di_src_file));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(WindowWidth, WindowHeight, "debag", NULL, NULL);

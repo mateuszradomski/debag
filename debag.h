@@ -218,8 +218,10 @@ static u64 HexStringToInt(char *String);
 static char * DumpFile(char *Path);
 
 static arena *ArenaCreate(size_t Size);
+static arena *ArenaCreateZeros(size_t Size);
 static void *ArenaPush(arena *Arena, size_t Size);
 static void ArenaDestroy(arena *Arena);
+static size_t ArenaFreeBytes(arena *Arena);
 
 static void DebugerMain();
 static void DeallocDebugInfo();

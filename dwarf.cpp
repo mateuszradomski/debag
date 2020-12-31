@@ -603,6 +603,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 
                         char *FileName = 0x0;
                         DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
+                        printf("Address %lx, FileName %p [%s]\n", Address, (void *)FileName, FileName);
                         u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, FileNum);
 
                         di_src_file *File = PushSourceFile(FileName, LinesMatching);
@@ -1974,8 +1975,8 @@ DWARFRead()
     
     OpenDwarfSymbolsHandle();
     
-    DI->Arena = ArenaCreate(Kilobytes(256));
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
+    DI->Arena = ArenaCreateZeros(Kilobytes(256));
     
     for(i32 CUCount = 0;;++CUCount) {
         i32 Result = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
@@ -1997,21 +1998,23 @@ DWARFRead()
     
     //TIMER_START(0);
     
-    DI->CompileUnits = (di_compile_unit *)calloc(CountTable[DW_TAG_compile_unit], sizeof(di_compile_unit));
-    DI->Functions = (di_function *)calloc(CountTable[DW_TAG_subprogram], sizeof(di_function));
-    DI->BaseTypes = (di_base_type *)calloc(CountTable[DW_TAG_base_type], sizeof(di_base_type));
-    DI->Typedefs = (di_typedef *)calloc(CountTable[DW_TAG_typedef], sizeof(di_typedef));
-    DI->PointerTypes = (di_pointer_type *)calloc(CountTable[DW_TAG_pointer_type], sizeof(di_pointer_type));
-    DI->ConstTypes = (di_const_type *)calloc(CountTable[DW_TAG_const_type], sizeof(di_const_type));
-    DI->RestrictTypes = (di_restrict_type *)calloc(CountTable[DW_TAG_restrict_type], sizeof(di_restrict_type));
-    DI->Variables = (di_variable *)calloc(CountTable[DW_TAG_variable], sizeof(di_variable));
-    DI->Params = (di_variable *)calloc(CountTable[DW_TAG_formal_parameter], sizeof(di_variable));
-    DI->LexScopes = (di_lexical_scope *)calloc(CountTable[DW_TAG_lexical_block], sizeof(di_lexical_scope));
-    DI->StructMembers = (di_struct_member *)calloc(CountTable[DW_TAG_member], sizeof(di_struct_member));
-    DI->StructTypes = (di_struct_type *)calloc(CountTable[DW_TAG_structure_type], sizeof(di_struct_type));
-    DI->UnionMembers = (di_union_member *)calloc(CountTable[DW_TAG_member], sizeof(di_union_member));
-    DI->UnionTypes = (di_union_type *)calloc(CountTable[DW_TAG_union_type], sizeof(di_union_type));
-    DI->ArrayTypes = (di_array_type *)calloc(CountTable[DW_TAG_array_type], sizeof(di_array_type));
+    DI->CompileUnits = ArrayPush(DI->Arena, di_compile_unit, CountTable[DW_TAG_compile_unit]);
+    DI->Functions = ArrayPush(DI->Arena, di_function, CountTable[DW_TAG_subprogram]);
+    DI->BaseTypes = ArrayPush(DI->Arena, di_base_type, CountTable[DW_TAG_base_type]);
+    DI->Typedefs = ArrayPush(DI->Arena, di_typedef, CountTable[DW_TAG_typedef]);
+    DI->PointerTypes = ArrayPush(DI->Arena, di_pointer_type, CountTable[DW_TAG_pointer_type]);
+    DI->ConstTypes = ArrayPush(DI->Arena, di_const_type, CountTable[DW_TAG_const_type]);
+    DI->RestrictTypes = ArrayPush(DI->Arena, di_restrict_type, CountTable[DW_TAG_restrict_type]);
+    DI->Variables = ArrayPush(DI->Arena, di_variable, CountTable[DW_TAG_variable]);
+    DI->Params = ArrayPush(DI->Arena, di_variable, CountTable[DW_TAG_formal_parameter]);
+    DI->LexScopes = ArrayPush(DI->Arena, di_lexical_scope, CountTable[DW_TAG_lexical_block]);
+    DI->StructMembers = ArrayPush(DI->Arena, di_struct_member, CountTable[DW_TAG_member]);
+    DI->StructTypes = ArrayPush(DI->Arena, di_struct_type, CountTable[DW_TAG_structure_type]);
+    DI->UnionMembers = ArrayPush(DI->Arena, di_union_member, CountTable[DW_TAG_member]);
+    DI->UnionTypes = ArrayPush(DI->Arena, di_union_type, CountTable[DW_TAG_union_type]);
+    DI->ArrayTypes = ArrayPush(DI->Arena, di_array_type, CountTable[DW_TAG_array_type]);
+    DI->SourceFiles = ArrayPush(DI->Arena, di_src_file, MAX_DI_SOURCE_FILES);
+
 #if 0
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
     {
