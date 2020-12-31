@@ -1,7 +1,7 @@
 static bool
 AddressInDiffrentLine(size_t Address)
 {
-    di_src_line *Current = LineTableFindByAddress(Regs.rip);
+    di_src_line *Current = LineTableFindByAddress(Regs.RIP);
     di_src_line *Diff = LineTableFindByAddress(Address);
     assert(Current);
     assert(Diff);
@@ -44,7 +44,7 @@ WaitForSignal(i32 DebugeePID)
             case TRAP_BRKPT:
             {
                 Regs = PeekRegisters(DebugeePID);
-                Regs.rip -= 1;
+                Regs.RIP -= 1;
                 SetRegisters(Regs, DebugeePID);
                 //auto offset_pc = offset_load_address(get_pc()); //rember to offset the pc for querying DWARF
                 //auto line_entry = get_line_entry_from_pc(offset_pc);
@@ -210,7 +210,7 @@ BreakAtAddress(char *AddressStr)
 static void
 StepInstruction(i32 DebugeePID)
 {
-    breakpoint *BP = BreakpointFind(Regs.rip, DebugeePID);
+    breakpoint *BP = BreakpointFind(Regs.RIP, DebugeePID);
     if(BP && BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
     ptrace(PTRACE_SINGLESTEP, DebugeePID, 0x0, 0x0);
@@ -235,14 +235,14 @@ NextInstruction(i32 DebugeePID)
 static void
 StepLine(i32 DebugeePID)
 {
-    di_src_line *LTEntry = LineTableFindByAddress(Regs.rip);
+    di_src_line *LTEntry = LineTableFindByAddress(Regs.RIP);
     assert(LTEntry);
     
     while(true)
     {
         StepInstruction(DebugeePID);
         
-        di_src_line *CurrentLTE = LineTableFindByAddress(Regs.rip);
+        di_src_line *CurrentLTE = LineTableFindByAddress(Regs.RIP);
         if(CurrentLTE && LTEntry->LineNum != CurrentLTE->LineNum)
         {
             break;
@@ -255,7 +255,7 @@ ContinueProgram(i32 DebugeePID)
 {
     if(BreakpointCount > 0)
     {
-        size_t OldPC = Regs.rip;
+        size_t OldPC = Regs.RIP;
         StepInstruction(DebugeePID);
         
         breakpoint *BP = BreakpointFind(OldPC, DebugeePID);
@@ -322,7 +322,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         
         if(Type & INST_TYPE_RET)
         {
-            size_t ReturnAddress = PeekDebugeeMemory(Regs.rbp + 8, DebugeePID);
+            size_t ReturnAddress = PeekDebugeeMemory(Regs.RBP + 8, DebugeePID);
 
             if(AddressInAnyCompileUnit(ReturnAddress))
             {
@@ -375,9 +375,9 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
 static void
 ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
-    address_range Range = AddressRangeCurrentAndNextLine(Regs.rip);
+    address_range Range = AddressRangeCurrentAndNextLine(Regs.RIP);
     
-//    printf("Regs.rip = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.rip, Range.Start, Range.End);
+//    printf("Regs.RIP = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.RIP, Range.Start, Range.End);
     
     breakpoint TempBreakpoints[8] = {};
     u32 TempBreakpointsCount = 0;

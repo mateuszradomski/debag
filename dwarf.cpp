@@ -2087,7 +2087,7 @@ DWARFGetCFA(size_t PC)
             Dwarf_Half RegnumOut = Tab3.rt3_cfa_rule.dw_regnum;
             
             assert(OffsetRel == 1);
-            size_t RegVal = GetRegisterByABINumber(RegnumOut);
+            size_t RegVal = GetRegisterByABINumber(Regs, RegnumOut);
             
             //printf("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
             return RegVal + OffsetOut;

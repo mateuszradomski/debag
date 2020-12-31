@@ -495,59 +495,134 @@ AddressBetween(size_t Address, size_t Lower, size_t Upper)
     return Result;
 }
 
+static x64_registers
+ParseUserRegsStruct(user_regs_struct URS)
+{
+    x64_registers Result = {};
+
+    Result.R15 = URS.r15;
+    Result.R14 = URS.r14;
+    Result.R13 = URS.r13;
+    Result.R12 = URS.r12;
+    Result.RBP = URS.rbp;
+    Result.RBX = URS.rbx;
+    Result.R11 = URS.r11;
+    Result.R10 = URS.r10;
+    Result.R9 = URS.r9;
+    Result.R8 = URS.r8;
+    Result.RAX = URS.rax;
+    Result.RCX = URS.rcx;
+    Result.RDX = URS.rdx;
+    Result.RSI = URS.rsi;
+    Result.RDI = URS.rdi;
+    Result.OrigRax = URS.orig_rax;
+    Result.RIP = URS.rip;
+    Result.Cs = URS.cs;
+    Result.Eflags = URS.eflags;
+    Result.RSP = URS.rsp;
+    Result.Ss = URS.ss;
+    Result.FsBase = URS.fs_base;
+    Result.GsBase = URS.gs_base;
+    Result.Ds = URS.ds;
+    Result.Es = URS.es;
+    Result.Fs = URS.fs;
+    Result.Gs = URS.gs;
+
+    return Result;
+}
+
 static user_regs_struct
-PeekRegisters(i32 DebugeePID)
+ParseToUserRegsStruct(x64_registers Regs)
 {
     user_regs_struct Result = {};
-    
-    ptrace(PTRACE_GETREGS, DebugeePID, 0x0, &Result);
-    
+
+    Result.r15 = Regs.R15;
+    Result.r14 = Regs.R14;
+    Result.r13 = Regs.R13;
+    Result.r12 = Regs.R12;
+    Result.rbp = Regs.RBP;
+    Result.rbx = Regs.RBX;
+    Result.r11 = Regs.R11;
+    Result.r10 = Regs.R10;
+    Result.r9 = Regs.R9;
+    Result.r8 = Regs.R8;
+    Result.rax = Regs.RAX;
+    Result.rcx = Regs.RCX;
+    Result.rdx = Regs.RDX;
+    Result.rsi = Regs.RSI;
+    Result.rdi = Regs.RDI;
+    Result.orig_rax = Regs.OrigRax;
+    Result.rip = Regs.RIP;
+    Result.cs = Regs.Cs;
+    Result.eflags = Regs.Eflags;
+    Result.rsp = Regs.RSP;
+    Result.ss = Regs.Ss;
+    Result.fs_base = Regs.FsBase;
+    Result.gs_base = Regs.GsBase;
+    Result.ds = Regs.Ds;
+    Result.es = Regs.Es;
+    Result.fs = Regs.Fs;
+    Result.gs = Regs.Gs;
+
+    return Result;
+}
+
+static x64_registers
+PeekRegisters(i32 DebugeePID)
+{
+    x64_registers Result = {};
+
+    user_regs_struct USR = {};
+    ptrace(PTRACE_GETREGS, DebugeePID, 0x0, &USR);
+
+    Result = ParseUserRegsStruct(USR);
     return Result;
 }
 
 static void
-SetRegisters(user_regs_struct Regs, i32 DebugeePID)
+SetRegisters(x64_registers Regs, i32 DebugeePID)
 {
-    ptrace(PTRACE_SETREGS, DebugeePID, 0x0, &Regs);
+    user_regs_struct USR = ParseToUserRegsStruct(Regs);
+    ptrace(PTRACE_SETREGS, DebugeePID, 0x0, &USR);
 }
 
 static size_t
-GetRegisterByABINumber(u32 Number)
+GetRegisterByABINumber(x64_registers Registers, u32 Number)
 {
     switch(Number)
     {
         case 0:
-        return Regs.rax;
+        return Registers.RAX;
         case 1:
-        return Regs.rdx;
+        return Registers.RDX;
         case 2:
-        return Regs.rcx;
+        return Registers.RCX;
         case 3:
-        return Regs.rbx;
+        return Registers.RBX;
         case 4:
-        return Regs.rsi;
+        return Registers.RSI;
         case 5:
-        return Regs.rdi;
+        return Registers.RDI;
         case 6:
-        return Regs.rbp;
+        return Registers.RBP;
         case 7:
-        return Regs.rsp;
+        return Registers.RSP;
         case 8:
-        return Regs.r8;
+        return Registers.R8;
         case 9:
-        return Regs.r9;
+        return Registers.R9;
         case 10:
-        return Regs.r10;
+        return Registers.R10;
         case 11:
-        return Regs.r11;
+        return Registers.R11;
         case 12:
-        return Regs.r12;
+        return Registers.R12;
         case 13:
-        return Regs.r13;
+        return Registers.R13;
         case 14:
-        return Regs.r14;
+        return Registers.R14;
         case 15:
-        return Regs.r15;
+        return Registers.R15;
         default:
         {
             assert(false);
@@ -555,65 +630,39 @@ GetRegisterByABINumber(u32 Number)
     }
 }
 
+static char *
+GetRegisterNameByIndex(u32 Index)
+{
+    char *Names[] = {
+        "RAX", "RBX", "RCX", "RDX", "RDI", "RSI",
+        "RIP", "RBP", "RSP",
+        "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+        "OrigRax", "Cs", "Eflags", "Ss", "FsBase", "GsBase", "Ds", "Es", "Fs", "Gs",
+    };
+
+    return Names[Index];
+}
+
+static size_t
+GetProgramCounter()
+{
+    return Regs.RIP;
+}
+
 static void
-ImGuiShowRegisters(user_regs_struct Regs)
+ImGuiShowRegisters(x64_registers Regs)
 {
     ImGui::Columns(4, 0x0, true);
-    
-    ImGui::Text("r15: %lX", (u64)Regs.r15);
-    ImGui::NextColumn();
-    ImGui::Text("r14: %lX", (u64)Regs.r14);
-    ImGui::NextColumn();
-    ImGui::Text("r13: %lX", (u64)Regs.r13);
-    ImGui::NextColumn();
-    ImGui::Text("r12: %lX", (u64)Regs.r12);
-    ImGui::NextColumn();
-    ImGui::Text("rbp: %lX", (u64)Regs.rbp);
-    ImGui::NextColumn();
-    ImGui::Text("rbx: %lX", (u64)Regs.rbx);
-    ImGui::NextColumn();
-    ImGui::Text("r11: %lX", (u64)Regs.r11);
-    ImGui::NextColumn();
-    ImGui::Text("r10: %lX", (u64)Regs.r10);
-    ImGui::NextColumn();
-    ImGui::Text("r9: %lX", (u64)Regs.r9);
-    ImGui::NextColumn();
-    ImGui::Text("r8: %lX", (u64)Regs.r8);
-    ImGui::NextColumn();
-    ImGui::Text("rax: %lX", (u64)Regs.rax);
-    ImGui::NextColumn();
-    ImGui::Text("rcx: %lX", (u64)Regs.rcx);
-    ImGui::NextColumn();
-    ImGui::Text("rdx: %lX", (u64)Regs.rdx);
-    ImGui::NextColumn();
-    ImGui::Text("rsi: %lX", (u64)Regs.rsi);
-    ImGui::NextColumn();
-    ImGui::Text("rdi: %lX", (u64)Regs.rdi);
-    ImGui::NextColumn();
-    ImGui::Text("orig_rax: %lX", (u64)Regs.orig_rax);
-    ImGui::NextColumn();
-    ImGui::Text("rip: %lX", (u64)Regs.rip);
-    ImGui::NextColumn();
-    ImGui::Text("cs: %lX", (u64)Regs.cs);
-    ImGui::NextColumn();
-    ImGui::Text("eflags: %lX", (u64)Regs.eflags);
-    ImGui::NextColumn();
-    ImGui::Text("rsp: %lX", (u64)Regs.rsp);
-    ImGui::NextColumn();
-    ImGui::Text("ss: %lX", (u64)Regs.ss);
-    ImGui::NextColumn();
-    ImGui::Text("fs_base: %lX", (u64)Regs.fs_base);
-    ImGui::NextColumn();
-    ImGui::Text("gs_base: %lX", (u64)Regs.gs_base);
-    ImGui::NextColumn();
-    ImGui::Text("ds: %lX", (u64)Regs.ds);
-    ImGui::NextColumn();
-    ImGui::Text("es: %lX", (u64)Regs.es);
-    ImGui::NextColumn();
-    ImGui::Text("fs: %lX", (u64)Regs.fs);
-    ImGui::NextColumn();
-    ImGui::Text("gs: %lX", (u64)Regs.gs);
 
+    // NOTE(mateusz): We ignore we registers that are the last 10 in the 'x64_registers' struct
+    u32 IgnoreCount = 10;
+
+    for(u32 I = 0; I < (sizeof(Regs) / sizeof(size_t)) - IgnoreCount; I++)
+    {
+        ImGui::Text("%s : %lX", GetRegisterNameByIndex(I), Regs.Array[I]);
+        ImGui::NextColumn();
+    }
+    
     ImGui::Columns(1);
 }
 
@@ -1181,7 +1230,7 @@ UpdateInfo()
 {
     Regs = PeekRegisters(Debuger.DebugeePID);
     
-    di_function *Func = FindFunctionConfiningAddress(Regs.rip);
+    di_function *Func = FindFunctionConfiningAddress(Regs.RIP);
     if(Func)
     {
         assert(Func->FuncLexScope.RangesCount == 0);
@@ -1549,7 +1598,7 @@ DebugerMain()
         {
             disasm_inst *Inst = &DisasmInst[I];
             
-            if(Inst->Address == Regs.rip)
+            if(Inst->Address == Regs.RIP)
             {
                 ImGui::TextColored(CurrentLineColor,
                                    "0x%" PRIx64 ":\t%s\t\t%s\n",
@@ -1579,7 +1628,7 @@ DebugerMain()
         
         if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            di_src_line *Line = LineTableFindByAddress(Regs.rip);
+            di_src_line *Line = LineTableFindByAddress(Regs.RIP);
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
@@ -1686,10 +1735,10 @@ DebugerMain()
                 ImGui::BeginChild("regs");
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
                 
-                di_function *Func = FindFunctionConfiningAddress(Regs.rip);
+                di_function *Func = FindFunctionConfiningAddress(Regs.RIP);
                 if(Func && Func->FrameBaseIsCFA)
                 {
-                    size_t FBReg = DWARFGetCFA(Regs.rip);
+                    size_t FBReg = DWARFGetCFA(Regs.RIP);
                     
                     ImGui::Columns(3, "tree", true);
                     
@@ -1718,7 +1767,7 @@ DebugerMain()
                         
                         if(LexScope->RangesCount == 0)
                         {
-                            if(AddressBetween(Regs.rip, LexScope->LowPC, LexScope->HighPC - 1))
+                            if(AddressBetween(Regs.RIP, LexScope->LowPC, LexScope->HighPC - 1))
                             {
                                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                                 {
@@ -1731,7 +1780,7 @@ DebugerMain()
                         {
                             for(u32 RIndex = 0; RIndex < LexScope->RangesCount; RIndex++)
                             {
-                                if(AddressBetween(Regs.rip, LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
+                                if(AddressBetween(Regs.RIP, LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
                                 {
                                     for(u32 I = 0; I < LexScope->VariablesCount; I++)
                                     {

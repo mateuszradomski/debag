@@ -89,6 +89,44 @@ struct address_range
     size_t End;
 };
 
+union x64_registers
+{
+    struct
+    {
+        size_t RAX;
+        size_t RBX;
+        size_t RCX;
+        size_t RDX;
+        size_t RDI;
+        size_t RSI;
+
+        size_t RIP;
+        size_t RBP;
+        size_t RSP;
+
+        size_t R8;
+        size_t R9;
+        size_t R10;
+        size_t R11;
+        size_t R12;
+        size_t R13;
+        size_t R14;
+        size_t R15;
+
+        size_t OrigRax;
+        size_t Cs;
+        size_t Eflags;
+        size_t Ss;
+        size_t FsBase;
+        size_t GsBase;
+        size_t Ds;
+        size_t Es;
+        size_t Fs;
+        size_t Gs;
+    };
+    size_t Array[27];
+};
+
 enum
 {
     DEBUGEE_FLAG_NULL = 0,
@@ -127,7 +165,7 @@ disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS] = {};
 u32 DisasmInstCount = 0;
 
 csh DisAsmHandle;
-user_regs_struct Regs;
+x64_registers Regs;
 
 dbg Debuger;
 
@@ -148,8 +186,10 @@ static bool CharInString(char *String, char C);
 static u32 StringCountChar(char *String, char C);
 static u64 HexStringToInt(char *String);
 
-static user_regs_struct PeekRegisters(i32 DebugeePID);
-static void SetRegisters(user_regs_struct Regs, i32 DebugeePID);
+static x64_registers PeekRegisters(i32 DebugeePID);
+static void SetRegisters(x64_registers Regs, i32 DebugeePID);
+static x64_registers ParseUserRegsStruct(user_regs_struct URS);
+static user_regs_struct ParseToUserRegsStruct(x64_registers Regs);
 
 static breakpoint *BreakpointFind(u64 Address, i32 DebugeePID);
 static bool BreakpointEnabled(breakpoint *BP);
@@ -167,7 +207,7 @@ static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t FindEntryPointAddress();
 
 static bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
-static size_t GetRegisterByABINumber(u32 Number);
+static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
 
 static bool CharInString(char *String, char C);
 static u32 StringCountChar(char *String, char C);
