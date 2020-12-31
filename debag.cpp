@@ -35,8 +35,13 @@
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
  * - Break at Address allows you to insert arbirary chars, allow only hex and decimal ones
- * - Better registers window / sort them
+ * - Sort Registers maybe?
  * - Better Breakpoints window, give information like Enabled, LineNO, FileName
+ * - hamster_debug
+ *   - When you are in a constructor for Vec2 you cann't step out of it until you spam the step instr button
+ *   - Can't switch between file tabs, it's broken???
+ *   - Can't scroll it keeps snapping back
+ *   - Can't see anything that is inside a union (anonymous strctures I guess)
  */
 
 static void
