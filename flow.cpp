@@ -184,7 +184,7 @@ BreakAtFunctionName(char *Name)
 }
 
 static bool
-BreakAtAddress(char *Address)
+BreakAtAddress(char *AddressStr)
 {
     bool Result = false;
 
@@ -192,11 +192,11 @@ BreakAtAddress(char *Address)
 
     if(CharInString(Debuger.BreakAddress, 'x'))
     {
-        Address = HexStringToInt(Debuger.BreakAddress);
+        Address = HexStringToInt(AddressStr);
     }
     else
     {
-        Address = atol(Debuger.BreakAddress);
+        Address = atol(AddressStr);
     }
 
     Result = true;

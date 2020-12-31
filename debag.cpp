@@ -1370,6 +1370,9 @@ DebugerMain()
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
 
+    bool CenteredDissassembly = false;
+    bool CenteredSourceCode = false;
+
     while(!glfwWindowShouldClose(Window))
     {
         //if(!Debuger.InputChange) { goto EndDraw; }
@@ -1378,7 +1381,12 @@ DebugerMain()
         // NOTE(mateusz): This has to happen before the calls to next lines
         if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
         {
-            Debuger.Flags ^= DEBUGEE_FLAG_STEPED;
+            if(CenteredDissassembly && CenteredSourceCode)
+            {
+                Debuger.Flags ^= DEBUGEE_FLAG_STEPED;
+                CenteredDissassembly = false;
+                CenteredSourceCode = false;
+            }
         }
         
         glClear(GL_COLOR_BUFFER_BIT);
@@ -1550,6 +1558,7 @@ DebugerMain()
                 if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                 {
                     ImGui::SetScrollHereY(0.5f);
+                    CenteredDissassembly = true;
                 }
             }
             else
@@ -1599,8 +1608,6 @@ DebugerMain()
                         u32 LineLength = (u64)LinePtr - (u64)Prev;
                         
                         // NOTE(mateusz): Lines are indexed from 1
-//                        if(DrawingLine)
-
                         if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                         {
                             DrawingLine = Line;
@@ -1609,21 +1616,18 @@ DebugerMain()
                             if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                             {
                                 ImGui::SetScrollHereY(0.5f);
+                                CenteredSourceCode = true;
                             }
                         }
                         else
                         {
-                            di_src_line *TempLine = LineFindByNumber(I + 1, SrcFileIndex);
-                            if(TempLine)
-                            {
-                                DrawingLine = TempLine;
-                            }
+                            DrawingLine = LineFindByNumber(I + 1, SrcFileIndex);
                             
                             breakpoint *BP = 0x0;
-
                             if(DrawingLine &&
                                (BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID)) &&
-                               BreakpointEnabled(BP)){
+                               BreakpointEnabled(BP))
+                            {
                                 ImGui::TextColored(BreakpointLineColor, "%.*s",
                                                    LineLength, Prev);
                             }
