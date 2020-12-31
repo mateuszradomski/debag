@@ -185,6 +185,7 @@ static void ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarNam
 static bool CharInString(char *String, char C);
 static u32 StringCountChar(char *String, char C);
 static u64 HexStringToInt(char *String);
+static char *StringDuplicate(arena *Arena, char *Str);
 
 static x64_registers PeekRegisters(i32 DebugeePID);
 static void SetRegisters(x64_registers Regs, i32 DebugeePID);
@@ -215,7 +216,7 @@ static void StringCopy(char *Dest, char *Src);
 static void StringConcat(char *Dest, char *Src);
 static bool StringsMatch(char *Str0, char *Str1);
 static u64 HexStringToInt(char *String);
-static char * DumpFile(char *Path);
+static char *DumpFile(arena *Arena, char *Path);
 
 static arena *ArenaCreate(size_t Size);
 static arena *ArenaCreateZeros(size_t Size);

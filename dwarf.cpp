@@ -368,8 +368,8 @@ PushSourceFile(char *Path, u32 SrcLineCount)
     
     Result = &DI->SourceFiles[DI->SourceFilesCount++];
     
-    Result->Path = strdup(Path);
-    Result->Content = DumpFile(Path);
+    Result->Path = StringDuplicate(DI->Arena, Path);
+    Result->Content = DumpFile(DI->Arena, Path);
     Result->ContentLineCount = StringCountChar(Result->Content, '\n');
     Result->SrcLineCount = 0;
     Result->Lines = ArrayPush(DI->Arena, di_src_line, SrcLineCount);
@@ -384,8 +384,8 @@ PushSourceFile(char *Path)
     
     Result = &DI->SourceFiles[DI->SourceFilesCount++];
     
-    Result->Path = strdup(Path);
-    Result->Content = DumpFile(Path);
+    Result->Path = StringDuplicate(DI->Arena, Path);
+    Result->Content = DumpFile(DI->Arena, Path);
     Result->ContentLineCount = StringCountChar(Result->Content, '\n');
     
     return Result;

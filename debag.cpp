@@ -284,6 +284,18 @@ StringLength(char *Str)
     return strlen(Str);
 }
 
+static char *
+StringDuplicate(arena *Arena, char *Str)
+{
+    char *Result = 0x0;
+
+    u32 Len = StringLength(Str);
+    Result = ArrayPush(Arena, char, Len + 1);
+    StringCopy(Result, Str);
+
+    return Result;
+}
+
 #define ARGV_MAX  255
 #define ARGV_TOKEN_MAX  255
 
@@ -472,6 +484,8 @@ ArenaDestroy(arena *Arena)
     {
         free(Arena->BasePtr);
     }
+
+    free(Arena);
 }
 
 static void *
@@ -1229,7 +1243,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 }
 
 static char *
-DumpFile(char *Path)
+DumpFile(arena *Arena, char *Path)
 {
     FILE *FHandle = fopen(Path, "r");
     assert(FHandle);
@@ -1237,7 +1251,7 @@ DumpFile(char *Path)
     u32 FileSize = ftell(FHandle);
     fseek(FHandle, 0, SEEK_SET);
     
-    char *Result = (char *)malloc(FileSize + 1);
+    char *Result = ArrayPush(Arena, char, FileSize + 1);
     fread(Result, FileSize, 1, FHandle);
     Result[FileSize] = '\0';
     
