@@ -1,7 +1,7 @@
 static bool
 AddressInDiffrentLine(size_t Address)
 {
-    di_src_line *Current = LineTableFindByAddress(Regs.RIP);
+    di_src_line *Current = LineTableFindByAddress(GetProgramCounter());
     di_src_line *Diff = LineTableFindByAddress(Address);
     assert(Current);
     assert(Diff);
@@ -28,7 +28,7 @@ WaitForSignal(i32 DebugeePID)
     
     if(WIFEXITED(WaitStatus))
     {
-        StatusText = "Program finished it's execution";
+        GuiSetStatusText("Program finished it's execution");
         Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
         DeallocDebugInfo();
     }
@@ -43,9 +43,9 @@ WaitForSignal(i32 DebugeePID)
             case SI_KERNEL:
             case TRAP_BRKPT:
             {
-                Regs = PeekRegisters(DebugeePID);
-                Regs.RIP -= 1;
-                SetRegisters(Regs, DebugeePID);
+                Debuger.Regs = PeekRegisters(DebugeePID);
+                Debuger.Regs.RIP -= 1;
+                SetRegisters(Debuger.Regs, DebugeePID);
                 //auto offset_pc = offset_load_address(get_pc()); //rember to offset the pc for querying DWARF
                 //auto line_entry = get_line_entry_from_pc(offset_pc);
                 //print_source(line_entry->file->path, line_entry->line);
@@ -62,11 +62,15 @@ WaitForSignal(i32 DebugeePID)
     }
     else if(SigInfo.si_signo == SIGSEGV)
     {
-        StatusText = "Program seg faulted";
+        GuiSetStatusText("Program seg faulted");
+        DebugeeKill();
+        DeallocDebugInfo();
     }
     else if(SigInfo.si_signo == SIGABRT)
     {
-        StatusText = "Program aborted";
+        DebugeeKill();
+        GuiSetStatusText("Program aborted");
+        DeallocDebugInfo();
     }
     else
     {
@@ -75,12 +79,12 @@ WaitForSignal(i32 DebugeePID)
 }
 
 static breakpoint *
-BreakpointFind(u64 Address, i32 DebugeePID, breakpoint *BPs, u32 Count)
+BreakpointFind(size_t Address, breakpoint *BPs, u32 Count)
 {
     for(u32 I = 0; I < Count; I++)
     {
         breakpoint *BP = &BPs[I];
-        if(BP->Address == Address && BP->DebugeePID == DebugeePID)
+        if(BP->Address == Address)
         {
             return BP;
         }
@@ -90,11 +94,11 @@ BreakpointFind(u64 Address, i32 DebugeePID, breakpoint *BPs, u32 Count)
 }
 
 static breakpoint *
-BreakpointFind(u64 Address, i32 DebugeePID)
+BreakpointFind(size_t Address)
 {
     breakpoint *Result = 0x0;
     
-    Result = BreakpointFind(Address, DebugeePID, Breakpoints, BreakpointCount);
+    Result = BreakpointFind(Address, Breakpoints, BreakpointCount);
     
     return Result;
 }
@@ -111,7 +115,7 @@ BreakpointEnabled(breakpoint *BP)
 }
 
 static breakpoint
-BreakpointCreate(u64 Address, i32 DebugeePID)
+BreakpointCreate(size_t Address)
 {
     breakpoint BP = {};
     //u64 OpCodes = ptrace(PTRACE_PEEKDATA, DebugeePID, Address, 0x0);
@@ -119,7 +123,6 @@ BreakpointCreate(u64 Address, i32 DebugeePID)
     //assert(BreakpointCount != MAX_BREAKPOINT_COUNT);
     
     BP.Address = Address;
-    BP.DebugeePID = DebugeePID;
     
     return BP;
 }
@@ -132,20 +135,20 @@ BreakpointEnable(breakpoint *BP)
     // if someone has a self-modifying exectuable. So if you don't want to support that
     // just store the opcodes at Instruction Pointer in the struct of breakpoint, it will 
     // speed this up a bit, I don't know how much of a problem this will be.
-    u64 OpCodes = ptrace(PTRACE_PEEKDATA, BP->DebugeePID, BP->Address, 0x0);
+    u64 OpCodes = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, BP->Address, 0x0);
     BP->SavedOpCode = OpCodes & 0xff;
     u64 TrapInterupt = 0xcc; // int 3
     u64 OpCodesInt3 = (OpCodes & ~0xff) | TrapInterupt;
-    ptrace(PTRACE_POKEDATA, BP->DebugeePID, BP->Address, OpCodesInt3);
+    ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, OpCodesInt3);
 }
 
 static void
 BreakpointDisable(breakpoint *BP)
 {
     BP->Enabled = false;
-    u64 OpCodes = ptrace(PTRACE_PEEKDATA, BP->DebugeePID, BP->Address, 0x0);
+    u64 OpCodes = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, BP->Address, 0x0);
     u64 RestoredOpCodes = (OpCodes & ~0xff) | BP->SavedOpCode;
-    ptrace(PTRACE_POKEDATA, BP->DebugeePID, BP->Address, RestoredOpCodes);
+    ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, RestoredOpCodes);
 }
 
 static void
@@ -156,10 +159,10 @@ BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *
     
     if(Line)
     {
-        bool NoBreakpointAtLine = BreakpointFind(Line->Address, Debuger.DebugeePID) == 0;
+        bool NoBreakpointAtLine = BreakpointFind(Line->Address) == 0;
         if(NoBreakpointAtLine)
         {
-            breakpoint BP = BreakpointCreate(Line->Address, Debuger.DebugeePID);
+            breakpoint BP = BreakpointCreate(Line->Address);
             BreakpointEnable(&BP);
             BPs[*Count] = BP;
             *Count += 1;
@@ -177,7 +180,7 @@ BreakAtFunctionName(char *Name)
         di_function *Func = &DI->Functions[I];
         if(StringsMatch(Name, Func->Name))
         {
-            breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC, Debuger.DebugeePID);
+            breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC);
             BreakpointEnable(&BP);
             Breakpoints[BreakpointCount++] = BP;
             Result = true;
@@ -187,6 +190,21 @@ BreakAtFunctionName(char *Name)
     return Result;
 }
 
+static void
+BreakAtMain()
+{
+    size_t EntryPointAddress = FindEntryPointAddress();
+    assert(EntryPointAddress);
+
+    breakpoint *BP = BreakpointFind(EntryPointAddress);
+    if(!BP)
+    {
+        breakpoint BP = BreakpointCreate(EntryPointAddress);
+        BreakpointEnable(&BP);
+        Breakpoints[BreakpointCount++] = BP;
+    }
+}
+
 static bool
 BreakAtAddress(char *AddressStr)
 {
@@ -194,7 +212,7 @@ BreakAtAddress(char *AddressStr)
 
     u64 Address = 0;
 
-    if(CharInString(Debuger.BreakAddress, 'x'))
+    if(CharInString(Gui->BreakAddress, 'x'))
     {
         Address = HexStringToInt(AddressStr);
     }
@@ -204,7 +222,7 @@ BreakAtAddress(char *AddressStr)
     }
 
     Result = true;
-    breakpoint BP = BreakpointCreate(Address, Debuger.DebugeePID);
+    breakpoint BP = BreakpointCreate(Address);
     BreakpointEnable(&BP);
     Breakpoints[BreakpointCount++] = BP;
 
@@ -214,7 +232,7 @@ BreakAtAddress(char *AddressStr)
 static void
 StepInstruction(i32 DebugeePID)
 {
-    breakpoint *BP = BreakpointFind(Regs.RIP, DebugeePID);
+    breakpoint *BP = BreakpointFind(GetProgramCounter());
     if(BP && BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
     ptrace(PTRACE_SINGLESTEP, DebugeePID, 0x0, 0x0);
@@ -223,7 +241,7 @@ StepInstruction(i32 DebugeePID)
     if(BP && !BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointEnable(BP); }
     if(BP) { BP->ExectuedSavedOpCode = !BP->ExectuedSavedOpCode; }
     
-    Regs = PeekRegisters(DebugeePID);
+    Debuger.Regs = PeekRegisters(DebugeePID);
 
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;
 }
@@ -239,14 +257,14 @@ NextInstruction(i32 DebugeePID)
 static void
 StepLine(i32 DebugeePID)
 {
-    di_src_line *LTEntry = LineTableFindByAddress(Regs.RIP);
+    di_src_line *LTEntry = LineTableFindByAddress(GetProgramCounter());
     assert(LTEntry);
     
     while(true)
     {
         StepInstruction(DebugeePID);
         
-        di_src_line *CurrentLTE = LineTableFindByAddress(Regs.RIP);
+        di_src_line *CurrentLTE = LineTableFindByAddress(GetProgramCounter());
         if(CurrentLTE && LTEntry->LineNum != CurrentLTE->LineNum)
         {
             break;
@@ -259,10 +277,10 @@ ContinueProgram(i32 DebugeePID)
 {
     if(BreakpointCount > 0)
     {
-        size_t OldPC = Regs.RIP;
+        size_t OldPC = GetProgramCounter();
         StepInstruction(DebugeePID);
         
-        breakpoint *BP = BreakpointFind(OldPC, DebugeePID);
+        breakpoint *BP = BreakpointFind(OldPC);
         if(BreakpointEnabled(BP))
         {
             BP->ExectuedSavedOpCode = false;
@@ -278,7 +296,7 @@ ContinueProgram(i32 DebugeePID)
 static void
 BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID, breakpoint *Breakpoints, u32 *BreakpointsCount)
 {
-    breakpoint BP = BreakpointCreate(Range.End, DebugeePID);
+    breakpoint BP = BreakpointCreate(Range.End);
     BreakpointEnable(&BP);
     Breakpoints[(*BreakpointsCount)++] = BP;
 
@@ -291,7 +309,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
 
         {
             breakpoint *BP = 0x0; ;
-            if((BP = BreakpointFind(CurrentAddress, DebugeePID)) && BreakpointEnabled(BP))
+            if((BP = BreakpointFind(CurrentAddress)) && BreakpointEnabled(BP))
             {
                 InstrInMemory[0] = BP->SavedOpCode;
             }
@@ -318,7 +336,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             
             if(AddressInAnyCompileUnit(CallAddress))
             {
-                breakpoint BP = BreakpointCreate(CallAddress, DebugeePID);
+                breakpoint BP = BreakpointCreate(CallAddress);
                 BreakpointEnable(&BP);
                 Breakpoints[(*BreakpointsCount)++] = BP;
             }
@@ -326,11 +344,11 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         
         if(Type & INST_TYPE_RET)
         {
-            size_t ReturnAddress = PeekDebugeeMemory(Regs.RBP + 8, DebugeePID);
+            size_t ReturnAddress = PeekDebugeeMemory(Debuger.Regs.RBP + 8, DebugeePID);
 
             if(AddressInAnyCompileUnit(ReturnAddress))
             {
-                breakpoint BP = BreakpointCreate(ReturnAddress, DebugeePID);
+                breakpoint BP = BreakpointCreate(ReturnAddress);
                 BreakpointEnable(&BP);
                 Breakpoints[(*BreakpointsCount)++] = BP;
             }
@@ -348,8 +366,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             size_t JumpAddress = Instruction->detail->x86.operands[0].imm;
             //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
             
-            bool AddressWithoutBreakpoint = !BreakpointFind(JumpAddress, DebugeePID,
-                                                            Breakpoints, (*BreakpointsCount));
+            bool AddressWithoutBreakpoint = !BreakpointFind(JumpAddress, Breakpoints, (*BreakpointsCount));
             if(AddressWithoutBreakpoint)
             {
                 bool Between = AddressBetween(JumpAddress, Range.Start, Range.End);
@@ -358,7 +375,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
                 {
                     //printf("Breaking rel branch: %lX\n", JumpAddress);
 
-                    breakpoint BP = BreakpointCreate(JumpAddress, DebugeePID);
+                    breakpoint BP = BreakpointCreate(JumpAddress);
                     BreakpointEnable(&BP);
                     Breakpoints[(*BreakpointsCount)++] = BP;
                 }
@@ -379,7 +396,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
 static void
 ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
-    address_range Range = AddressRangeCurrentAndNextLine(Regs.RIP);
+    address_range Range = AddressRangeCurrentAndNextLine(GetProgramCounter());
     
 //    printf("Regs.RIP = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.RIP, Range.Start, Range.End);
     

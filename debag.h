@@ -59,7 +59,6 @@ struct keyboard_modifiers
 struct breakpoint
 {
     u64 Address;
-    i32 DebugeePID;
     u8 SavedOpCode;
     bool Enabled;
     bool ExectuedSavedOpCode;
@@ -144,9 +143,8 @@ struct dbg
     char ProgramArgs[128];
     char PathToRunIn[256];
     char DebugeeProgramPath[256];
-    char BreakFuncName[128];
-    char BreakAddress[32];
-    void (* ModalFuncShow)();
+
+    x64_registers Regs;
 };
 
 struct arena
@@ -165,20 +163,10 @@ disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS] = {};
 u32 DisasmInstCount = 0;
 
 csh DisAsmHandle;
-x64_registers Regs;
-
 dbg Debuger;
-
-u32 WindowWidth = 1024;
-u32 WindowHeight = 768;
 
 button KeyboardButtons[GLFW_KEY_LAST] = {};
 keyboard_modifiers KeyMods = {};
-
-ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
-ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
-
-char *StatusText = 0x0;
 
 static inline bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
 static arena *ArenaCreate(size_t Size);
@@ -192,6 +180,7 @@ static void DeallocDebugInfo();
 static void DebugeeContinueOrStart();
 static void DebugeeRestart();
 static void DebugeeStart();
+static void DebugeeKill();
 static void DebugerMain();
 static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
 static char *DumpFile(arena *Arena, char *Path);

@@ -104,8 +104,8 @@ WindowSizeCallback(GLFWwindow* Window, i32 Width, i32 Height)
 {
     (void)Window;
     
-    WindowWidth = Width;
-    WindowHeight = Height;
+    Gui->WindowWidth = Width;
+    Gui->WindowHeight = Height;
 }
 
 static void
@@ -672,7 +672,7 @@ GetRegisterNameByIndex(u32 Index)
 static size_t
 GetProgramCounter()
 {
-    return Regs.RIP;
+    return Debuger.Regs.RIP;
 }
 
 static size_t
@@ -755,7 +755,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
         
         {
             breakpoint *BP = 0x0; ;
-            if((BP = BreakpointFind(InstructionAddress, DebugeePID)) && BreakpointEnabled(BP))
+            if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
             {
                 InstrInMemory[0] = BP->SavedOpCode;
             }
@@ -851,9 +851,9 @@ DumpFile(arena *Arena, char *Path)
 static void
 UpdateInfo()
 {
-    Regs = PeekRegisters(Debuger.DebugeePID);
+    Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     
-    di_function *Func = FindFunctionConfiningAddress(Regs.RIP);
+    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
     if(Func)
     {
         assert(Func->FuncLexScope.RangesCount == 0);
@@ -902,6 +902,13 @@ DebugeeStart()
 }
 
 static void
+DebugeeKill()
+{
+    ptrace(PTRACE_KILL, Debuger.DebugeePID, 0x0, 0x0);
+    Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
+}
+
+static void
 DebugeeContinueOrStart()
 {
     //Continue or start program
@@ -910,17 +917,10 @@ DebugeeContinueOrStart()
         DebugeeStart();
         DWARFRead();
         
-        // NOTE(mateusz): For debug purpouses
-        size_t EntryPointAddress = FindEntryPointAddress();
-        printf("%lx\n", EntryPointAddress);
-        assert(EntryPointAddress);
-        
-        breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
-        BreakpointEnable(&BP);
-        Breakpoints[BreakpointCount++] = BP;
-        
-        size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
-        printf("LoadAddress = %lx\n", LoadAddress);
+        BreakAtMain();
+
+        //size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+        //printf("LoadAddress = %lx\n", LoadAddress);
     }
     
     ContinueProgram(Debuger.DebugeePID);
@@ -931,8 +931,8 @@ static void
 DeallocDebugInfo()
 {
     CloseDwarfSymbolsHandle();
-    ArenaDestroy(DI->Arena);
     
+    ArenaDestroy(DI->Arena);
     memset(DI, 0, sizeof(debug_info));
 }
 
@@ -941,20 +941,11 @@ DebugeeRestart()
 {
     if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
     {
-        //DebugeeStart();
-        
-        // NOTE(mateusz): For debug purpouses
-        //size_t EntryPointAddress = FindEntryPointAddress();
-        //assert(EntryPointAddress);
-        
-        //breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
-        //BreakpointEnable(&BP);
-        //Breakpoints[BreakpointCount++] = BP;
-        
-        //DWARFRead();
+        DebugeeKill();
+        DeallocDebugInfo();
+
+        DebugeeContinueOrStart();
     }
-    
-    printf("Unimplemented method!");
 }
 
 static void
@@ -964,7 +955,7 @@ DebugerMain()
     DI = (debug_info *)calloc(1, sizeof(debug_info));
     
     glfwInit();
-    GLFWwindow *Window = glfwCreateWindow(WindowWidth, WindowHeight, "debag", NULL, NULL);
+    GLFWwindow *Window = glfwCreateWindow(Gui->WindowWidth, Gui->WindowHeight, "debag", NULL, NULL);
     glfwMakeContextCurrent(Window);
     glewInit();
     
@@ -991,7 +982,7 @@ DebugerMain()
     u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
     strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
     
-    Regs = PeekRegisters(Debuger.DebugeePID);
+    Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     
     ImGuiInputTextFlags ITFlags = 0;
     ITFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
@@ -1040,7 +1031,7 @@ DebugerMain()
             if(ImGui::BeginMenu("File"))
             {
                 f32 OneThird = 0.3333333f;
-                ImGui::PushItemWidth(WindowWidth * OneThird);
+                ImGui::PushItemWidth(Gui->WindowWidth * OneThird);
                 ImGui::InputText("Program path", Debuger.DebugeeProgramPath, sizeof(Debuger.DebugeeProgramPath));
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
                 ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
@@ -1110,7 +1101,7 @@ DebugerMain()
                 ImGui::EndMenu();
             }
             
-            if(StatusText)
+            if(Gui->StatusText)
             {
                 auto StatusColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
                 ImGui::PushStyleColor(ImGuiCol_Button, StatusColor);
@@ -1119,7 +1110,7 @@ DebugerMain()
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0, 0));
                 
-                ImGui::Button(StatusText, ImVec2(WindowWidth, 0));
+                ImGui::Button(Gui->StatusText, ImVec2(Gui->WindowWidth, 0));
                 
                 ImGui::PopStyleVar(1);
                 ImGui::PopStyleColor(4);
@@ -1130,7 +1121,14 @@ DebugerMain()
         
         if(KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
-            DebugeeContinueOrStart();
+            if(KeyMods.Shit)
+            {
+                DebugeeRestart();
+            }
+            else
+            {
+                DebugeeContinueOrStart();
+            }
         }
         
         if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
@@ -1189,22 +1187,22 @@ DebugerMain()
             ImGuiShowBreakAtAddress();
         }
         
-        if(Debuger.ModalFuncShow)
+        if(Gui->ModalFuncShow)
         {
-            Debuger.ModalFuncShow();
+            Gui->ModalFuncShow();
         }
         
         ImGui::Begin("Disassembly", 0x0, WinFlags);
         
-        ImGui::SetWindowPos(ImVec2(WindowWidth / 2, MenuBarHeight));
-        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2 - MenuBarHeight));
+        ImGui::SetWindowPos(ImVec2(Gui->WindowWidth / 2, MenuBarHeight));
+        ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
         for(u32 I = 0; I < DisasmInstCount; I++)
         {
             disasm_inst *Inst = &DisasmInst[I];
             
-            if(Inst->Address == Regs.RIP)
+            if(Inst->Address == GetProgramCounter())
             {
                 ImGui::TextColored(CurrentLineColor,
                                    "0x%" PRIx64 ":\t%s\t\t%s\n",
@@ -1228,13 +1226,13 @@ DebugerMain()
         
         ImGui::Begin("Listings", 0x0, WinFlags);
         ImGui::SetWindowPos(ImVec2(0, MenuBarHeight));
-        ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2 - MenuBarHeight));
+        ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
         if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            di_src_line *Line = LineTableFindByAddress(Regs.RIP);
+            di_src_line *Line = LineTableFindByAddress(GetProgramCounter());
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
@@ -1280,7 +1278,7 @@ DebugerMain()
                             
                             breakpoint *BP = 0x0;
                             if(DrawingLine &&
-                               (BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID)) &&
+                               (BP = BreakpointFind(DrawingLine->Address)) &&
                                BreakpointEnabled(BP))
                             {
                                 ImGui::TextColored(BreakpointLineColor, "%.*s",
@@ -1298,7 +1296,7 @@ DebugerMain()
                             // at comments and other garbage
                             if(DrawingLine)
                             {
-                                breakpoint *BP = BreakpointFind(DrawingLine->Address, Debuger.DebugeePID);
+                                breakpoint *BP = BreakpointFind(DrawingLine->Address);
                                 if(BreakpointEnabled(BP))
                                 {
                                     BreakpointDisable(BP);
@@ -1331,8 +1329,8 @@ DebugerMain()
         
         ImGui::Begin("Program variables", 0x0, WinFlags);
         
-        ImGui::SetWindowPos(ImVec2(0, (WindowHeight / 3) * 2));
-        ImGui::SetWindowSize(ImVec2(WindowWidth, WindowHeight / 3));
+        ImGui::SetWindowPos(ImVec2(0, (Gui->WindowHeight / 3) * 2));
+        ImGui::SetWindowSize(ImVec2(Gui->WindowWidth, Gui->WindowHeight / 3));
         
         if(ImGui::BeginTabBar("Vars", TBFlags))
         {
@@ -1341,10 +1339,10 @@ DebugerMain()
                 ImGui::BeginChild("regs");
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
                 
-                di_function *Func = FindFunctionConfiningAddress(Regs.RIP);
+                di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
                 if(Func && Func->FrameBaseIsCFA)
                 {
-                    size_t FBReg = DWARFGetCFA(Regs.RIP);
+                    size_t FBReg = DWARFGetCFA(GetProgramCounter());
                     
                     ImGui::Columns(3, "tree", true);
                     
@@ -1373,7 +1371,7 @@ DebugerMain()
                         
                         if(LexScope->RangesCount == 0)
                         {
-                            if(AddressBetween(Regs.RIP, LexScope->LowPC, LexScope->HighPC - 1))
+                            if(AddressBetween(GetProgramCounter(), LexScope->LowPC, LexScope->HighPC - 1))
                             {
                                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                                 {
@@ -1386,7 +1384,7 @@ DebugerMain()
                         {
                             for(u32 RIndex = 0; RIndex < LexScope->RangesCount; RIndex++)
                             {
-                                if(AddressBetween(Regs.RIP, LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
+                                if(AddressBetween(GetProgramCounter(), LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
                                 {
                                     for(u32 I = 0; I < LexScope->VariablesCount; I++)
                                     {
@@ -1411,7 +1409,7 @@ DebugerMain()
             if(ImGui::BeginTabItem("x64 Registers"))
             {
                 ImGui::BeginChild("regs");
-                ImGuiShowRegisters(Regs);
+                ImGuiShowRegisters(Debuger.Regs);
                 ImGui::EndChild();
                 ImGui::EndTabItem();
             }
