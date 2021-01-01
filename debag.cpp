@@ -11,7 +11,7 @@
 #include <sys/prctl.h>
 #include <fcntl.h>
 
-#include <GL/glew.h>
+//#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <capstone/capstone.h>
 #include <libdwarf/dwarf.h>
@@ -19,7 +19,7 @@
 
 #include <libs/imgui/imgui.h>
 #include <libs/imgui/imgui_impl_glfw.h>
-#include <libs/imgui/imgui_impl_opengl3.h>
+#include <libs/imgui/imgui_impl_opengl2.h>
 
 #include "debag.h"
 #include "utils.h"
@@ -970,7 +970,6 @@ DebugerMain()
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(Gui->WindowWidth, Gui->WindowHeight, "debag", NULL, NULL);
     glfwMakeContextCurrent(Window);
-    glewInit();
     
     glfwSetKeyCallback(Window, KeyboardButtonCallback);
     glfwSetInputMode(Window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
@@ -984,7 +983,7 @@ DebugerMain()
     ImGui::StyleColorsDark();
     
     ImGui_ImplGlfw_InitForOpenGL(Window, true);
-    ImGui_ImplOpenGL3_Init("#version 130");
+    ImGui_ImplOpenGL2_Init();
     
     // Make windows square not round
     ImGuiStyle& style = ImGui::GetStyle();
