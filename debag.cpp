@@ -42,6 +42,7 @@
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
  *   - Can't see anything that is inside a union (anonymous strctures I guess)
+ *   - Add an option to open a new source file
  */
 
 static void
@@ -1454,9 +1455,12 @@ DebugerMain()
 
             if(ImGui::BeginMenu("File"))
             {
+                f32 OneThird = 0.3333333f;
+                ImGui::PushItemWidth(WindowWidth * OneThird);
                 ImGui::InputText("Program path", Debuger.DebugeeProgramPath, sizeof(Debuger.DebugeeProgramPath));
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
                 ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
+                ImGui::PopItemWidth();
 
                 ImGui::EndMenu();
             }
@@ -1520,7 +1524,23 @@ DebugerMain()
                 ImGui::Text("created by Mateusz Radomski.");
 
                 ImGui::EndMenu();
-            } 
+            }
+
+            if(StatusText)
+            {
+                auto StatusColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button, StatusColor);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, StatusColor);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, StatusColor);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0, 0));
+
+                ImGui::Button(StatusText, ImVec2(WindowWidth, 0));
+
+                ImGui::PopStyleVar(1);
+                ImGui::PopStyleColor(4);
+            }
+
             ImGui::EndMainMenuBar();
         }
 

@@ -28,7 +28,7 @@ WaitForSignal(i32 DebugeePID)
     
     if(WIFEXITED(WaitStatus))
     {
-        printf("Program finished it's execution\n");
+        StatusText = "Program finished it's execution";
         Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
         DeallocDebugInfo();
     }
@@ -62,7 +62,11 @@ WaitForSignal(i32 DebugeePID)
     }
     else if(SigInfo.si_signo == SIGSEGV)
     {
-        printf("Program seg faulted\n");
+        StatusText = "Program seg faulted";
+    }
+    else if(SigInfo.si_signo == SIGABRT)
+    {
+        StatusText = "Program aborted";
     }
     else
     {

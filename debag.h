@@ -178,6 +178,8 @@ keyboard_modifiers KeyMods = {};
 ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 
+char *StatusText = 0x0;
+
 static void ImGuiStartFrame();
 static void ImGuiEndFrame();
 static void ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName);
