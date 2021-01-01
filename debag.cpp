@@ -1121,7 +1121,7 @@ DebugerMain()
         
         if(KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
-            if(KeyMods.Shit)
+            if(KeyMods.Shift)
             {
                 DebugeeRestart();
             }
