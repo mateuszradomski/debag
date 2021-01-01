@@ -8,6 +8,3 @@ if (ImGui::BeginPopupContextItem("item context menu"))
 	ImGui::DragFloat("##Value",&value,0.1f,0.0f,0.0f);
 	ImGui::EndPopup();
 }
-
-For styling how variables look:
-ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0.0f);
