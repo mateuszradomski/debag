@@ -99,11 +99,11 @@ union x64_registers
         size_t RDX;
         size_t RDI;
         size_t RSI;
-
+        
         size_t RIP;
         size_t RBP;
         size_t RSP;
-
+        
         size_t R8;
         size_t R9;
         size_t R10;
@@ -112,7 +112,7 @@ union x64_registers
         size_t R13;
         size_t R14;
         size_t R15;
-
+        
         size_t OrigRax;
         size_t Cs;
         size_t Eflags;
@@ -201,17 +201,6 @@ static size_t GetProgramCounter();
 static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
 static char *GetRegisterNameByIndex(u32 Index);
 static u64 HexStringToInt(char *String);
-static void ImGuiEndFrame();
-static void ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
-static void ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
-static void ImGuiShowBreakAtAddress();
-static void ImGuiShowBreakAtFunction();
-static void ImGuiShowRegisters(x64_registers Regs);
-static void ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
-static void ImGuiShowValueAsString(size_t DereferencedAddress);
-static void ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "");
-static void ImGuiShowVariable(di_variable *Var, size_t FBReg);
-static void ImGuiStartFrame();
 static void KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, int Mods);
 static void MouseButtonCallback(GLFWwindow *Window, int Key, int Action, int Mods);
 static void MousePositionCallback(GLFWwindow *Window, double X, double Y);
@@ -231,8 +220,6 @@ static void StringReplaceChar(char *Str, char Find, char Replace);
 static void StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
 static bool StringsMatch(char *Str0, char *Str1);
 static void UpdateInfo();
-static void WindowSizeCallback(GLFWwindow*Window, i32 Width, i32 Height);
-static void  _ImGuiShowBreakAtAddressModalWindow();
-static void _ImGuiShowBreakAtFunctionModalWindow();
+static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
 
 #endif //DEBAG_H

@@ -24,9 +24,11 @@
 #include "debag.h"
 #include "utils.h"
 #include "dwarf.h"
+#include "gui.h"
 #include "utils.cpp"
 #include "dwarf.cpp"
 #include "flow.cpp"
+#include "gui.cpp"
 
 /*
  * A big big TODO list:
@@ -114,21 +116,6 @@ ButtonsUpdate(button *Buttons, u32 Count)
         Buttons[I].Pressed = Buttons[I].Down && !Buttons[I].Last;
         Buttons[I].Last = Buttons[I].Down;
     }
-}
-
-static void
-ImGuiStartFrame()
-{
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-}
-
-static void
-ImGuiEndFrame()
-{
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 static bool
@@ -246,7 +233,7 @@ StringReplaceChar(char *Str, char Find, char Replace)
         {
             Str[0] = Replace;
         }
-
+        
         Str++;
     }
 }
@@ -294,11 +281,11 @@ static char *
 StringDuplicate(arena *Arena, char *Str)
 {
     char *Result = 0x0;
-
+    
     u32 Len = StringLength(Str);
     Result = ArrayPush(Arena, char, Len + 1);
     StringCopy(Result, Str);
-
+    
     return Result;
 }
 
@@ -308,156 +295,156 @@ StringDuplicate(arena *Arena, char *Str)
 static void
 StringToArgv(char *Str, char **ArgvOut, u32 *Argc)
 {
-   bool InToken = false;
-   bool InContainer = false;
-   bool Escaped = false;
-   char ContainerStart = 0;
-
-   char *Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
-
-   u32 StrLen = StringLength(Str);
-   for(u32 I = 0; I < StrLen; I++)
-   {
-       char C = Str[I];
-
-       switch (C)
-       {
-           /* Handle whitespace */
-           case ' ':
-           case '\t':
-           case '\n':
-           {
-               if (!InToken)
-               {
-                   continue;
-               }
-
-               if (InContainer)
-               {
-                   int Idx = StringLength(Token);
-                   assert(Idx < ARGV_TOKEN_MAX);
-
-                   Token[Idx] = C;
-                   continue;
-               }
-
-               if(Escaped)
-               {
-                   Escaped = false;
-                   int Idx = StringLength(Token);
-                   assert(Idx < ARGV_TOKEN_MAX);
-
-                   Token[Idx] = C;
-                   continue;
-               }
-
-               /* if reached here, we're at end of token */
-               InToken = false;
-               assert(*Argc < ARGV_MAX);
-
-               ArgvOut[(*Argc)++] = Token;
-               Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+    bool InToken = false;
+    bool InContainer = false;
+    bool Escaped = false;
+    char ContainerStart = 0;
+    
+    char *Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+    
+    u32 StrLen = StringLength(Str);
+    for(u32 I = 0; I < StrLen; I++)
+    {
+        char C = Str[I];
+        
+        switch (C)
+        {
+            /* Handle whitespace */
+            case ' ':
+            case '\t':
+            case '\n':
+            {
+                if (!InToken)
+                {
+                    continue;
+                }
+                
+                if (InContainer)
+                {
+                    int Idx = StringLength(Token);
+                    assert(Idx < ARGV_TOKEN_MAX);
+                    
+                    Token[Idx] = C;
+                    continue;
+                }
+                
+                if(Escaped)
+                {
+                    Escaped = false;
+                    int Idx = StringLength(Token);
+                    assert(Idx < ARGV_TOKEN_MAX);
+                    
+                    Token[Idx] = C;
+                    continue;
+                }
+                
+                /* if reached here, we're at end of token */
+                InToken = false;
+                assert(*Argc < ARGV_MAX);
+                
+                ArgvOut[(*Argc)++] = Token;
+                Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
             }break;
-           /* Handle quotes */
-           case '\'':
-           case '\"':
-           {
-
-               if(Escaped)
-               {
-                   int Idx = StringLength(Token);
-                   assert(Idx < ARGV_TOKEN_MAX);
-
-                   Token[Idx] = C;
-                   Escaped = false;
-                   continue;
-               }
-
-               if(!InToken)
-               {
-                   InToken = true;
-                   InContainer = true;
-                   ContainerStart = C;
-                   continue;
-               }
-
-               if(InContainer)
-               {
-                   if(C == ContainerStart)
-                   {
-                       InContainer = false;
-                       InToken = false;
-                       assert(*Argc < ARGV_MAX);
-
-                       ArgvOut[(*Argc)++] = Token;
-                       Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
-                       continue;
-                   }
-                   else 
-                   {
-                       int Idx = StringLength(Token);
-                       assert(Idx < ARGV_TOKEN_MAX);
-
-                       Token[Idx] = C;
-                       continue;
-                   }
-               }
-
-               /* XXX in this case, we:
-                *    1. have a quote
-                *    2. are in a token
-                *    3. and not in a container
-                * e.g.
-                *    hell"o
-                *
-                * what's done here appears shell-dependent,
-                * but overall, it's an error.... i *think*
-                */
-               assert(!"Parse Error! Bad quotes\n");
-           }break;
-           case '\\':
-           {
-               if(InContainer && Str[I+1] != ContainerStart)
-               {
-                   int Idx = StringLength(Token);
-                   assert(Idx < ARGV_TOKEN_MAX);
-
-                   Token[Idx] = C;
-                   continue;
-               }
-               if(Escaped)
-               {
-                   int Idx = StringLength(Token);
-                   assert(Idx < ARGV_TOKEN_MAX);
-
-                   Token[Idx] = C;
-                   continue;
-               }
-
-               Escaped = true;
-           }break;
-           default:
-           {
-               if (!InToken) {
-                   InToken = true;
-               }
-
-               int Idx = StringLength(Token);
-               assert(Idx < ARGV_TOKEN_MAX);
-
-               Token[Idx] = C;
-           }break;
-       }
-   }
-
-   assert(!InContainer);
-   assert(!Escaped);
-   if(strlen(Token) != 0)
-   {
-       assert(*Argc < ARGV_MAX);
-
-       ArgvOut[(*Argc)++] = Token;
-   }
+            /* Handle quotes */
+            case '\'':
+            case '\"':
+            {
+                
+                if(Escaped)
+                {
+                    int Idx = StringLength(Token);
+                    assert(Idx < ARGV_TOKEN_MAX);
+                    
+                    Token[Idx] = C;
+                    Escaped = false;
+                    continue;
+                }
+                
+                if(!InToken)
+                {
+                    InToken = true;
+                    InContainer = true;
+                    ContainerStart = C;
+                    continue;
+                }
+                
+                if(InContainer)
+                {
+                    if(C == ContainerStart)
+                    {
+                        InContainer = false;
+                        InToken = false;
+                        assert(*Argc < ARGV_MAX);
+                        
+                        ArgvOut[(*Argc)++] = Token;
+                        Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+                        continue;
+                    }
+                    else 
+                    {
+                        int Idx = StringLength(Token);
+                        assert(Idx < ARGV_TOKEN_MAX);
+                        
+                        Token[Idx] = C;
+                        continue;
+                    }
+                }
+                
+                /* XXX in this case, we:
+                 *    1. have a quote
+                 *    2. are in a token
+                 *    3. and not in a container
+                 * e.g.
+                 *    hell"o
+                 *
+                 * what's done here appears shell-dependent,
+                 * but overall, it's an error.... i *think*
+                 */
+                assert(!"Parse Error! Bad quotes\n");
+            }break;
+            case '\\':
+            {
+                if(InContainer && Str[I+1] != ContainerStart)
+                {
+                    int Idx = StringLength(Token);
+                    assert(Idx < ARGV_TOKEN_MAX);
+                    
+                    Token[Idx] = C;
+                    continue;
+                }
+                if(Escaped)
+                {
+                    int Idx = StringLength(Token);
+                    assert(Idx < ARGV_TOKEN_MAX);
+                    
+                    Token[Idx] = C;
+                    continue;
+                }
+                
+                Escaped = true;
+            }break;
+            default:
+            {
+                if (!InToken) {
+                    InToken = true;
+                }
+                
+                int Idx = StringLength(Token);
+                assert(Idx < ARGV_TOKEN_MAX);
+                
+                Token[Idx] = C;
+            }break;
+        }
+    }
+    
+    assert(!InContainer);
+    assert(!Escaped);
+    if(strlen(Token) != 0)
+    {
+        assert(*Argc < ARGV_MAX);
+        
+        ArgvOut[(*Argc)++] = Token;
+    }
 }
 
 static arena *
@@ -476,10 +463,10 @@ static arena *
 ArenaCreateZeros(size_t Size)
 {
     arena *Result = 0x0;
-
+    
     Result = ArenaCreate(Size);
     memset(Result->BasePtr, 0, Size);
-
+    
     return Result;
 }
 
@@ -490,7 +477,7 @@ ArenaDestroy(arena *Arena)
     {
         free(Arena->BasePtr);
     }
-
+    
     free(Arena);
 }
 
@@ -520,7 +507,7 @@ static size_t
 ArenaFreeBytes(arena *Arena)
 {
     size_t Result = Arena->Size - (Arena->CursorPtr - Arena->BasePtr);
-
+    
     return Result;
 }
 
@@ -538,7 +525,7 @@ static x64_registers
 ParseUserRegsStruct(user_regs_struct URS)
 {
     x64_registers Result = {};
-
+    
     Result.R15 = URS.r15;
     Result.R14 = URS.r14;
     Result.R13 = URS.r13;
@@ -566,7 +553,7 @@ ParseUserRegsStruct(user_regs_struct URS)
     Result.Es = URS.es;
     Result.Fs = URS.fs;
     Result.Gs = URS.gs;
-
+    
     return Result;
 }
 
@@ -574,7 +561,7 @@ static user_regs_struct
 ParseToUserRegsStruct(x64_registers Regs)
 {
     user_regs_struct Result = {};
-
+    
     Result.r15 = Regs.R15;
     Result.r14 = Regs.R14;
     Result.r13 = Regs.R13;
@@ -602,7 +589,7 @@ ParseToUserRegsStruct(x64_registers Regs)
     Result.es = Regs.Es;
     Result.fs = Regs.Fs;
     Result.gs = Regs.Gs;
-
+    
     return Result;
 }
 
@@ -610,10 +597,10 @@ static x64_registers
 PeekRegisters(i32 DebugeePID)
 {
     x64_registers Result = {};
-
+    
     user_regs_struct USR = {};
     ptrace(PTRACE_GETREGS, DebugeePID, 0x0, &USR);
-
+    
     Result = ParseUserRegsStruct(USR);
     return Result;
 }
@@ -678,7 +665,7 @@ GetRegisterNameByIndex(u32 Index)
         "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
         "OrigRax", "Cs", "Eflags", "Ss", "FsBase", "GsBase", "Ds", "Es", "Fs", "Gs",
     };
-
+    
     return Names[Index];
 }
 
@@ -686,409 +673,6 @@ static size_t
 GetProgramCounter()
 {
     return Regs.RIP;
-}
-
-static void
-ImGuiShowRegisters(x64_registers Regs)
-{
-    ImGui::Columns(4, 0x0, true);
-
-    // NOTE(mateusz): We ignore we registers that are the last 10 in the 'x64_registers' struct
-    u32 IgnoreCount = 10;
-
-    for(u32 I = 0; I < (sizeof(Regs) / sizeof(size_t)) - IgnoreCount; I++)
-    {
-        ImGui::Text("%s : %lX", GetRegisterNameByIndex(I), Regs.Array[I]);
-        ImGui::NextColumn();
-    }
-    
-    ImGui::Columns(1);
-}
-
-static void
-ImGuiShowValueAsString(size_t DereferencedAddress)
-{
-    char Temp[256] = {};
-    u32 TIndex = 0;
-    
-    Temp[TIndex++] = '\"';
-    if(DereferencedAddress)
-    {
-        size_t MachineWord = PeekDebugeeMemory(DereferencedAddress, Debuger.DebugeePID);
-        char *PChar = (char *)&MachineWord;
-        
-        int RemainingBytes = sizeof(MachineWord);
-        while(PChar[0] && IS_PRINTABLE(PChar[0]))
-        {
-            Temp[TIndex++] = PChar[0];
-            PChar += 1;
-            
-            RemainingBytes -= 1;
-            if(RemainingBytes == 0)
-            {
-                RemainingBytes = sizeof(MachineWord);
-                DereferencedAddress += sizeof(MachineWord);
-                
-                MachineWord = PeekDebugeeMemory(DereferencedAddress, Debuger.DebugeePID);
-                PChar = (char *)&MachineWord;
-            }
-        }
-    }
-    Temp[TIndex++] = '\"';
-    assert(TIndex < sizeof(Temp));
-    
-    char AddrTemp[24] = {};
-    sprintf(AddrTemp, " (%p)", (void *)DereferencedAddress);
-    
-    for(u32 I = 0; I < sizeof(AddrTemp); I++)
-    {
-        Temp[TIndex++] = AddrTemp[I];
-    }
-    assert(TIndex < sizeof(Temp));
-    
-    ImGui::Text("%s", Temp);
-}
-
-static void
-ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
-{
-    di_base_type *BType = Underlaying.Type;
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-    
-    ImGui::Text("%s", VarName);
-    ImGui::NextColumn();
-    
-    union types_ptrs
-    {
-        void *Void;
-        float *Float;
-        double *Double;
-        char *Char;
-        short *Short;
-        int *Int;
-        long long *Long;
-    } TypesPtrs;
-    TypesPtrs.Void = &MachineWord;
-    
-    if(Underlaying.Flags & TYPE_IS_POINTER)
-    {
-        if(BType->Encoding == DW_ATE_signed_char && Underlaying.PointerCount == 1)
-        {
-            size_t DereferencedAddress = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-            ImGuiShowValueAsString(DereferencedAddress);
-        }
-        else
-        {
-            ImGui::Text("%p", TypesPtrs.Void);
-        }
-    }
-    else
-    {
-        switch(BType->ByteSize)
-        {
-            case 1:
-            {
-                if(BType->Encoding == DW_ATE_signed_char)
-                {
-                    ImGui::Text("%c (%x)", *TypesPtrs.Char, (*TypesPtrs.Char));
-                }
-                else
-                {
-                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Char);
-                }
-            }break;
-            case 2:
-            {
-                if(BType->Encoding == DW_ATE_signed)
-                {
-                    ImGui::Text("%d", *TypesPtrs.Short);
-                }
-                else
-                {
-                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Short);
-                }
-            }break;
-            case 4:
-            {
-                if(BType->Encoding == DW_ATE_unsigned)
-                {
-                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Int);
-                }
-                else if(BType->Encoding == DW_ATE_float)
-                {
-                    ImGui::Text("%f", *TypesPtrs.Float);
-                }
-                else
-                {
-                    ImGui::Text("%d", *TypesPtrs.Int);
-                }
-            }break;
-            case 8:
-            {
-                if(BType->Encoding == DW_ATE_unsigned)
-                {
-                    ImGui::Text("%llu", (unsigned long long)*TypesPtrs.Long);
-                }
-                else if(BType->Encoding == DW_ATE_float)
-                {
-                    ImGui::Text("%f", *TypesPtrs.Double);
-                }
-                else
-                {
-                    ImGui::Text("%lld", *TypesPtrs.Long);
-                }
-            }break;
-            default:
-            {
-                printf("Unsupported byte size = %d", BType->ByteSize);
-            }break;
-        }
-    }
-    
-    char TypeName[128] = {};
-    strcat(TypeName, Underlaying.Name);
-    
-    if(Underlaying.Flags & TYPE_IS_POINTER)
-    {
-        strcat(TypeName, " *");
-    }
-    
-    ImGui::NextColumn();
-    ImGui::Text("%s", TypeName);
-    ImGui::NextColumn();
-}
-
-static void
-ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
-{
-    di_struct_type *Struct = Underlaying.Struct;
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-    
-    char TypeName[128] = {};
-    StringConcat(TypeName, Underlaying.Name);
-    
-    // TODO(mateusz): Stacked pointers dereference, like (void **)
-    if(Underlaying.Flags & TYPE_IS_POINTER)
-    {
-        VarAddress = MachineWord;
-        
-        strcat(TypeName, " *");
-    }
-    
-    bool Open = ImGui::TreeNode(VarName, "%s", VarName);
-    ImGui::NextColumn();
-    ImGui::Text("0x%lx", VarAddress);
-    ImGui::NextColumn();
-    ImGui::Text("%s", TypeName);
-    ImGui::NextColumn();
-    
-    if(Open)
-    {
-        for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
-        {
-            di_struct_member *Member = &Struct->Members[MemberIndex];
-            size_t MemberAddress = VarAddress + Member->ByteLocation;
-            assert(Member->Name);
-            
-            ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
-        }
-        
-        ImGui::TreePop();
-    }
-    
-}
-
-static void
-ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
-{
-    char TypeName[128] = {};
-    strcat(TypeName, Underlaying.Name);
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-    
-    // TODO(mateusz): Stacked pointers dereference, like (void **)
-    if(Underlaying.Flags & TYPE_IS_POINTER)
-    {
-        VarAddress = MachineWord;
-        
-        strcat(TypeName, " *");
-    }
-    
-    bool Open = ImGui::TreeNode(VarName, "%s", VarName);
-    ImGui::NextColumn();
-    if(Underlaying.Type->Encoding == DW_ATE_signed_char)
-    {
-        ImGuiShowValueAsString(VarAddress);
-    }
-    else
-    {
-        ImGui::Text("0x%lx", VarAddress);
-    }
-    
-    ImGui::NextColumn();
-    ImGui::Text("%s[%ld]", TypeName, Underlaying.ArrayUpperBound + 1);
-    ImGui::NextColumn();
-    
-    if(Open)
-    {
-        for(u32 I = 0; I <= Underlaying.ArrayUpperBound; I++)
-        {
-            //size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
-            
-            if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
-            {
-                char VarNameWI[128] = {};
-                sprintf(VarNameWI, "%s[%d]", VarName, I);
-                
-                ImGuiShowStructType(Underlaying, VarAddress, VarNameWI);
-                
-                VarAddress += Underlaying.Struct->ByteSize;
-            }
-            else if(Underlaying.Flags & TYPE_IS_BASE)
-            {
-                char VarNameWI[128] = {};
-                sprintf(VarNameWI, "%s[%d]", VarName, I);
-                
-                ImGuiShowBaseType(Underlaying, VarAddress, VarNameWI);
-                
-                VarAddress += Underlaying.Type->ByteSize;
-            }
-            else
-            {
-                //printf("Var [%s] doesn't have a type\n", VarName);
-                //assert(false);
-            }
-        }
-        ImGui::TreePop();
-    }
-}
-
-static void
-ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
-{
-    di_underlaying_type Underlaying = FindUnderlayingType(TypeOffset);
-    
-    if(Underlaying.Flags & TYPE_IS_ARRAY)
-    {
-        ImGuiShowArrayType(Underlaying, VarAddress, VarName);
-    }
-    else if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
-    {
-        // NOTE(mateusz): We are treating unions and struct as the same thing, but with ByteLocation = 0
-        assert(sizeof(di_union_type) == sizeof(di_struct_type));
-        assert(sizeof(di_union_member) == sizeof(di_struct_member));
-        
-        ImGuiShowStructType(Underlaying, VarAddress, VarName);
-    }
-    else if(Underlaying.Flags & TYPE_IS_BASE)
-    {
-        ImGuiShowBaseType(Underlaying, VarAddress, VarName);
-    }
-    else
-    {
-        //printf("Var [%s] doesn't have a type\n", VarName);
-        //assert(false);
-    }
-}
-
-static void
-ImGuiShowVariable(di_variable *Var, size_t FBReg)
-{
-    // TODO(mateusz): Other ways of accessing variables
-    if(Var->LocationAtom == DW_OP_fbreg)
-    {
-        size_t VarAddress = FBReg + Var->Offset;
-        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
-    }
-}
-
-static void
-_ImGuiShowBreakAtFunctionModalWindow()
-{
-    char *FuncBreakLabel = "Function to break at"; 
-
-    if(ImGui::BeginPopupModal(FuncBreakLabel))
-    {
-        ImGui::Text("Enter the function name you wish to set a brekpoint");
-        ImGui::Separator();
-
-        ImGui::InputText("Name", Debuger.BreakFuncName, sizeof(Debuger.BreakFuncName));
-
-        if(ImGui::Button("OK", ImVec2(120, 0)))
-        {
-            BreakAtFunctionName(Debuger.BreakFuncName);
-            UpdateInfo();
-
-            ImGui::CloseCurrentPopup(); 
-            memset(Debuger.BreakFuncName, 0, sizeof(Debuger.BreakFuncName));
-            Debuger.ModalFuncShow = 0x0;
-        }
-        ImGui::SetItemDefaultFocus();
-
-        ImGui::SameLine();
-        if(ImGui::Button("Cancel", ImVec2(120, 0)))
-        {
-            ImGui::CloseCurrentPopup();
-            memset(Debuger.BreakFuncName, 0, sizeof(Debuger.BreakFuncName));
-            Debuger.ModalFuncShow = 0x0;
-        }
-        ImGui::EndPopup();
-    }
-}
-
-static void
-ImGuiShowBreakAtFunction()
-{
-    char *FuncBreakLabel = "Function to break at"; 
-
-    ImGui::OpenPopup(FuncBreakLabel);
-    ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
-    ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    Debuger.ModalFuncShow = _ImGuiShowBreakAtFunctionModalWindow;
-}
-
-static void 
-_ImGuiShowBreakAtAddressModalWindow()
-{
-    char *AddressBreakLabel = "Address to break at";
-
-    if(ImGui::BeginPopupModal(AddressBreakLabel))
-    {
-        ImGui::Text("Enter the address you wish to set a brekpoint, hex or decimal");
-        ImGui::Separator();
-
-        ImGui::InputText("Address", Debuger.BreakAddress, sizeof(Debuger.BreakAddress));
-
-        if(ImGui::Button("OK", ImVec2(120, 0)))
-        {
-            BreakAtAddress(Debuger.BreakAddress);
-            UpdateInfo();
-
-            ImGui::CloseCurrentPopup(); 
-            memset(Debuger.BreakAddress, 0, sizeof(Debuger.BreakAddress));
-            Debuger.ModalFuncShow = 0x0;
-        }
-
-        ImGui::SetItemDefaultFocus();
-        ImGui::SameLine();
-        if(ImGui::Button("Cancel", ImVec2(120, 0)))
-        {
-            ImGui::CloseCurrentPopup();
-            memset(Debuger.BreakAddress, 0, sizeof(Debuger.BreakAddress));
-            Debuger.ModalFuncShow = 0x0;
-        }
-        ImGui::EndPopup();
-    }
-}
-
-static void
-ImGuiShowBreakAtAddress()
-{
-    char *AddressBreakLabel = "Address to break at";
-    ImGui::OpenPopup(AddressBreakLabel);
-    ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
-    ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-    Debuger.ModalFuncShow = _ImGuiShowBreakAtAddressModalWindow;
 }
 
 static size_t
@@ -1168,7 +752,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
         u8 InstrInMemory[16] = {};
         PeekDebugeeMemoryArray(InstructionAddress, AddrRange.End,
                                DebugeePID, InstrInMemory, sizeof(InstrInMemory));
-
+        
         {
             breakpoint *BP = 0x0; ;
             if((BP = BreakpointFind(InstructionAddress, DebugeePID)) && BreakpointEnabled(BP))
@@ -1302,7 +886,7 @@ DebugeeStart()
         {
             i32 Result = chdir(Debuger.PathToRunIn);
             assert(Result == 0);
-
+            
             char CWDStr[128] = {};
             printf("getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
         }
@@ -1325,20 +909,20 @@ DebugeeContinueOrStart()
     {
         DebugeeStart();
         DWARFRead();
-
+        
         // NOTE(mateusz): For debug purpouses
         size_t EntryPointAddress = FindEntryPointAddress();
         printf("%lx\n", EntryPointAddress);
         assert(EntryPointAddress);
-
+        
         breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
         BreakpointEnable(&BP);
         Breakpoints[BreakpointCount++] = BP;
-
+        
         size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
         printf("LoadAddress = %lx\n", LoadAddress);
     }
-
+    
     ContinueProgram(Debuger.DebugeePID);
     UpdateInfo();
 }
@@ -1348,7 +932,7 @@ DeallocDebugInfo()
 {
     CloseDwarfSymbolsHandle();
     ArenaDestroy(DI->Arena);
-
+    
     memset(DI, 0, sizeof(debug_info));
 }
 
@@ -1358,18 +942,18 @@ DebugeeRestart()
     if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
     {
         //DebugeeStart();
-
+        
         // NOTE(mateusz): For debug purpouses
         //size_t EntryPointAddress = FindEntryPointAddress();
         //assert(EntryPointAddress);
-
+        
         //breakpoint BP = BreakpointCreate(EntryPointAddress, Debuger.DebugeePID);
         //BreakpointEnable(&BP);
         //Breakpoints[BreakpointCount++] = BP;
-
+        
         //DWARFRead();
     }
-                
+    
     printf("Unimplemented method!");
 }
 
@@ -1421,10 +1005,10 @@ DebugerMain()
     assert(cs_open(CS_ARCH_X86, CS_MODE_64, &DisAsmHandle) == CS_ERR_OK);
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
-
+    
     bool CenteredDissassembly = false;
     bool CenteredSourceCode = false;
-
+    
     while(!glfwWindowShouldClose(Window))
     {
         //if(!Debuger.InputChange) { goto EndDraw; }
@@ -1444,7 +1028,7 @@ DebugerMain()
         glClear(GL_COLOR_BUFFER_BIT);
         
         ImGuiStartFrame();
-
+        
         f64 MenuBarHeight = 0.0;
         bool BreakAtFunction = false;
         bool BreakAtAddress = false;
@@ -1452,7 +1036,7 @@ DebugerMain()
         {
             auto MenuBarSize = ImGui::GetWindowSize();
             MenuBarHeight = MenuBarSize.y;
-
+            
             if(ImGui::BeginMenu("File"))
             {
                 f32 OneThird = 0.3333333f;
@@ -1461,13 +1045,13 @@ DebugerMain()
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
                 ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
                 ImGui::PopItemWidth();
-
+                
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Control"))
             {
                 bool IsRunning = Debuger.Flags & DEBUGEE_FLAG_RUNNING;
-
+                
                 if (ImGui::MenuItem("Start process", "F5", false, !IsRunning))
                 {
                     DebugeeContinueOrStart();
@@ -1476,9 +1060,9 @@ DebugerMain()
                 {
                     DebugeeRestart();
                 }
-
+                
                 ImGui::Separator();
-
+                
                 if (ImGui::MenuItem("Continue", "F5", false, IsRunning))
                 {
                     DebugeeContinueOrStart();
@@ -1503,29 +1087,29 @@ DebugerMain()
                     StepInstruction(Debuger.DebugeePID);
                     UpdateInfo();
                 }
-
+                
                 ImGui::Separator();
-
+                
                 if(ImGui::MenuItem("Break at function", "Ctrl+b", false, IsRunning))
                 {
                     BreakAtFunction = true;
                 }
-
+                
                 if (ImGui::MenuItem("Break at address", "Ctrl+B", false, IsRunning))
                 {
                     BreakAtAddress = true;
                 }
-
+                
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Help"))
             {
                 ImGui::Text("Debag is a C/C++ GUI debugger for Linux");
                 ImGui::Text("created by Mateusz Radomski.");
-
+                
                 ImGui::EndMenu();
             }
-
+            
             if(StatusText)
             {
                 auto StatusColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
@@ -1534,16 +1118,16 @@ DebugerMain()
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, StatusColor);
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0, 0));
-
+                
                 ImGui::Button(StatusText, ImVec2(WindowWidth, 0));
-
+                
                 ImGui::PopStyleVar(1);
                 ImGui::PopStyleColor(4);
             }
-
+            
             ImGui::EndMainMenuBar();
         }
-
+        
         if(KeyboardButtons[GLFW_KEY_F5].Pressed)
         {
             DebugeeContinueOrStart();
@@ -1553,7 +1137,7 @@ DebugerMain()
         {
             bool F10 = KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat;
             bool F11 = KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat;
-
+            
             if(KeyMods.Shift)
             {
                 if(F10)
@@ -1580,9 +1164,9 @@ DebugerMain()
                     UpdateInfo();
                 }
             }
-
+            
             bool Ctrlb = KeyboardButtons[GLFW_KEY_B].Pressed && KeyMods.Control;
-
+            
             if(Ctrlb)
             {
                 if(KeyMods.Shift || KeyMods.CapsLock)
@@ -1595,7 +1179,7 @@ DebugerMain()
                 }
             }
         }
-
+        
         if(BreakAtFunction)
         {
             ImGuiShowBreakAtFunction();
@@ -1604,14 +1188,14 @@ DebugerMain()
         {
             ImGuiShowBreakAtAddress();
         }
-
+        
         if(Debuger.ModalFuncShow)
         {
             Debuger.ModalFuncShow();
         }
-
+        
         ImGui::Begin("Disassembly", 0x0, WinFlags);
-
+        
         ImGui::SetWindowPos(ImVec2(WindowWidth / 2, MenuBarHeight));
         ImGui::SetWindowSize(ImVec2(WindowWidth / 2, (WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
@@ -1662,7 +1246,7 @@ DebugerMain()
                 (void)TIFlags;
                 
                 char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
-//                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
+                //                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
                 if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
                 {
                     //printf("child on %u\n", SrcFileIndex);
