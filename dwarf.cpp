@@ -838,7 +838,6 @@ ranges have been read then don't read the low-high
                         Dwarf_Signed RangesCount = 0;
                         Dwarf_Unsigned ByteCount = 0;
                         CompUnit->RangesCount = 0;
-                        printf("ranges\n");
                         Dwarf_Off DebugRangesOffset = 0;
                         DWARF_CALL(dwarf_global_formref(Attribute, &DebugRangesOffset, Error));
                         
@@ -898,44 +897,6 @@ ranges have been read then don't read the low-high
             {
                 assert(CompUnit->RangesLowPCs && CompUnit->RangesHighPCs);
             }
-            
-#if 0            
-            Dwarf_Unsigned Version = 0;
-            Dwarf_Small TableType = 0;
-            Dwarf_Line_Context LineCtx = 0;
-            DWARF_CALL(dwarf_srclines_b(DIE, &Version, &TableType, &LineCtx, Error));
-            
-            Dwarf_Signed SrcFilesCount = 0;
-            dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
-            DI->SourceFilesInExec += SrcFilesCount;
-            
-            printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
-            
-            Dwarf_Line *LineBuffer = 0;
-            Dwarf_Signed LineCount = 0;
-            DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
-            
-            for (i32 I = 0; I < LineCount; ++I) {
-                Dwarf_Addr LineAddr = 0;
-                Dwarf_Unsigned FileNum = 0;
-                Dwarf_Unsigned LineNum = 0;
-                char *LineSrcFile = 0;
-                
-                DWARF_CALL(dwarf_lineno(LineBuffer[I], &LineNum, Error));
-                DWARF_CALL(dwarf_line_srcfileno(LineBuffer[I], &FileNum, Error));
-                if (FileNum) {
-                    FileNum -= 1;
-                }
-                
-                DWARF_CALL(dwarf_lineaddr(LineBuffer[I], &LineAddr, Error));
-                DWARF_CALL(dwarf_linesrc(LineBuffer[I], &LineSrcFile, Error));
-                
-                di_src_line *LTEntry = &DI->SourceLines[DI->SourceLinesCount++];
-                LTEntry->Address = LineAddr;
-                LTEntry->LineNum = LineNum;
-                LTEntry->SrcFileIndex = SrcFileAssociatePath(LineSrcFile);
-            }
-#endif
         }break;
         case DW_TAG_subprogram:
         {
