@@ -180,53 +180,59 @@ ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 
 char *StatusText = 0x0;
 
-static void ImGuiStartFrame();
-static void ImGuiEndFrame();
-static void ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName);
-
-static bool CharInString(char *String, char C);
-static u32 StringCountChar(char *String, char C);
-static u64 HexStringToInt(char *String);
-static char *StringDuplicate(arena *Arena, char *Str);
-
-static x64_registers PeekRegisters(i32 DebugeePID);
-static void SetRegisters(x64_registers Regs, i32 DebugeePID);
-static x64_registers ParseUserRegsStruct(user_regs_struct URS);
-static user_regs_struct ParseToUserRegsStruct(x64_registers Regs);
-
-static breakpoint *BreakpointFind(u64 Address, i32 DebugeePID);
-static bool BreakpointEnabled(breakpoint *BP);
-static breakpoint BreakpointCreate(u64 Address, i32 DebugeePID);
-static void BreakpointEnable(breakpoint *BP);
-static void BreakpointDisable(breakpoint *BP);
-
-static address_range AddressRangeCurrentAndNextLine();
-static void UpdateInfo();
-static void ImGuiShowRegisters(user_regs_struct Regs);
-static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
-static void PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
-static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
-static inst_type GetInstructionType(cs_insn *Instruction);
-static size_t FindEntryPointAddress();
-
-static bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
-static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
-
-static bool CharInString(char *String, char C);
-static u32 StringCountChar(char *String, char C);
-static void StringCopy(char *Dest, char *Src);
-static void StringConcat(char *Dest, char *Src);
-static bool StringsMatch(char *Str0, char *Str1);
-static u64 HexStringToInt(char *String);
-static char *DumpFile(arena *Arena, char *Path);
-
+static inline bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
 static arena *ArenaCreate(size_t Size);
 static arena *ArenaCreateZeros(size_t Size);
-static void *ArenaPush(arena *Arena, size_t Size);
 static void ArenaDestroy(arena *Arena);
 static size_t ArenaFreeBytes(arena *Arena);
-
-static void DebugerMain();
+static void *ArenaPush(arena *Arena, size_t Size);
+static void ButtonsUpdate(button *Buttons, u32 Count);
+static bool CharInString(char *String, char C);
 static void DeallocDebugInfo();
+static void DebugeeContinueOrStart();
+static void DebugeeRestart();
+static void DebugeeStart();
+static void DebugerMain();
+static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
+static char *DumpFile(arena *Arena, char *Path);
+static void GLFWModsToKeyboardModifiers(int Mods);
+static inst_type GetInstructionType(cs_insn *Instruction);
+static size_t GetProgramCounter();
+static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
+static char *GetRegisterNameByIndex(u32 Index);
+static u64 HexStringToInt(char *String);
+static void ImGuiEndFrame();
+static void ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
+static void ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
+static void ImGuiShowBreakAtAddress();
+static void ImGuiShowBreakAtFunction();
+static void ImGuiShowRegisters(x64_registers Regs);
+static void ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
+static void ImGuiShowValueAsString(size_t DereferencedAddress);
+static void ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "");
+static void ImGuiShowVariable(di_variable *Var, size_t FBReg);
+static void ImGuiStartFrame();
+static void KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, int Mods);
+static void MouseButtonCallback(GLFWwindow *Window, int Key, int Action, int Mods);
+static void MousePositionCallback(GLFWwindow *Window, double X, double Y);
+static user_regs_struct ParseToUserRegsStruct(x64_registers Regs);
+static x64_registers ParseUserRegsStruct(user_regs_struct URS);
+static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
+static void PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
+static x64_registers PeekRegisters(i32 DebugeePID);
+static void SetRegisters(x64_registers Regs, i32 DebugeePID);
+static void StringConcat(char *Dest, char *Src);
+static void StringCopy(char *Dest, char *Src);
+static u32 StringCountChar(char *String, char C);
+static char *StringDuplicate(arena *Arena, char *Str);
+static char *StringFindLastChar(char *String, char C);
+static u32 StringLength(char *Str);
+static void StringReplaceChar(char *Str, char Find, char Replace);
+static void StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
+static bool StringsMatch(char *Str0, char *Str1);
+static void UpdateInfo();
+static void WindowSizeCallback(GLFWwindow*Window, i32 Width, i32 Height);
+static void  _ImGuiShowBreakAtAddressModalWindow();
+static void _ImGuiShowBreakAtFunctionModalWindow();
 
 #endif //DEBAG_H

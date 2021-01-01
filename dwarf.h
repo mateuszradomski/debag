@@ -266,4 +266,31 @@ struct debug_info
     int DwarfFd;
 };
 
+static bool AddressInAnyCompileUnit(size_t Address);
+static bool AddressInCompileUnit(di_compile_unit *CU, size_t Address);
+static address_range AddressRangeCurrentAndNextLine(size_t StartAddress);
+static bool BaseTypeIsDoubleFloat(di_base_type *Type);
+static bool BaseTypeIsFloat(di_base_type *Type);
+static char *BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
+static void CloseDwarfSymbolsHandle();
+static u32 CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx);
+static void DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT]);
+static size_t DWARFGetCFA(size_t PC);
+static void DWARFRead();
+static void DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE);
+static void DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum, u32 *LineIdxOut);
+static Dwarf_Die FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset);
+static size_t FindEntryPointAddress();
+static di_function *FindFunctionConfiningAddress(size_t Address);
+static di_src_file *FindSourceFile(char *Path);
+static di_underlaying_type FindUnderlayingType(size_t BTDIEOffset);
+static size_t GetDebugeeLoadAddress(i32 DebugeePID);
+static di_src_line *LineFindByNumber(u32 LineNum, u32 SrcFileIndex);
+static di_src_line *LineTableFindByAddress(size_t Address);
+static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
+static bool OpenDwarfSymbolsHandle();
+static di_src_file *PushSourceFile(char *Path, u32 SrcLineCount);
+static di_src_file *PushSourceFile(char *Path);
+static u32 SrcFileAssociatePath(char *Path);
+
 #endif //DWARF_H
