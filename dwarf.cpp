@@ -1,4 +1,3 @@
-
 debug_info *DI = 0x0;
 
 static bool
@@ -1534,6 +1533,63 @@ ranges have been read then don't read the low-high
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
             StructType->DIEOffset = DIEOffset;
             
+            /*
+            This is to support things like this
+            < 1><0x00009c75>    DW_TAG_union_type
+                                  DW_AT_name                  Vec3
+                                  DW_AT_byte_size             0x0000000c
+                                  DW_AT_decl_file             0x00000001 /home/mateusz/src/cpp/hamster/src/hamster_math.h
+                                  DW_AT_decl_line             0x00000040
+                                  DW_AT_decl_column           0x00000007
+                                  DW_AT_sibling               <0x00009d35>
+            < 2><0x00009c82>      DW_TAG_structure_type
+                                    DW_AT_byte_size             0x0000000c
+                                    DW_AT_decl_file             0x00000001 /home/mateusz/src/cpp/hamster/src/hamster_math.h
+                                    DW_AT_decl_line             0x00000043
+                                    DW_AT_decl_column           0x00000002
+                                    DW_AT_sibling               <0x00009cad>
+            < 3><0x00009c8b>        DW_TAG_member
+                                      DW_AT_name                  x
+                                      DW_AT_decl_file             0x00000001 /home/mateusz/src/cpp/hamster/src/hamster_math.h
+                                      DW_AT_decl_line             0x00000044
+                                      DW_AT_decl_column           0x00000007
+                                      DW_AT_type                  <0x000096d6>
+                                      DW_AT_data_member_location  0
+            < 3><0x00009c96>        DW_TAG_member
+                                      DW_AT_name                  y
+                                      DW_AT_decl_file             0x00000001 /home/mateusz/src/cpp/hamster/src/hamster_math.h
+                                      DW_AT_decl_line             0x00000045
+                                      DW_AT_decl_column           0x00000007
+                                      DW_AT_type                  <0x000096d6>
+                                      DW_AT_data_member_location  4
+            < 3><0x00009ca1>        DW_TAG_member
+                                      DW_AT_name                  z
+                                      DW_AT_decl_file             0x00000001 /home/mateusz/src/cpp/hamster/src/hamster_math.h
+                                      DW_AT_decl_line             0x00000046
+                                      DW_AT_decl_column           0x00000007
+                                      DW_AT_type                  <0x000096d6>
+                                      DW_AT_data_member_location  8
+
+            When there are structure types emplaced in the union instead of a member and a offset to it.
+            */
+            if(WasUnion && DI->DIEIndentLevel == DI->LastUnionIndent + 1)
+            {
+                // There is a possibility of there not being enough space for the member given the fact we don't count it
+                // when we are doing a pass over all the DIEs
+                di_union_member *Member = &DI->UnionMembers[DI->UnionMembersCount++];
+                
+                di_union_type *Union = &DI->UnionTypes[DI->UnionTypesCount - 1];
+                if(Union->MembersCount == 0)
+                {
+                    Union->Members = Member;
+                }
+                
+                Union->MembersCount += 1;
+                Member->ByteLocation = 0;
+                Member->Name = "";
+                Member->ActualTypeOffset = DIEOffset;
+            }
+
             WasUnion = false;
             WasStruct = true;
             
@@ -1585,6 +1641,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_union_type:
         {
+            DI->LastUnionIndent = DI->DIEIndentLevel;
             //LOG_UNHANDLED("libdwarf: Union Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1866,8 +1923,10 @@ ranges have been read then don't read the low-high
     
     if(Result == DW_DLV_OK)
     { 
+        DI->DIEIndentLevel++;
         DWARFReadDIEs(Debug, ChildDIE);
         Dwarf_Die SiblingDIE = ChildDIE;
+        
         while(Result == DW_DLV_OK)
         {
             CurrentDIE = SiblingDIE;
@@ -1881,6 +1940,7 @@ ranges have been read then don't read the low-high
                 break;
             }
         };
+        DI->DIEIndentLevel--;
     }
     
     return;

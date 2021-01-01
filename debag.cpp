@@ -224,6 +224,19 @@ StringsMatch(char *Str0, char *Str1)
     return Result;
 }
 
+static bool
+StringEmpty(char *Str)
+{
+    bool Result = false;
+
+    if(!Str || !Str[0])
+    {
+        Result = true;
+    }
+
+    return Result;
+}
+
 static void
 StringReplaceChar(char *Str, char Find, char Replace)
 {
@@ -589,7 +602,7 @@ ParseToUserRegsStruct(x64_registers Regs)
     Result.es = Regs.Es;
     Result.fs = Regs.Fs;
     Result.gs = Regs.Gs;
-    
+
     return Result;
 }
 
@@ -669,7 +682,7 @@ GetRegisterNameByIndex(u32 Index)
     return Names[Index];
 }
 
-static size_t
+static inline size_t
 GetProgramCounter()
 {
     return Debuger.Regs.RIP;
@@ -1197,30 +1210,35 @@ DebugerMain()
         ImGui::SetWindowPos(ImVec2(Gui->WindowWidth / 2, MenuBarHeight));
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-        
-        for(u32 I = 0; I < DisasmInstCount; I++)
+
+        ImGuiListClipper Clipper;
+        Clipper.Begin(DisasmInstCount);
+        while(Clipper.Step())
         {
-            disasm_inst *Inst = &DisasmInst[I];
-            
-            if(Inst->Address == GetProgramCounter())
+            for(int I = Clipper.DisplayStart; I < Clipper.DisplayEnd; I++)
             {
-                ImGui::TextColored(CurrentLineColor,
-                                   "0x%" PRIx64 ":\t%s\t\t%s\n",
-                                   Inst->Address, Inst->Mnemonic, Inst->Operation);
+                disasm_inst *Inst = &DisasmInst[I];
                 
-                if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                if(Inst->Address == GetProgramCounter())
                 {
-                    ImGui::SetScrollHereY(0.5f);
-                    CenteredDissassembly = true;
+                    ImGui::TextColored(CurrentLineColor,
+                                       "0x%" PRIx64 ":\t%s\t\t%s\n",
+                                       Inst->Address, Inst->Mnemonic, Inst->Operation);
+                    
+                    if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                    {
+                        ImGui::SetScrollHereY(0.5f);
+                        CenteredDissassembly = true;
+                    }
+                }
+                else
+                {
+                    ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
+                                Inst->Address, Inst->Mnemonic, Inst->Operation);
                 }
             }
-            else
-            {
-                ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
-                            Inst->Address, Inst->Mnemonic, Inst->Operation);
-            }
         }
-        
+
         ImGui::PopStyleVar();
         ImGui::End();
         

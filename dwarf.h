@@ -264,6 +264,9 @@ struct debug_info
     di_frame_info FrameInfo;
     Dwarf_Debug Debug;
     int DwarfFd;
+
+    i32 DIEIndentLevel;
+    i32 LastUnionIndent;
 };
 
 static bool AddressInAnyCompileUnit(size_t Address);

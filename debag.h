@@ -208,6 +208,7 @@ static u32 StringLength(char *Str);
 static void StringReplaceChar(char *Str, char Find, char Replace);
 static void StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
 static bool StringsMatch(char *Str0, char *Str1);
+static bool StringEmpty(char *Str);
 static void UpdateInfo();
 static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
 

@@ -200,14 +200,8 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
         strcat(TypeName, " *");
     }
     
-    bool Open = ImGui::TreeNode(VarName, "%s", VarName);
-    ImGui::NextColumn();
-    ImGui::Text("0x%lx", VarAddress);
-    ImGui::NextColumn();
-    ImGui::Text("%s", TypeName);
-    ImGui::NextColumn();
-    
-    if(Open)
+    // Anonymous union
+    if(StringEmpty(VarName))
     {
         for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
         {
@@ -217,8 +211,29 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
             
             ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
         }
+    }
+    else
+    {
+        bool Open = ImGui::TreeNode(VarName, "%s", VarName);
+        ImGui::NextColumn();
+        ImGui::Text("0x%lx", VarAddress);
+        ImGui::NextColumn();
+        ImGui::Text("%s", TypeName);
+        ImGui::NextColumn();
         
-        ImGui::TreePop();
+        if(Open)
+        {
+            for(u32 MemberIndex = 0; MemberIndex < Struct->MembersCount; MemberIndex++)
+            {
+                di_struct_member *Member = &Struct->Members[MemberIndex];
+                size_t MemberAddress = VarAddress + Member->ByteLocation;
+                assert(Member->Name);
+                
+                ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
+            }
+            
+            ImGui::TreePop();
+        }
     }
     
 }

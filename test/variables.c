@@ -39,6 +39,22 @@ struct big_struct
     
 };
 
+union test_union
+{
+    struct vec2 abs;
+    int a[2];
+};
+
+union anon_struct
+{
+    struct
+    {
+        float x;
+        float y;
+    };
+    real32 a[2];
+};
+
 int main()
 {
     real32 X = 0.5;
@@ -64,4 +80,10 @@ int main()
     };
     
     real32 Result = X * ssss;
+
+    union test_union testu = {};
+    testu.abs.x = 1.0f;
+
+    union anon_struct anonu = {};
+    anonu.a[0] = 3.14159f;
 }
