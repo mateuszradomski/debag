@@ -78,8 +78,8 @@ typedef i32 inst_type;
 struct disasm_inst
 {
     size_t Address;
-    char Mnemonic[16];
-    char Operation[48];
+    char *Mnemonic;
+    char *Operation;
 };
 
 struct address_range
@@ -158,8 +158,8 @@ struct arena
 breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;
 
-#define MAX_DISASM_INSTRUCTIONS 1024
-disasm_inst DisasmInst[MAX_DISASM_INSTRUCTIONS] = {};
+arena *DisasmArena = 0x0;
+disasm_inst *DisasmInst = 0x0;
 u32 DisasmInstCount = 0;
 
 csh DisAsmHandle;
@@ -171,6 +171,7 @@ keyboard_modifiers KeyMods = {};
 static inline bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
 static arena *ArenaCreate(size_t Size);
 static arena *ArenaCreateZeros(size_t Size);
+static void ArenaClear(arena *Arena);
 static void ArenaDestroy(arena *Arena);
 static size_t ArenaFreeBytes(arena *Arena);
 static void *ArenaPush(arena *Arena, size_t Size);

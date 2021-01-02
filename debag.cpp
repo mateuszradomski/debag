@@ -43,7 +43,7 @@
  *   - When you are in a constructor for Vec2 you cann't step out of it until you spam the step instr button
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
- *   - Can't see anything that is inside a union (anonymous strctures I guess)
+ *   - hamster.cpp line 404 breaks the stepping
  *   - Add an option to open a new source file
  */
 
@@ -545,6 +545,13 @@ ArenaCreateZeros(size_t Size)
 }
 
 static void
+ArenaClear(arena *Arena)
+{
+    memset(Arena->BasePtr, 0, Arena->Size);
+    Arena->CursorPtr = Arena->BasePtr;
+}
+
+static void
 ArenaDestroy(arena *Arena)
 {
     if(Arena)
@@ -817,11 +824,12 @@ GetInstructionType(cs_insn *Instruction)
 static void
 DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 {
-    DisasmInstCount = 0;
-    
+    u32 InstCount = 0;
+    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_OFF); 
+
     cs_insn *Instruction = {};
     size_t InstructionAddress = AddrRange.Start;
-    for(int I = 0; I < MAX_DISASM_INSTRUCTIONS && InstructionAddress < AddrRange.End; I++)
+    while(InstructionAddress < AddrRange.End)
     {
         u8 InstrInMemory[16] = {};
         PeekDebugeeMemoryArray(InstructionAddress, AddrRange.End,
@@ -838,68 +846,46 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
         int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
                               InstructionAddress, 1, &Instruction);
         
-        // TODO(mateusz): In the tests_bin/variables program there are weird bytes
-        // between instructions, looks kinda like padding. I guess to get around it
-        // I have to disassemble between CU LowPC and HighPC.
-        // NOTE(mateusz): Comments are always out of date, i feel like it's already solved
-        // 2020.12.16
+        if(Count == 0) { break; }
+
+        InstCount++;
+        InstructionAddress += Instruction->size;
+
+        cs_free(Instruction, 1);
+    }
+    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
+
+    assert(DisasmArena->Size > InstCount * sizeof(disasm_inst));
+    DisasmInstCount = 0;
+    
+    InstructionAddress = AddrRange.Start;
+    ArenaClear(DisasmArena);
+    DisasmInst = ArrayPush(DisasmArena, disasm_inst, InstCount);
+    for(u32 I = 0; I < InstCount; I++)
+    {
+        u8 InstrInMemory[16] = {};
+        PeekDebugeeMemoryArray(InstructionAddress, AddrRange.End,
+                               DebugeePID, InstrInMemory, sizeof(InstrInMemory));
+        
+        {
+            breakpoint *BP = 0x0; ;
+            if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
+            {
+                InstrInMemory[0] = BP->SavedOpCode;
+            }
+        }
+        
+        int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
+                              InstructionAddress, 1, &Instruction);
+        
         if(Count == 0) { break; }
         
         DisasmInst[I].Address = InstructionAddress;
         InstructionAddress += Instruction->size;
         
-        assert(strlen(Instruction->mnemonic) < sizeof(DisasmInst[I].Mnemonic));
-        assert(strlen(Instruction->op_str) < sizeof(DisasmInst[I].Operation));
-        strcpy(DisasmInst[I].Mnemonic, Instruction->mnemonic);
-        strcpy(DisasmInst[I].Operation, Instruction->op_str);
+        DisasmInst[I].Mnemonic = StringDuplicate(DisasmArena, Instruction->mnemonic);
+        DisasmInst[I].Operation = StringDuplicate(DisasmArena, Instruction->op_str);
         DisasmInstCount++;
-        
-#if 0        
-        if(Instruction->detail && Instruction->detail->groups_count > 0)
-        {
-            for(i32 GroupIndex = 0;
-                GroupIndex < Instruction->detail->groups_count;
-                GroupIndex++)
-            {
-                switch(Instruction->detail->groups[GroupIndex])
-                {
-                    case X86_GRP_INVALID:
-                    {
-                        printf("X86_GRP_INVALID, ");
-                    }break;
-                    case X86_GRP_JUMP:
-                    {
-                        printf("X86_GRP_JUMP, ");
-                    }break;
-                    case X86_GRP_CALL:
-                    {
-                        printf("X86_GRP_CALL, ");
-                    }break;
-                    case X86_GRP_RET:
-                    {
-                        printf("X86_GRP_RET, ");
-                    }break;
-                    case X86_GRP_INT:
-                    {
-                        printf("X86_GRP_INT, ");
-                    }break;
-                    case X86_GRP_IRET:
-                    {
-                        printf("X86_GRP_IRET, ");
-                    }break;
-                    case X86_GRP_PRIVILEGE:
-                    {
-                        printf("X86_GRP_PRIVILEGE, ");
-                    }break;
-                    case X86_GRP_BRANCH_RELATIVE:
-                    {
-                        printf("X86_GRP_BRANCH_RELATIVE, ");
-                    }break;
-                }
-            }
-            printf("%s: %s\n", DisasmInst[I].Mnemonic, DisasmInst[I].Operation);
-        }
-#endif
         
         cs_free(Instruction, 1);
     }
@@ -1039,6 +1025,7 @@ DebugeeRestart()
 static void
 DebugerMain()
 {
+    DisasmArena = ArenaCreateZeros(Kilobytes(256));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     DI = (debug_info *)calloc(1, sizeof(debug_info));
     
@@ -1289,13 +1276,35 @@ DebugerMain()
 
         ImGuiListClipper Clipper = {};
         Clipper.Begin(DisasmInstCount);
+        size_t PC = GetProgramCounter();
+
+        // @Speed: Binary search will like this one!
+        i32 PCItemIndex = -1;
+        for(u32 I = 0; I < DisasmInstCount; I++)
+        {
+            if(DisasmInst[I].Address == PC)
+            {
+                PCItemIndex = I;
+                break;
+            }
+        }
+
+        if(Debuger.Flags & DEBUGEE_FLAG_STEPED && PCItemIndex != -1)
+        {
+            f32 Max = ImGui::GetScrollMaxY();
+            f32 Curr = ((f32)PCItemIndex / (f32)DisasmInstCount);
+            Curr *= Max;
+
+            ImGui::SetScrollY(Curr);
+        }
+
         while(Clipper.Step())
         {
             for(int I = Clipper.DisplayStart; I < Clipper.DisplayEnd; I++)
             {
                 disasm_inst *Inst = &DisasmInst[I];
                 
-                if(Inst->Address == GetProgramCounter())
+                if(Inst->Address == PC)
                 {
                     ImGui::TextColored(CurrentLineColor,
                                        "0x%" PRIx64 ":\t%s\t\t%s\n",

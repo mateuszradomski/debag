@@ -400,7 +400,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
 //    printf("Regs.RIP = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.RIP, Range.Start, Range.End);
     
-    breakpoint TempBreakpoints[8] = {};
+    breakpoint TempBreakpoints[32] = {};
     u32 TempBreakpointsCount = 0;
     
     BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, DebugeePID, TempBreakpoints, &TempBreakpointsCount);
