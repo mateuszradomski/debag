@@ -45,7 +45,7 @@ struct di_src_line
 struct di_src_file
 {
     char *Path;
-    char *Content;
+    char **Content;
     u32 ContentLineCount;
     di_src_line *Lines;
     u32 SrcLineCount;

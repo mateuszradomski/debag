@@ -209,6 +209,10 @@ static void StringReplaceChar(char *Str, char Find, char Replace);
 static void StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
 static bool StringsMatch(char *Str0, char *Str1);
 static bool StringEmpty(char *Str);
+static bool StringStartsWith(char *Str, char *Start);
+static u32 StringSplit(char *Str, char Delimiter);
+static char *StringSplitNext(char *Str);
+static u32 StringSplitCountStarting(char *Lines, u32 LinesCount, char *Start);
 static void UpdateInfo();
 static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
 

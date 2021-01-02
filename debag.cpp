@@ -302,6 +302,67 @@ StringDuplicate(arena *Arena, char *Str)
     return Result;
 }
 
+static bool
+StringStartsWith(char *Str, char *Start)
+{
+    u32 StrLen = StringLength(Str);
+    u32 StartLen = StringLength(Start);
+    if(StrLen < StartLen)
+    {
+        return false;
+    }
+    
+    return strncmp(Str, Start, StartLen) == 0;
+}
+
+// NOTE(mateusz): Modifies the string in place, putting null-termination
+// in places of the delimiter, returns the amount of elements that you can work on.
+static u32
+StringSplit(char *Str, char Delimiter)
+{
+    u32 Parts = 1;
+    
+    while(*Str)
+    {
+        if(*Str == Delimiter)
+        {
+            *Str = '\0';
+            Parts++;
+        }
+        Str++;
+    }
+    
+    return Parts;
+}
+
+// NOTE(mateusz): Helper for the string_split function. The user is supposed to
+// know that it can safely ask for the next split element.
+static char *
+StringSplitNext(char *Str)
+{
+    char *Result = Str + StringLength(Str) + 1;
+    
+    return Result;
+}
+
+static u32
+StringSplitCountStarting(char *Lines, u32 LinesCount, char *Start)
+{
+    u32 Result = 0;
+    
+    char *Line = Lines;
+    for(u32 I = 0; I < LinesCount; I++)
+    {
+        if(StringStartsWith(Line, Start))
+        {
+            Result++;
+        }
+        Line = StringSplitNext(Line);
+    }
+    
+    return Result;
+}
+
 #define ARGV_MAX  255
 #define ARGV_TOKEN_MAX  255
 
@@ -842,7 +903,6 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
         
         cs_free(Instruction, 1);
     }
-    
 }
 
 static char *
@@ -1122,11 +1182,13 @@ DebugerMain()
             }
             if(ImGui::BeginMenu("Help"))
             {
-                ImGui::Text("Debag is a C/C++ GUI debugger for Linux");
-                ImGui::Text("created by Mateusz Radomski.");
+                ImGui::TextUnformatted("Debag is a C/C++ GUI debugger for Linux");
+                ImGui::TextUnformatted("created by Mateusz Radomski.");
                 
                 ImGui::EndMenu();
             }
+
+            ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
             
             if(Gui->StatusText)
             {
@@ -1225,7 +1287,7 @@ DebugerMain()
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-        ImGuiListClipper Clipper;
+        ImGuiListClipper Clipper = {};
         Clipper.Begin(DisasmInstCount);
         while(Clipper.Step())
         {
@@ -1274,8 +1336,6 @@ DebugerMain()
                     TIFlags = ImGuiTabItemFlags_SetSelected;
                 }
                 
-                (void)TIFlags;
-                
                 char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
                 //                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
                 if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
@@ -1285,19 +1345,13 @@ DebugerMain()
                     
                     di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
                     di_src_line *DrawingLine = 0x0;
-                    char *LinePtr = Src->Content;
-                    char *Prev = 0x0;
                     for(u32 I = 0; I < Src->ContentLineCount + 1; I++)
                     {
-                        Prev = LinePtr;
-                        LinePtr = strchr(LinePtr, '\n') + 1;
-                        u32 LineLength = (u64)LinePtr - (u64)Prev;
-                        
                         // NOTE(mateusz): Lines are indexed from 1
                         if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                         {
                             DrawingLine = Line;
-                            ImGui::TextColored(CurrentLineColor, "%.*s", LineLength, Prev);
+                            ImGui::TextColored(CurrentLineColor, "%s", Src->Content[I]);
                             
                             if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                             {
@@ -1314,12 +1368,11 @@ DebugerMain()
                                (BP = BreakpointFind(DrawingLine->Address)) &&
                                BreakpointEnabled(BP))
                             {
-                                ImGui::TextColored(BreakpointLineColor, "%.*s",
-                                                   LineLength, Prev);
+                                ImGui::TextColored(BreakpointLineColor, "%s", Src->Content[I]);
                             }
                             else
                             {
-                                ImGui::Text("%.*s", LineLength, Prev);
+                                ImGui::TextUnformatted(Src->Content[I]);
                             }
                         }
                         

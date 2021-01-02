@@ -372,48 +372,21 @@ PushSourceFile(char *Path, u32 SrcLineCount)
     Result = &DI->SourceFiles[DI->SourceFilesCount++];
     
     Result->Path = StringDuplicate(DI->Arena, Path);
-    Result->Content = DumpFile(DI->Arena, Path);
-    Result->ContentLineCount = StringCountChar(Result->Content, '\n');
+    char *FileCont = DumpFile(DI->Arena, Path);
+    u32 LineCount = StringSplit(FileCont, '\n');
+
+    Result->ContentLineCount = LineCount;
+    Result->Content = ArrayPush(DI->Arena, char *, LineCount);
+
+    char *Line = FileCont;
+    for(u32 I = 0; I < LineCount; I++)
+    {
+        Result->Content[I] = Line;
+        Line = StringSplitNext(Line);
+    }
+
     Result->SrcLineCount = 0;
     Result->Lines = ArrayPush(DI->Arena, di_src_line, SrcLineCount);
-    
-    return Result;
-}
-
-static di_src_file *
-PushSourceFile(char *Path)
-{
-    di_src_file *Result = 0x0;
-    
-    Result = &DI->SourceFiles[DI->SourceFilesCount++];
-    
-    Result->Path = StringDuplicate(DI->Arena, Path);
-    Result->Content = DumpFile(DI->Arena, Path);
-    Result->ContentLineCount = StringCountChar(Result->Content, '\n');
-    
-    return Result;
-}
-
-static u32
-SrcFileAssociatePath(char *Path)
-{
-    u32 Result = MAX_DI_SOURCE_FILES + 1;
-    
-    assert(Path);
-    for(u32 I = 0; I < DI->SourceFilesCount; I++)
-    {
-        if(StringsMatch(Path, DI->SourceFiles[I].Path))
-        {
-            Result = I;
-            break;
-        }
-    }
-    
-    if(DI->SourceFilesCount == 0 || Result == MAX_DI_SOURCE_FILES + 1)
-    {
-        PushSourceFile(Path);
-        Result = DI->SourceFilesCount - 1;
-    }
     
     return Result;
 }
