@@ -14,8 +14,12 @@ OpenDwarfSymbolsHandle()
 static void
 CloseDwarfSymbolsHandle()
 {
-    assert(dwarf_finish(DI->Debug, 0x0) == DW_DLV_OK);
-    close(DI->DwarfFd);
+    if(DI->DwarfFd)
+    {
+        assert(dwarf_finish(DI->Debug, 0x0) == DW_DLV_OK);
+        close(DI->DwarfFd);
+        DI->DwarfFd = 0;
+    }
 }
 
 static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
@@ -977,7 +981,14 @@ ranges have been read then don't read the low-high
                             
                             //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                             
-                            assert(AtomOut == DW_OP_call_frame_cfa);
+                            if(AtomOut != DW_OP_call_frame_cfa)
+                            {
+                                const char *OpName = 0x0;
+                                dwarf_get_OP_name(AtomOut, &OpName);
+
+                                printf("AtomOut is = %d, %s\n", AtomOut, OpName);
+                                assert(!"Call frame is not CFA");
+                            }
                             Func->FrameBaseIsCFA = true;
                         }
                     }break;

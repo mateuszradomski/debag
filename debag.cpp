@@ -881,15 +881,14 @@ UpdateInfo()
 static void
 DebugeeStart()
 {
+    char BaseDir[128] = {};
+    getcwd(BaseDir, sizeof(BaseDir));
+
     i32 ProcessID = fork();
     
     // Child process
     if(ProcessID == 0)
     {
-        personality(ADDR_NO_RANDOMIZE);
-        ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
-        prctl(PR_SET_PDEATHSIG, SIGHUP);
-        
         char *ProgramArgs[16] = {};
         u32 ArgsLen = 0;
         ProgramArgs[0] = Debuger.DebugeeProgramPath;
@@ -900,17 +899,33 @@ DebugeeStart()
             i32 Result = chdir(Debuger.PathToRunIn);
             assert(Result == 0);
             
-            char CWDStr[128] = {};
-            printf("getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
+//            char CWDStr[128] = {};
+//            printf("child getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
         }
         
-        execv(Debuger.DebugeeProgramPath, ProgramArgs);
+        personality(ADDR_NO_RANDOMIZE);
+        ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
+        prctl(PR_SET_PDEATHSIG, SIGHUP);
+
+        // TODO(mateusz): Better path handling
+        char AbsolutePath[512] = {};
+        if(Debuger.DebugeeProgramPath[0] == '/' || Debuger.DebugeeProgramPath[0] == '~')
+        {
+            sprintf(AbsolutePath, "%s", Debuger.DebugeeProgramPath);
+        }
+        else
+        {
+            sprintf(AbsolutePath, "%s/%s", BaseDir, Debuger.DebugeeProgramPath);
+        }
+
+        execv(AbsolutePath, ProgramArgs);
     }
     else
     {
         Debuger.DebugeePID = ProcessID;
         Debuger.Flags |= DEBUGEE_FLAG_RUNNING;
         WaitForSignal(Debuger.DebugeePID);
+        assert(chdir(BaseDir) == 0);
     }
 }
 
@@ -1249,7 +1264,8 @@ DebugerMain()
         
         if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            di_src_line *Line = LineTableFindByAddress(GetProgramCounter());
+            di_src_line *Line = Debuger.Flags & DEBUGEE_FLAG_RUNNING ? LineTableFindByAddress(GetProgramCounter()) : 0x0;
+
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;

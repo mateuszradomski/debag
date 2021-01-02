@@ -1,6 +1,6 @@
 #!/bin/bash
 
-flags='-g -no-pie'
+flags='-g'
 
 for f in test/*
 do

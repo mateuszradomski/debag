@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Debuging build
-# optim='-g -fsanitize=address'
+optim='-g -fsanitize=address'
 # Relase build
-optim='-O2'
+# optim='-O2'
 
 opts=$optim' -Wall -Wextra -Wno-write-strings -Wno-unused-function -Wno-class-memaccess'
 libs='-lGL -lglfw -ldwarf'
