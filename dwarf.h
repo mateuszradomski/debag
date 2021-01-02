@@ -19,7 +19,7 @@ typedef i32 di_compile_unit_flags;
 struct di_compile_unit
 {
     char *Name;
-    size_t DIEOffset;
+    size_t Offset;
     
     size_t *RangesLowPCs;
     size_t *RangesHighPCs;

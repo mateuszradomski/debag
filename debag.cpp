@@ -993,8 +993,8 @@ DebugeeContinueOrStart()
         
         BreakAtMain();
 
-        //size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
-        //printf("LoadAddress = %lx\n", LoadAddress);
+        size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+        printf("LoadAddress = %lx\n", LoadAddress);
     }
     
     ContinueProgram(Debuger.DebugeePID);

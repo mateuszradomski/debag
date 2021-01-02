@@ -396,8 +396,10 @@ FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
 {
     Dwarf_Off DIEOffset = 0;
     DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, 0x0));
+    Dwarf_Off OverallOffset = 0;
+    DWARF_CALL(dwarf_dieoffset(DIE, &OverallOffset, 0x0));
     
-    if(DIEOffset == Offset)
+    if((OverallOffset - DIEOffset) == Offset)
     {
         return DIE;
     }
@@ -489,6 +491,8 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     bool Result = false;
     
     assert(OpenDwarfSymbolsHandle());
+
+    printf("Loading source that contains address %lx\n", Address);
     
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -500,6 +504,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     size_t CUDIEOffset = 0;
     if(DI->CompileUnitsCount > 0)
     {
+        printf("Searching for CU\n");
         for(u32 I = 0; I < DI->CompileUnitsCount; I++)
         {
             di_compile_unit *CompUnit = &DI->CompileUnits[I];
@@ -512,13 +517,17 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 
                 if(AddressBetween(Address, LowPC, HighPC))
                 {
-                    CUDIEOffset = CompUnit->DIEOffset;
+                    CUDIEOffset = CompUnit->Offset;
+                    printf("LowPC is %lx, HighPC is %lx\n", LowPC, HighPC);
                 }
             }
         }
-        
+
         if(CUDIEOffset)
         {
+            printf("Found CU with offset %lx\n", CUDIEOffset);
+            printf("Searching for that DIE\n");
+
             Dwarf_Die SearchDie = 0x0;
             
             for(;;)
@@ -542,6 +551,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
             
             if(SearchDie)
             {
+                printf("Found DIE\n");
                 Dwarf_Half Tag = 0;
                 DWARF_CALL(dwarf_tag(SearchDie, &Tag, 0x0));
                 assert(Tag == DW_TAG_compile_unit);
@@ -562,6 +572,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
                 
                 //printf("There are %lld source lines\n", LineCount);
+                printf("Iterating over %lld lines\n", LineCount);
                 for(i32 I = 0; I < LineCount; ++I)
                 {
                     Dwarf_Addr LineAddr = 0;
@@ -727,10 +738,13 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount++];
-            
+
+            Dwarf_Off OverallOffset = 0;
+            DWARF_CALL(dwarf_dieoffset(DIE, &OverallOffset, Error));
             Dwarf_Off DIEOffset = 0;
-            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            CompUnit->DIEOffset = DIEOffset;
+            DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, 0x0));
+            
+            CompUnit->Offset = OverallOffset - DIEOffset;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -991,7 +1005,9 @@ ranges have been read then don't read the low-high
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
-            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            //DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            if(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error) != DW_DLV_OK)
+                break;
             
             assert(DI->FuctionsCount);
             
@@ -1302,7 +1318,7 @@ ranges have been read then don't read the low-high
             di_base_type *Type = (di_base_type *)&DI->BaseTypes[DI->BaseTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            Type->DIEOffset = DIEOffset;
+            Type->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1351,7 +1367,7 @@ ranges have been read then don't read the low-high
             di_typedef *Typedef = &DI->Typedefs[DI->TypedefsCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            Typedef->DIEOffset = DIEOffset;
+            Typedef->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1403,7 +1419,7 @@ ranges have been read then don't read the low-high
             di_pointer_type *PType = &DI->PointerTypes[DI->PointerTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            PType->DIEOffset = DIEOffset;
+            PType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1446,7 +1462,7 @@ ranges have been read then don't read the low-high
                 di_const_type *CType = &DI->ConstTypes[DI->ConstTypesCount++];
                 Dwarf_Off DIEOffset = 0;
                 DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-                CType->DIEOffset = DIEOffset;
+                CType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
                 
                 for(u32 I = 0; I < AttrCount; I++)
                 {
@@ -1481,7 +1497,7 @@ ranges have been read then don't read the low-high
             di_restrict_type *RType = &DI->RestrictTypes[DI->RestrictTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            RType->DIEOffset = DIEOffset;
+            RType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1515,7 +1531,7 @@ ranges have been read then don't read the low-high
             di_struct_type *StructType = &DI->StructTypes[DI->StructTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            StructType->DIEOffset = DIEOffset;
+            StructType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             
             /*
             This is to support things like this
@@ -1571,7 +1587,7 @@ ranges have been read then don't read the low-high
                 Union->MembersCount += 1;
                 Member->ByteLocation = 0;
                 Member->Name = "";
-                Member->ActualTypeOffset = DIEOffset;
+                Member->ActualTypeOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             }
 
             WasUnion = false;
@@ -1634,7 +1650,7 @@ ranges have been read then don't read the low-high
             di_union_type *UnionType = &DI->UnionTypes[DI->UnionTypesCount++];
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            UnionType->DIEOffset = DIEOffset;
+            UnionType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             UnionType->Name = "";
             
             WasUnion = true;
@@ -1821,7 +1837,7 @@ ranges have been read then don't read the low-high
             
             Dwarf_Off DIEOffset = 0;
             DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, Error));
-            AType->DIEOffset = DIEOffset;
+            AType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1855,7 +1871,8 @@ ranges have been read then don't read the low-high
             //LOG_UNHANDLED("libdwarf: Subrange type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
-            DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
+            if(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error) != DW_DLV_OK)
+                break;
             
             assert(DI->ArrayTypesCount);
             di_array_type *AType = &DI->ArrayTypes[DI->ArrayTypesCount - 1];
@@ -1983,7 +2000,8 @@ DWARFRead()
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
     DI->Arena = ArenaCreateZeros(Kilobytes(4096));
     
-    for(i32 CUCount = 0;;++CUCount) {
+    for(i32 CUCount = 0;;++CUCount)
+    {
         i32 Result = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
                                           &Version, &AbbrevOffset, &AddressSize,
                                           &NextCUHeader, Error);
@@ -2034,12 +2052,13 @@ DWARFRead()
     
     //TIMER_END(0);
     
-    for(i32 CUCount = 0;;++CUCount) {
+    for(i32 CUCount = 0;;++CUCount)
+    {
         // NOTE(mateusz): I don't know what it does
         i32 Result = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
                                           &Version, &AbbrevOffset, &AddressSize,
                                           &NextCUHeader, Error);
-        
+
         assert(Result != DW_DLV_ERROR);
         if(Result  == DW_DLV_NO_ENTRY) {
             break;

@@ -325,7 +325,7 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     }
     else
     {
-        //printf("Var [%s] doesn't have a type\n", VarName);
+        printf("Var [%s] doesn't have a type\n", VarName);
         //assert(false);
     }
 }
@@ -338,6 +338,10 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg)
     {
         size_t VarAddress = FBReg + Var->Offset;
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
+    }
+    else
+    {
+        printf("blablah\n");
     }
 }
 

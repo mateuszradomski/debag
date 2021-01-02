@@ -194,11 +194,13 @@ static void
 BreakAtMain()
 {
     size_t EntryPointAddress = FindEntryPointAddress();
+    printf("entrypoint address is %lx\n", EntryPointAddress);
     assert(EntryPointAddress);
 
     breakpoint *BP = BreakpointFind(EntryPointAddress);
     if(!BP)
     {
+        printf("Breakpoint is set\n");
         breakpoint BP = BreakpointCreate(EntryPointAddress);
         BreakpointEnable(&BP);
         Breakpoints[BreakpointCount++] = BP;
