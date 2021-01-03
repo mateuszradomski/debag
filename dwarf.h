@@ -295,5 +295,6 @@ static bool OpenDwarfSymbolsHandle();
 static di_src_file *PushSourceFile(char *Path, u32 SrcLineCount);
 static di_src_file *PushSourceFile(char *Path);
 static u32 SrcFileAssociatePath(char *Path);
+static bool FunctionHasAnyVariables(di_function *Func);
 
 #endif //DWARF_H

@@ -1432,7 +1432,7 @@ DebugerMain()
             if(ImGui::BeginTabItem("Locals"))
             {
                 ImGui::BeginChild("regs");
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
                 
                 di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
                 if(Func && Func->FrameBaseIsCFA)
@@ -1494,6 +1494,19 @@ DebugerMain()
                 else if(Func)
                 {
                     assert(false);
+                }
+
+                if(DI->FuctionsCount && DI->VariablesCount)
+                {
+                    u32 I = 0;
+                    while(!FunctionHasAnyVariables(&DI->Functions[I]))
+                    {
+                        I++;
+                    }
+
+                    u32 GlobalCount = DI->Functions[I].FuncLexScope.Variables - DI->Variables;
+
+//                    printf("There are %d global variables\n", GlobalCount);
                 }
                 
                 ImGui::PopStyleVar();

@@ -502,6 +502,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     Dwarf_Error *Error = 0x0;
     
     size_t CUDIEOffset = 0;
+    bool CUFound = false;
     if(DI->CompileUnitsCount > 0)
     {
         printf("Searching for CU\n");
@@ -518,12 +519,13 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 if(AddressBetween(Address, LowPC, HighPC))
                 {
                     CUDIEOffset = CompUnit->Offset;
+                    CUFound = true;
                     printf("LowPC is %lx, HighPC is %lx\n", LowPC, HighPC);
                 }
             }
         }
 
-        if(CUDIEOffset)
+        if(CUFound)
         {
             printf("Found CU with offset %lx\n", CUDIEOffset);
             printf("Searching for that DIE\n");
@@ -1119,52 +1121,49 @@ ranges have been read then don't read the low-high
             // NOTE(mateusz): Globals
             if(DI->FuctionsCount)
             {
-                if(DI->FuctionsCount)
+                di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
+                bool HasLexScopes = Func->LexScopesCount != 0;
+                di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
+                if(!LexScope->Variables)
                 {
-                    
-                    di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
-                    bool HasLexScopes = Func->LexScopesCount != 0;
-                    di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
-                    if(!LexScope->Variables)
-                    {
-                        LexScope->Variables = Var;
-                    }
-                    
-                    LexScope->VariablesCount += 1;
+                    LexScope->Variables = Var;
                 }
-                
-                for(u32 I = 0; I < AttrCount; I++)
+
+                LexScope->VariablesCount += 1;
+            }
+
+            for(u32 I = 0; I < AttrCount; I++)
+            {
+                Dwarf_Attribute Attribute = AttrList[I];
+                Dwarf_Half AttrTag = 0;
+                DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
+
+                switch(AttrTag)
                 {
-                    Dwarf_Attribute Attribute = AttrList[I];
-                    Dwarf_Half AttrTag = 0;
-                    DWARF_CALL(dwarf_whatattr(Attribute, &AttrTag, Error));
-                    
-                    switch(AttrTag)
-                    {
-                        case DW_AT_name:
+                    case DW_AT_name:
                         {
                             char *Name = 0x0;
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
-                            
+
                             u32 Size = strlen(Name) + 1;
                             Var->Name = ArrayPush(DI->Arena, char, Size);
                             StringCopy(Var->Name, Name);
                         }break;
-                        case DW_AT_type:
+                    case DW_AT_type:
                         {
                             Dwarf_Off Offset = 0;
                             DWARF_CALL(dwarf_dietype_offset(CurrentDIE, &Offset, Error));
-                            
+
                             Var->TypeOffset = Offset;
                         }break;
-                        case DW_AT_location:
+                    case DW_AT_location:
                         {
                             Dwarf_Loc_Head_c LocListHead = {};
                             Dwarf_Unsigned LocCount = 0;
                             DWARF_CALL(dwarf_get_loclist_c(Attribute, &LocListHead, &LocCount, Error));
-                            
+
                             assert(LocCount == 1);
-                            
+
                             for(u32 I = 0; I < LocCount; I++)
                             {
                                 Dwarf_Small LLEOut = 0;
@@ -1175,24 +1174,24 @@ ranges have been read then don't read the low-high
                                 Dwarf_Small LocListSourceOut = 0;
                                 Dwarf_Unsigned ExpressionOffsetOut = 0;
                                 Dwarf_Unsigned LocDescOffsetOut = 0;
-                                
+
                                 DWARF_CALL(dwarf_get_locdesc_entry_c(LocListHead, I, &LLEOut, &LowPC, &HighPC, &LocListCountOut, &LocDesc, &LocListSourceOut, &ExpressionOffsetOut, 
                                                                      &LocDescOffsetOut, Error));
-                                
+
                                 Dwarf_Small AtomOut = 0;
                                 Dwarf_Unsigned Operand1 = 0;
                                 Dwarf_Unsigned Operand2 = 0;
                                 Dwarf_Unsigned Operand3 = 0;
                                 Dwarf_Unsigned OffsetBranch = 0;
                                 DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
-                                
+
                                 //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
-                                
+
                                 Var->LocationAtom = AtomOut;
                                 Var->Offset = Operand1;
                             }
                         }break;
-                        default:
+                    default:
                         {
                             bool ignored = AttrTag == DW_AT_decl_file ||
                                 AttrTag == DW_AT_decl_line ||
@@ -1200,7 +1199,7 @@ ranges have been read then don't read the low-high
                                 AttrTag == DW_AT_sibling ||
                                 AttrTag == DW_AT_artificial ||
                                 AttrTag == DW_AT_specification;
-                            
+
                             if(!ignored)
                             {
                                 const char *AttrName = 0x0;
@@ -1208,7 +1207,6 @@ ranges have been read then don't read the low-high
                                 LOG_UNHANDLED("Variable Unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
-                    }
                 }
             }
         }break;
@@ -2123,4 +2121,28 @@ DWARFGetCFA(size_t PC)
     
     assert(false);
     return PC;
+}
+
+static bool
+FunctionHasAnyVariables(di_function *Func)
+{
+    bool Result = false;
+
+    if(Func->FuncLexScope.VariablesCount > 0)
+    {
+        Result = true;
+    }
+    else
+    {
+        for(u32 I = 0; I < Func->LexScopesCount; I++)
+        {
+            if(Func->LexScopes[I].VariablesCount > 0)
+            {
+                Result = true;
+                break;
+            }
+        }
+    }
+
+    return Result;
 }

@@ -87,3 +87,6 @@ int main()
     union anon_struct anonu = {};
     anonu.a[0] = 3.14159f;
 }
+
+float global = 2.718;
+
