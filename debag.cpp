@@ -1506,11 +1506,17 @@ DebugerMain()
                         while(!FunctionHasAnyVariables(&Func[I])) { I++; }
 
                         u32 GlobalCount = Func[I].FuncLexScope.Variables - CU->Variables;
-                        printf("GlobalCount is %u\n", GlobalCount);
-
                         for(u32 I = 0; I < GlobalCount; I++)
                         {
-                            printf("%u var [%s]\n", I, CU->Variables[I].Name);
+                            di_variable *Var = &CU->Variables[I];
+                            if(Var->LocationAtom)
+                            {
+                                ImGuiShowVariable(Var);
+
+//                                const char *OpName = "";
+//                                dwarf_get_OP_name(Var->LocationAtom, &OpName);
+//                                printf("%u var [%s] loc with %s (%lx)\n", I, Var->Name, OpName, Var->Offset);
+                            }
                         }
                     }
                 }

@@ -331,12 +331,17 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 }
 
 static void
-ImGuiShowVariable(di_variable *Var, size_t FBReg)
+ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
 {
     // TODO(mateusz): Other ways of accessing variables
     if(Var->LocationAtom == DW_OP_fbreg)
     {
         size_t VarAddress = FBReg + Var->Offset;
+        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
+    }
+    else if(Var->LocationAtom == DW_OP_addr)
+    {
+        size_t VarAddress = Var->Offset;
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else
