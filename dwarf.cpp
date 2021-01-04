@@ -329,17 +329,17 @@ AddressInCompileUnit(di_compile_unit *CU, size_t Address)
     return Result;
 }
 
-static bool
-AddressInAnyCompileUnit(size_t Address)
+static di_compile_unit *
+FindCompileUnitConfiningAddress(size_t Address)
 {
-    bool Result = false;
+    di_compile_unit *Result = 0x0;
 
     for(u32 I = 0; I < DI->CompileUnitsCount; I++)
     {
         di_compile_unit *CU = &DI->CompileUnits[I];
         if(AddressInCompileUnit(CU, Address))
         {
-            Result = true;
+            Result = CU;
             break;
         }
     }
@@ -900,6 +900,13 @@ ranges have been read then don't read the low-high
             di_function *Func = &DI->Functions[DI->FuctionsCount++];
             assert(Func->LexScopesCount == 0);
             di_lexical_scope *LexScope = &Func->FuncLexScope;
+
+            di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount - 1];
+            if(!CompUnit->Functions)
+            {
+                CompUnit->Functions = Func;
+            }
+
             for(u32 I = 0; I < AttrCount; I++)
             {
                 Dwarf_Attribute Attribute = AttrList[I];
@@ -1117,9 +1124,15 @@ ranges have been read then don't read the low-high
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             di_variable *Var = &DI->Variables[DI->VariablesCount++];
+
+            di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount - 1];
+            if(!CompUnit->Variables)
+            {
+                CompUnit->Variables = Var;
+            }
             
             // NOTE(mateusz): Globals
-            if(DI->FuctionsCount)
+            if(CompUnit->Functions)
             {
                 di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
                 bool HasLexScopes = Func->LexScopesCount != 0;

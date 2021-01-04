@@ -1498,15 +1498,21 @@ DebugerMain()
 
                 if(DI->FuctionsCount && DI->VariablesCount)
                 {
-                    u32 I = 0;
-                    while(!FunctionHasAnyVariables(&DI->Functions[I]))
+                    di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
+                    di_function *Func = CU->Functions;
+                    if(Func)
                     {
-                        I++;
+                        u32 I = 0;
+                        while(!FunctionHasAnyVariables(&Func[I])) { I++; }
+
+                        u32 GlobalCount = Func[I].FuncLexScope.Variables - CU->Variables;
+                        printf("GlobalCount is %u\n", GlobalCount);
+
+                        for(u32 I = 0; I < GlobalCount; I++)
+                        {
+                            printf("%u var [%s]\n", I, CU->Variables[I].Name);
+                        }
                     }
-
-                    u32 GlobalCount = DI->Functions[I].FuncLexScope.Variables - DI->Variables;
-
-//                    printf("There are %d global variables\n", GlobalCount);
                 }
                 
                 ImGui::PopStyleVar();

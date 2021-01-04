@@ -16,25 +16,6 @@ enum
 
 typedef i32 di_compile_unit_flags;
 
-struct di_compile_unit
-{
-    char *Name;
-    size_t Offset;
-    
-    size_t *RangesLowPCs;
-    size_t *RangesHighPCs;
-    u32 RangesCount = 0;
-    
-    di_compile_unit_flags Flags;
-};
-
-struct di_src_line_loc
-{
-    size_t Address;
-    i32 FileNumber;
-    u32 NOInFile;
-};
-
 struct di_src_line
 {
     size_t Address;
@@ -205,8 +186,22 @@ struct di_underlaying_type
     type_flags Flags;
 };
 
+struct di_compile_unit
+{
+    char *Name;
+    size_t Offset;
+    
+    size_t *RangesLowPCs;
+    size_t *RangesHighPCs;
+    u32 RangesCount = 0;
+    
+    di_compile_unit_flags Flags;
+
+    di_variable *Variables;
+    di_function *Functions;
+};
+
 #define MAX_DI_SOURCE_FILES 8
-#define MAX_DI_SOURCE_LINES (1 << 15)
 
 struct debug_info
 {
@@ -269,8 +264,8 @@ struct debug_info
     i32 LastUnionIndent;
 };
 
-static bool AddressInAnyCompileUnit(size_t Address);
 static bool AddressInCompileUnit(di_compile_unit *CU, size_t Address);
+static di_compile_unit *FindCompileUnitConfiningAddress(size_t Address);
 static address_range AddressRangeCurrentAndNextLine(size_t StartAddress);
 static bool BaseTypeIsDoubleFloat(di_base_type *Type);
 static bool BaseTypeIsFloat(di_base_type *Type);

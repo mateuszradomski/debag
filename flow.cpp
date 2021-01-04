@@ -336,7 +336,8 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             //printf("Breaking because of call\n");
             size_t CallAddress = Instruction->detail->x86.operands[0].imm;
             
-            if(AddressInAnyCompileUnit(CallAddress))
+            bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(CallAddress) != 0x0;
+            if(AddressInAnyCompileUnit)
             {
                 breakpoint BP = BreakpointCreate(CallAddress);
                 BreakpointEnable(&BP);
@@ -348,7 +349,8 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         {
             size_t ReturnAddress = PeekDebugeeMemory(Debuger.Regs.RBP + 8, DebugeePID);
 
-            if(AddressInAnyCompileUnit(ReturnAddress))
+            bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(ReturnAddress) != 0x0;
+            if(AddressInAnyCompileUnit)
             {
                 breakpoint BP = BreakpointCreate(ReturnAddress);
                 BreakpointEnable(&BP);
