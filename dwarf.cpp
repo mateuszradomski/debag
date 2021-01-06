@@ -322,6 +322,29 @@ BaseTypeIsDoubleFloat(di_base_type *Type)
 }
 
 static bool
+AddressInLexicalScope(di_lexical_scope *LexScope, size_t Address)
+{
+    bool Result = false;
+    if(LexScope->RangesCount == 0)
+    {
+        Result = AddressBetween(Address, LexScope->LowPC, LexScope->HighPC - 1);
+    }
+    else
+    {
+        for(u32 RIndex = 0; RIndex < LexScope->RangesCount; RIndex++)
+        {
+            if(AddressBetween(Address, LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex]))
+            {
+                Result = true;
+                break;
+            }
+        }
+    }
+
+    return Result;
+}
+
+static bool
 AddressInCompileUnit(di_compile_unit *CU, size_t Address)
 {
     bool Result = false;
@@ -1133,12 +1156,16 @@ ranges have been read then don't read the low-high
             di_variable *Var = &DI->Variables[DI->VariablesCount++];
 
             di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount - 1];
-            if(!CompUnit->Variables)
+            if(!CompUnit->Functions && !CompUnit->GlobalVariables)
             {
-                CompUnit->Variables = Var;
+                CompUnit->GlobalVariables = Var;
             }
-            
-            // NOTE(mateusz): Globals
+
+            if(!CompUnit->Functions && CompUnit->GlobalVariables)
+            {
+                CompUnit->GlobalVariablesCount++;
+            }
+
             if(CompUnit->Functions)
             {
                 di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
@@ -2016,7 +2043,7 @@ DWARFRead()
     OpenDwarfSymbolsHandle();
     
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
-    DI->Arena = ArenaCreateZeros(Kilobytes(4096));
+    DI->Arena = ArenaCreateZeros(Kilobytes(4096 * 4));
     
     for(i32 CUCount = 0;;++CUCount)
     {
@@ -2143,14 +2170,14 @@ DWARFGetCFA(size_t PC)
     return PC;
 }
 
-static bool
-FunctionHasAnyVariables(di_function *Func)
+static di_variable *
+FunctionFirstVariable(di_function *Func)
 {
-    bool Result = false;
+    di_variable *Result = 0x0;
 
     if(Func->FuncLexScope.VariablesCount > 0)
     {
-        Result = true;
+        Result = Func->FuncLexScope.Variables;
     }
     else
     {
@@ -2158,7 +2185,7 @@ FunctionHasAnyVariables(di_function *Func)
         {
             if(Func->LexScopes[I].VariablesCount > 0)
             {
-                Result = true;
+                Result = Func->LexScopes[I].Variables;
                 break;
             }
         }

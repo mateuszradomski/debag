@@ -1485,30 +1485,12 @@ DebugerMain()
                         LexScopeIndex++)
                     {
                         di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-                        
-                        if(LexScope->RangesCount == 0)
+                        if(AddressInLexicalScope(LexScope, GetProgramCounter()))
                         {
-                            if(AddressBetween(GetProgramCounter(), LexScope->LowPC, LexScope->HighPC - 1))
+                            for(u32 I = 0; I < LexScope->VariablesCount; I++)
                             {
-                                for(u32 I = 0; I < LexScope->VariablesCount; I++)
-                                {
-                                    di_variable *Var = &LexScope->Variables[I];
-                                    ImGuiShowVariable(Var, FBReg);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            for(u32 RIndex = 0; RIndex < LexScope->RangesCount; RIndex++)
-                            {
-                                if(AddressBetween(GetProgramCounter(), LexScope->RangesLowPCs[RIndex], LexScope->RangesHighPCs[RIndex] - 1))
-                                {
-                                    for(u32 I = 0; I < LexScope->VariablesCount; I++)
-                                    {
-                                        di_variable *Var = &LexScope->Variables[I];
-                                        ImGuiShowVariable(Var, FBReg);
-                                    }
-                                }
+                                di_variable *Var = &LexScope->Variables[I];
+                                ImGuiShowVariable(Var, FBReg);
                             }
                         }
                     }
@@ -1518,32 +1500,18 @@ DebugerMain()
                     assert(false);
                 }
 
-#if 0
-                if(DI->FuctionsCount && DI->VariablesCount)
+                if(DI->Functions && DI->Variables)
                 {
                     di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
-                    di_function *Func = CU->Functions;
-                    if(Func)
+                    for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
                     {
-                        u32 I = 0;
-                        while(!FunctionHasAnyVariables(&Func[I])) { I++; }
-
-                        u32 GlobalCount = Func[I].FuncLexScope.Variables - CU->Variables;
-                        for(u32 I = 0; I < GlobalCount; I++)
+                        di_variable *Var = &CU->GlobalVariables[I];
+                        if(Var->LocationAtom)
                         {
-                            di_variable *Var = &CU->Variables[I];
-                            if(Var->LocationAtom)
-                            {
-                                ImGuiShowVariable(Var);
-
-//                                const char *OpName = "";
-//                                dwarf_get_OP_name(Var->LocationAtom, &OpName);
-//                                printf("%u var [%s] loc with %s (%lx)\n", I, Var->Name, OpName, Var->Offset);
-                            }
+                            ImGuiShowVariable(Var);
                         }
                     }
                 }
-#endif
                 
                 ImGui::PopStyleVar();
                 ImGui::EndChild();

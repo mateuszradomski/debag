@@ -197,6 +197,8 @@ struct di_compile_unit
     
     di_compile_unit_flags Flags;
 
+    di_variable *GlobalVariables;
+    u32 GlobalVariablesCount;
     di_variable *Variables;
     di_function *Functions;
 };
