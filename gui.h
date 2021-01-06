@@ -26,6 +26,8 @@ ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 gui_data _Gui = {};
 gui_data *Gui = &_Gui;
 
+#define LOG_GUI(...) do { } while (0)
+
 static void ImGuiEndFrame();
 static void ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
 static void ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);

@@ -408,7 +408,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine(GetProgramCounter());
     
-//    printf("Regs.RIP = %llX, Range.Start = %lX, Range.End = %lX\n", Regs.RIP, Range.Start, Range.End);
+    printf("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", GetProgramCounter(), Range.Start, Range.End);
     
     breakpoint TempBreakpoints[32] = {};
     u32 TempBreakpointsCount = 0;
@@ -422,6 +422,38 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     {
         printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
+    }
+    
+    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
+}
+
+static void
+StepOutOfFunction(i32 DebugeePID)
+{
+    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+
+    ToNextLine(DebugeePID, false);
+    UpdateInfo();
+
+    size_t PC = GetProgramCounter();
+    if(AddressInFunction(Func, PC))
+    {
+        size_t ReturnAddress = GetReturnAddress();
+        bool OwnBreakpoint = false;
+        breakpoint BP = {};
+
+        if(!BreakpointFind(ReturnAddress))
+        {
+            BP = BreakpointCreate(ReturnAddress);
+            BreakpointEnable(&BP);
+            OwnBreakpoint = true;
+        }
+    
+        ContinueProgram(DebugeePID);
+        if(OwnBreakpoint)
+        {
+            BreakpointDisable(&BP);
+        }
     }
     
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;

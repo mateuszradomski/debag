@@ -81,6 +81,15 @@ LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
     return 0x0;
 }
 
+static bool
+AddressInFunction(di_function *Func, size_t Address)
+{
+    size_t LowPC = Func->FuncLexScope.LowPC;
+    size_t HighPC = Func->FuncLexScope.HighPC;
+
+    return AddressBetween(Address, LowPC, HighPC);
+}
+
 static di_function *
 FindFunctionConfiningAddress(size_t Address)
 {
@@ -638,18 +647,16 @@ printf("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Address,
         {
             di_function *Func = FindFunctionConfiningAddress(Current->Address);
             Result.Start = Current->Address;
-            // TODO(mateusz): I think this will be different, in that it will use 
-            // the lexical scopes
             Result.End = Func->FuncLexScope.HighPC;
             break;
         }
         else
         {
             di_src_line *Next = &File->Lines[I];
-            if(Next->LineNum != Current->LineNum)
+            if(Next->LineNum != Current->LineNum && Next->Address != Current->Address)
             {
-                //printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
-                //printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
+                printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
+                printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
                 Result.Start = Current->Address;
                 Result.End = Next->Address;
 

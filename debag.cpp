@@ -39,7 +39,8 @@
  * - Sort Registers maybe?
  * - Better Breakpoints window, give information like Enabled, LineNO, FileName
  * - hamster_debug
- *   - When you are in a constructor for Vec2 you cann't step out of it until you spam the step instr button
+ *   - While in a class/struct/union method you cannot see the variables, because they have no names
+ *     the entry for the subprogram is heavily fragmented around the DWARF info
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
  *   - Add an option to open a new source file
@@ -754,6 +755,12 @@ GetProgramCounter()
     return Debuger.Regs.RIP;
 }
 
+static inline size_t
+GetReturnAddress()
+{
+    return PeekDebugeeMemory(Debuger.Regs.RBP + 8, Debuger.DebugeePID);
+}
+
 static size_t
 PeekDebugeeMemory(size_t Address, i32 DebugeePID)
 {
@@ -917,6 +924,7 @@ UpdateInfo()
         address_range LexScopeRange = {};
         LexScopeRange.Start = Func->FuncLexScope.LowPC;
         LexScopeRange.End = Func->FuncLexScope.HighPC;
+        printf("LexScope of %s is %lx-%lx\n", Func->Name, LexScopeRange.Start, LexScopeRange.End);
         
         DisassembleAroundAddress(LexScopeRange, Debuger.DebugeePID);
     }
@@ -1115,37 +1123,42 @@ DebugerMain()
             {
                 bool IsRunning = Debuger.Flags & DEBUGEE_FLAG_RUNNING;
                 
-                if (ImGui::MenuItem("Start process", "F5", false, !IsRunning))
+                if(ImGui::MenuItem("Start process", "F5", false, !IsRunning))
                 {
                     DebugeeContinueOrStart();
                 }
-                if (ImGui::MenuItem("Restart process", "Shift+F5", false, IsRunning))
+                if(ImGui::MenuItem("Restart process", "Shift+F5", false, IsRunning))
                 {
                     DebugeeRestart();
                 }
                 
                 ImGui::Separator();
                 
-                if (ImGui::MenuItem("Continue", "F5", false, IsRunning))
+                if(ImGui::MenuItem("Continue", "F5", false, IsRunning))
                 {
                     DebugeeContinueOrStart();
                 }
-                if (ImGui::MenuItem("Step next", "F10", false, IsRunning))
+                if(ImGui::MenuItem("Step out", "F9", false, IsRunning))
+                {
+                    StepOutOfFunction(Debuger.DebugeePID);
+                    UpdateInfo();
+                }
+                if(ImGui::MenuItem("Step next", "F10", false, IsRunning))
                 {
                     ToNextLine(Debuger.DebugeePID, false);
                     UpdateInfo();
                 }
-                if (ImGui::MenuItem("Step in", "F11", false, IsRunning))
+                if(ImGui::MenuItem("Step in", "F11", false, IsRunning))
                 {
                     ToNextLine(Debuger.DebugeePID, true);
                     UpdateInfo();
                 }
-                if (ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
+                if(ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
                 {
                     NextInstruction(Debuger.DebugeePID);
                     UpdateInfo();
                 }
-                if (ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
+                if(ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
                 {
                     StepInstruction(Debuger.DebugeePID);
                     UpdateInfo();
@@ -1202,6 +1215,17 @@ DebugerMain()
             else
             {
                 DebugeeContinueOrStart();
+            }
+        }
+
+        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+        {
+            bool F9 = KeyboardButtons[GLFW_KEY_F9].Pressed || KeyboardButtons[GLFW_KEY_F9].Repeat;
+            
+            if(F9)
+            {
+                StepOutOfFunction(Debuger.DebugeePID);
+                UpdateInfo();
             }
         }
         

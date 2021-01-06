@@ -188,6 +188,7 @@ static char *DumpFile(arena *Arena, char *Path);
 static void GLFWModsToKeyboardModifiers(int Mods);
 static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t GetProgramCounter();
+static size_t GetReturnAddress();
 static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
 static char *GetRegisterNameByIndex(u32 Index);
 static u64 HexStringToInt(char *String);
