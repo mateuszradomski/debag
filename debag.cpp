@@ -1289,162 +1289,167 @@ DebugerMain()
         {
             Gui->ModalFuncShow();
         }
-        
+
         ImGui::Begin("Disassembly", 0x0, WinFlags);
         
         ImGui::SetWindowPos(ImVec2(Gui->WindowWidth / 2, MenuBarHeight));
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-
-        ImGuiListClipper Clipper = {};
-        Clipper.Begin(DisasmInstCount);
-        size_t PC = GetProgramCounter();
-
-        // @Speed: Binary search will like this one!
-        i32 PCItemIndex = -1;
-        for(u32 I = 0; I < DisasmInstCount; I++)
+            
+        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
         {
-            if(DisasmInst[I].Address == PC)
+            ImGuiListClipper Clipper = {};
+            Clipper.Begin(DisasmInstCount);
+            size_t PC = GetProgramCounter();
+
+            // @Speed: Binary search will like this one!
+            i32 PCItemIndex = -1;
+            for(u32 I = 0; I < DisasmInstCount; I++)
             {
-                PCItemIndex = I;
-                break;
-            }
-        }
-
-        if(Debuger.Flags & DEBUGEE_FLAG_STEPED && PCItemIndex != -1)
-        {
-            f32 Max = ImGui::GetScrollMaxY();
-            f32 Curr = ((f32)PCItemIndex / (f32)DisasmInstCount);
-            Curr *= Max;
-
-            ImGui::SetScrollY(Curr);
-        }
-
-        while(Clipper.Step())
-        {
-            for(int I = Clipper.DisplayStart; I < Clipper.DisplayEnd; I++)
-            {
-                disasm_inst *Inst = &DisasmInst[I];
-                
-                if(Inst->Address == PC)
+                if(DisasmInst[I].Address == PC)
                 {
-                    ImGui::TextColored(CurrentLineColor,
-                                       "0x%" PRIx64 ":\t%s\t\t%s\n",
-                                       Inst->Address, Inst->Mnemonic, Inst->Operation);
-                    
-                    if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                    PCItemIndex = I;
+                    break;
+                }
+            }
+
+            if(Debuger.Flags & DEBUGEE_FLAG_STEPED && PCItemIndex != -1)
+            {
+                f32 Max = ImGui::GetScrollMaxY();
+                f32 Curr = ((f32)PCItemIndex / (f32)DisasmInstCount);
+                Curr *= Max;
+
+                ImGui::SetScrollY(Curr);
+            }
+
+            while(Clipper.Step())
+            {
+                for(int I = Clipper.DisplayStart; I < Clipper.DisplayEnd; I++)
+                {
+                    disasm_inst *Inst = &DisasmInst[I];
+                
+                    if(Inst->Address == PC)
                     {
-                        ImGui::SetScrollHereY(0.5f);
-                        CenteredDissassembly = true;
+                        ImGui::TextColored(CurrentLineColor,
+                                           "0x%" PRIx64 ":\t%s\t\t%s\n",
+                                           Inst->Address, Inst->Mnemonic, Inst->Operation);
+                    
+                        if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                        {
+                            ImGui::SetScrollHereY(0.5f);
+                            CenteredDissassembly = true;
+                        }
+                    }
+                    else
+                    {
+                        ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
+                                    Inst->Address, Inst->Mnemonic, Inst->Operation);
                     }
                 }
-                else
-                {
-                    ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
-                                Inst->Address, Inst->Mnemonic, Inst->Operation);
-                }
             }
         }
-
+        
         ImGui::PopStyleVar();
         ImGui::End();
-        
+
         ImGui::Begin("Listings", 0x0, WinFlags);
         ImGui::SetWindowPos(ImVec2(0, MenuBarHeight));
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
-        if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
+        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
         {
-            di_src_line *Line = Debuger.Flags & DEBUGEE_FLAG_RUNNING ? LineTableFindByAddress(GetProgramCounter()) : 0x0;
-
-            for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
+            if(ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
             {
-                ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
-                if(Line && SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                di_src_line *Line = Debuger.Flags & DEBUGEE_FLAG_RUNNING ? LineTableFindByAddress(GetProgramCounter()) : 0x0;
+
+                for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
                 {
-                    TIFlags = ImGuiTabItemFlags_SetSelected;
-                }
-                
-                char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
-                //                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
-                if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
-                {
-                    //printf("child on %u\n", SrcFileIndex);
-                    ImGui::BeginChild("srcfile");
-                    
-                    di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
-                    di_src_line *DrawingLine = 0x0;
-                    for(u32 I = 0; I < Src->ContentLineCount + 1; I++)
+                    ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
+                    if(Line && SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
                     {
-                        // NOTE(mateusz): Lines are indexed from 1
-                        if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
+                        TIFlags = ImGuiTabItemFlags_SetSelected;
+                    }
+                
+                    char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
+                    //                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
+                    if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
+                    {
+                        //printf("child on %u\n", SrcFileIndex);
+                        ImGui::BeginChild("srcfile");
+                    
+                        di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
+                        di_src_line *DrawingLine = 0x0;
+                        for(u32 I = 0; I < Src->ContentLineCount + 1; I++)
                         {
-                            DrawingLine = Line;
-                            ImGui::TextColored(CurrentLineColor, "%s", Src->Content[I]);
-                            
-                            if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                            // NOTE(mateusz): Lines are indexed from 1
+                            if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                             {
-                                ImGui::SetScrollHereY(0.5f);
-                                CenteredSourceCode = true;
-                            }
-                        }
-                        else
-                        {
-                            DrawingLine = LineFindByNumber(I + 1, SrcFileIndex);
+                                DrawingLine = Line;
+                                ImGui::TextColored(CurrentLineColor, "%s", Src->Content[I]);
                             
-                            breakpoint *BP = 0x0;
-                            if(DrawingLine &&
-                               (BP = BreakpointFind(DrawingLine->Address)) &&
-                               BreakpointEnabled(BP))
-                            {
-                                ImGui::TextColored(BreakpointLineColor, "%s", Src->Content[I]);
+                                if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                                {
+                                    ImGui::SetScrollHereY(0.5f);
+                                    CenteredSourceCode = true;
+                                }
                             }
                             else
                             {
-                                ImGui::TextUnformatted(Src->Content[I]);
-                            }
-                        }
-                        
-                        if(ImGui::IsItemClicked())
-                        {
-                            // TODO(mateusz): This NEEDS to be better and not settings breakpoints
-                            // at comments and other garbage
-                            if(DrawingLine)
-                            {
-                                breakpoint *BP = BreakpointFind(DrawingLine->Address);
-                                if(BreakpointEnabled(BP))
+                                DrawingLine = LineFindByNumber(I + 1, SrcFileIndex);
+                            
+                                breakpoint *BP = 0x0;
+                                if(DrawingLine &&
+                                   (BP = BreakpointFind(DrawingLine->Address)) &&
+                                   BreakpointEnabled(BP))
                                 {
-                                    BreakpointDisable(BP);
+                                    ImGui::TextColored(BreakpointLineColor, "%s", Src->Content[I]);
                                 }
                                 else
                                 {
-                                    if(BP)
+                                    ImGui::TextUnformatted(Src->Content[I]);
+                                }
+                            }
+                        
+                            if(ImGui::IsItemClicked())
+                            {
+                                if(DrawingLine)
+                                {
+                                    breakpoint *BP = BreakpointFind(DrawingLine->Address);
+                                    if(BreakpointEnabled(BP))
                                     {
-                                        BreakpointEnable(BP);
+                                        BreakpointDisable(BP);
                                     }
                                     else
                                     {
-                                        BreakpointPushAtSourceLine(Src, DrawingLine->LineNum, Breakpoints, &BreakpointCount);
+                                        if(BP)
+                                        {
+                                            BreakpointEnable(BP);
+                                        }
+                                        else
+                                        {
+                                            BreakpointPushAtSourceLine(Src, DrawingLine->LineNum, Breakpoints, &BreakpointCount);
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
                     
-                    ImGui::EndChild();
-                    ImGui::EndTabItem();
+                        ImGui::EndChild();
+                        ImGui::EndTabItem();
+                    }
                 }
-            }
             
-            ImGui::EndTabBar();
+                ImGui::EndTabBar();
+            }
+        
         }
         
         ImGui::PopStyleVar();
         ImGui::End();
         
-        ImGui::Begin("Program variables", 0x0, WinFlags);
+        ImGui::Begin("Control panel", 0x0, WinFlags);
         
         ImGui::SetWindowPos(ImVec2(0, (Gui->WindowHeight / 3) * 2));
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth, Gui->WindowHeight / 3));
@@ -1453,83 +1458,33 @@ DebugerMain()
         {
             if(ImGui::BeginTabItem("Locals"))
             {
-                ImGui::BeginChild("regs");
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
-                
-                di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
-                if(Func && Func->FrameBaseIsCFA)
+                if(Debuger.Flags && DEBUGEE_FLAG_RUNNING)
                 {
-                    size_t FBReg = DWARFGetCFA(GetProgramCounter());
-                    
-                    ImGui::Columns(3, "tree", true);
-                    
-                    ImGui::Text("Name"); ImGui::NextColumn();
-                    ImGui::Text("Value"); ImGui::NextColumn();
-                    ImGui::Text("Type"); ImGui::NextColumn();
-                    ImGui::Separator();
-                    
-                    for(u32 I = 0; I < Func->ParamCount; I++)
-                    {
-                        di_variable *Param = &Func->Params[I];
-                        ImGuiShowVariable(Param, FBReg);
-                    }
-                    
-                    for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
-                    {
-                        di_variable *Var = &Func->FuncLexScope.Variables[I];
-                        ImGuiShowVariable(Var, FBReg);
-                    }
-                    
-                    for(u32 LexScopeIndex = 0;
-                        LexScopeIndex < Func->LexScopesCount;
-                        LexScopeIndex++)
-                    {
-                        di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-                        if(AddressInLexicalScope(LexScope, GetProgramCounter()))
-                        {
-                            for(u32 I = 0; I < LexScope->VariablesCount; I++)
-                            {
-                                di_variable *Var = &LexScope->Variables[I];
-                                ImGuiShowVariable(Var, FBReg);
-                            }
-                        }
-                    }
-                }
-                else if(Func)
-                {
-                    assert(false);
-                }
-
-                if(DI->Functions && DI->Variables)
-                {
-                    di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
-                    for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
-                    {
-                        di_variable *Var = &CU->GlobalVariables[I];
-                        if(Var->LocationAtom)
-                        {
-                            ImGuiShowVariable(Var);
-                        }
-                    }
+                    ImGui::BeginChild("regs");
+                    GuiShowVariables();
+                    ImGui::EndChild();
                 }
                 
-                ImGui::PopStyleVar();
-                ImGui::EndChild();
-                ImGui::Columns(1);
                 ImGui::EndTabItem();
             }
             if(ImGui::BeginTabItem("x64 Registers"))
             {
-                ImGui::BeginChild("regs");
-                ImGuiShowRegisters(Debuger.Regs);
-                ImGui::EndChild();
+                if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+                {
+                    ImGui::BeginChild("regs");
+                    ImGuiShowRegisters(Debuger.Regs);
+                    ImGui::EndChild();
+                }
+                
                 ImGui::EndTabItem();
             }
             if(ImGui::BeginTabItem("Breakpoints"))
             {
-                for(u32 I = 0; I < BreakpointCount; I++)
+                if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
                 {
-                    ImGui::Text("Breakpoint at %lX\n", Breakpoints[I].Address);
+                    ImGui::BeginChild("bps");
+                    GuiShowBreakpoints();
+                    ImGui::EndChild();
                 }
                 
                 ImGui::EndTabItem();

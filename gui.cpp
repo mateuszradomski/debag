@@ -31,6 +31,15 @@ ImGuiShowRegisters(x64_registers Regs)
 }
 
 static void
+GuiShowBreakpoints()
+{
+    for(u32 I = 0; I < BreakpointCount; I++)
+    {
+        ImGui::Text("Breakpoint at %lX\n", Breakpoints[I].Address);
+    }
+}
+
+static void
 ImGuiShowValueAsString(size_t DereferencedAddress)
 {
     char Temp[256] = {};
@@ -378,6 +387,72 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
             }
         }
     }
+}
+
+static void
+GuiShowVariables()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+                
+    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    if(Func && Func->FrameBaseIsCFA)
+    {
+        size_t FBReg = DWARFGetCFA(GetProgramCounter());
+                    
+        ImGui::Columns(3, "tree", true);
+                    
+        ImGui::Text("Name"); ImGui::NextColumn();
+        ImGui::Text("Value"); ImGui::NextColumn();
+        ImGui::Text("Type"); ImGui::NextColumn();
+        ImGui::Separator();
+                    
+        for(u32 I = 0; I < Func->ParamCount; I++)
+        {
+            di_variable *Param = &Func->Params[I];
+            ImGuiShowVariable(Param, FBReg);
+        }
+                    
+        for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
+        {
+            di_variable *Var = &Func->FuncLexScope.Variables[I];
+            ImGuiShowVariable(Var, FBReg);
+        }
+                    
+        for(u32 LexScopeIndex = 0;
+            LexScopeIndex < Func->LexScopesCount;
+            LexScopeIndex++)
+        {
+            di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
+            if(AddressInLexicalScope(LexScope, GetProgramCounter()))
+            {
+                for(u32 I = 0; I < LexScope->VariablesCount; I++)
+                {
+                    di_variable *Var = &LexScope->Variables[I];
+                    ImGuiShowVariable(Var, FBReg);
+                }
+            }
+        }
+    }
+    else if(Func)
+    {
+        assert(false);
+    }
+
+    if(DI->Functions && DI->Variables)
+    {
+        di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
+        for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
+        {
+            di_variable *Var = &CU->GlobalVariables[I];
+            if(Var->LocationAtom)
+            {
+                ImGuiShowVariable(Var);
+            }
+        }
+    }
+                
+    ImGui::PopStyleVar();
+    ImGui::Columns(1);
 }
 
 static void
