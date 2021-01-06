@@ -175,7 +175,11 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
     
     if(Underlaying.Flags & TYPE_IS_POINTER)
     {
-        strcat(TypeName, " *");
+        StringConcat(TypeName, " ");
+        for(u32 I = 0; I < Underlaying.PointerCount; I++)
+        {
+            StringConcat(TypeName, "*");
+        }
     }
     
     ImGui::NextColumn();
@@ -197,7 +201,11 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
     {
         VarAddress = MachineWord;
         
-        strcat(TypeName, " *");
+        StringConcat(TypeName, " ");
+        for(u32 I = 0; I < Underlaying.PointerCount; I++)
+        {
+            StringConcat(TypeName, "*");
+        }
     }
     
     // Anonymous union
@@ -235,7 +243,6 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
             ImGui::TreePop();
         }
     }
-    
 }
 
 static void
@@ -250,7 +257,11 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
     {
         VarAddress = MachineWord;
         
-        strcat(TypeName, " *");
+        StringConcat(TypeName, " ");
+        for(u32 I = 0; I < Underlaying.PointerCount; I++)
+        {
+            StringConcat(TypeName, "*");
+        }
     }
     
     bool Open = ImGui::TreeNode(VarName, "%s", VarName);

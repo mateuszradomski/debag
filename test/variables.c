@@ -16,7 +16,6 @@ struct swarray
 
 struct big_struct
 {
-    
     int a;
     int b;
     int c;
