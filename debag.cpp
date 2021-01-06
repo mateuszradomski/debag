@@ -11,7 +11,6 @@
 #include <sys/prctl.h>
 #include <fcntl.h>
 
-//#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <capstone/capstone.h>
 #include <libdwarf/dwarf.h>
@@ -43,7 +42,6 @@
  *   - When you are in a constructor for Vec2 you cann't step out of it until you spam the step instr button
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
- *   - hamster.cpp line 404 breaks the stepping
  *   - Add an option to open a new source file
  */
 
@@ -1053,8 +1051,8 @@ DebugerMain()
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
-    u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
-    strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
+    // u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
+    // strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
     
     Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -1496,6 +1494,7 @@ DebugerMain()
                     assert(false);
                 }
 
+#if 0
                 if(DI->FuctionsCount && DI->VariablesCount)
                 {
                     di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
@@ -1520,6 +1519,7 @@ DebugerMain()
                         }
                     }
                 }
+#endif
                 
                 ImGui::PopStyleVar();
                 ImGui::EndChild();

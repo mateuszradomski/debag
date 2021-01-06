@@ -298,9 +298,13 @@ ContinueProgram(i32 DebugeePID)
 static void
 BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID, breakpoint *Breakpoints, u32 *BreakpointsCount)
 {
-    breakpoint BP = BreakpointCreate(Range.End);
-    BreakpointEnable(&BP);
-    Breakpoints[(*BreakpointsCount)++] = BP;
+    bool AddressWithoutBreakpoint = !BreakpointFind(Range.End, Breakpoints, (*BreakpointsCount));
+    if(AddressWithoutBreakpoint)
+    {
+        breakpoint BP = BreakpointCreate(Range.End);
+        BreakpointEnable(&BP);
+        Breakpoints[(*BreakpointsCount)++] = BP;
+    }
 
     cs_insn *Instruction = 0x0;
     for(size_t CurrentAddress = Range.Start; CurrentAddress < Range.End;)
@@ -333,11 +337,11 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             // values i.e. jump tables
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
-            //printf("Breaking because of call\n");
+            printf("Breaking because of call\n");
             size_t CallAddress = Instruction->detail->x86.operands[0].imm;
             
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(CallAddress) != 0x0;
-            if(AddressInAnyCompileUnit)
+            if(AddressInAnyCompileUnit && !BreakpointFind(CallAddress, Breakpoints, (*BreakpointsCount)))
             {
                 breakpoint BP = BreakpointCreate(CallAddress);
                 BreakpointEnable(&BP);
@@ -350,7 +354,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             size_t ReturnAddress = PeekDebugeeMemory(Debuger.Regs.RBP + 8, DebugeePID);
 
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(ReturnAddress) != 0x0;
-            if(AddressInAnyCompileUnit)
+            if(AddressInAnyCompileUnit && !BreakpointFind(ReturnAddress, Breakpoints, (*BreakpointsCount)))
             {
                 breakpoint BP = BreakpointCreate(ReturnAddress);
                 BreakpointEnable(&BP);
@@ -377,7 +381,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
                 bool DiffrentLine = AddressInDiffrentLine(JumpAddress);
                 if(!Between && DiffrentLine)
                 {
-                    //printf("Breaking rel branch: %lX\n", JumpAddress);
+                    printf("Breaking rel branch: %lX\n", JumpAddress);
 
                     breakpoint BP = BreakpointCreate(JumpAddress);
                     BreakpointEnable(&BP);
@@ -386,9 +390,11 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
                 else 
                 {
                     address_range JumpToNextLine = AddressRangeCurrentAndNextLine(JumpAddress);
-
-                    BreakAtCurcialInstrsInRange(JumpToNextLine, false, DebugeePID,
-                                                Breakpoints, BreakpointsCount);
+                    if(JumpToNextLine.Start != Range.Start && JumpToNextLine.End != Range.End)
+                    {
+                        BreakAtCurcialInstrsInRange(JumpToNextLine, false, DebugeePID,
+                                                    Breakpoints, BreakpointsCount);
+                    }
                 }
             }
         }

@@ -325,7 +325,14 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
     }
     else
     {
-        printf("Var [%s] doesn't have a type\n", VarName);
+        if(VarName == 0x0)
+        {
+            printf("Var with no name doesn't have a type\n");
+        }
+        else
+        {
+            printf("Var [%s] doesn't have a type\n", VarName);
+        }
         //assert(false);
     }
 }
@@ -346,7 +353,19 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
     }
     else
     {
-        printf("blablah\n");
+        if(Var && Var->Name)
+        {
+            const char *OpName = 0x0;
+            auto Result = dwarf_get_OP_name(Var->LocationAtom, &OpName);
+            if(Result == DW_DLV_OK && OpName)
+            {
+                printf("Cannot show [%s] with %s as OP\n", Var->Name, OpName);
+            }
+            else
+            {
+                printf("Cannot show Var, Result is nill, LocationAtom = %d\n", Var->LocationAtom);
+            }
+        }
     }
 }
 
