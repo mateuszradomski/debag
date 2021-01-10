@@ -507,10 +507,26 @@ _ImGuiShowBreakAtAddressModalWindow()
     
     if(ImGui::BeginPopupModal(AddressBreakLabel))
     {
+        struct AddressTextFilter
+        {
+            // Return 0 when we pass and 1 when we don't.
+            static int
+            LettersWithX(ImGuiInputTextCallbackData* Data)
+            {
+                if(Data->EventChar < 256 && strchr("0123456789abcdefxABCDEFX", (char)Data->EventChar))
+                {
+                    return 0; // pass
+                }
+
+                return 1; // no pass
+            }
+        };
+        
         ImGui::Text("Enter the address you wish to set a brekpoint, hex or decimal");
         ImGui::Separator();
-        
-        ImGui::InputText("Address", Gui->BreakAddress, sizeof(Gui->BreakAddress));
+
+        ImGui::InputText("Address", Gui->BreakAddress, sizeof(Gui->BreakAddress),
+                         ImGuiInputTextFlags_CallbackCharFilter, AddressTextFilter::LettersWithX);
         
         if(ImGui::Button("OK", ImVec2(120, 0)))
         {

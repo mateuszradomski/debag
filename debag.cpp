@@ -35,7 +35,6 @@
  * - When breaking at an function or address we need to have DebugInfo loaded about that file
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
- * - Break at Address allows you to insert arbirary chars, allow only hex and decimal ones
  * - Sort Registers maybe?
  * - Better Breakpoints window, give information like Enabled, LineNO, FileName
  * - hamster_debug
