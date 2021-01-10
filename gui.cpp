@@ -550,3 +550,9 @@ GuiSetStatusText(char *Str)
 {
     Gui->StatusText = StringDuplicate(Gui->Arena, Str);
 }
+
+static void
+GuiClearStatusText()
+{
+    Gui->StatusText = 0x0;
+}

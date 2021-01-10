@@ -42,5 +42,6 @@ static void ImGuiStartFrame();
 static void _ImGuiShowBreakAtAddressModalWindow();
 static void _ImGuiShowBreakAtFunctionModalWindow();
 static void GuiSetStatusText(char *Str);
+static void GuiClearStatusText();
 
 #endif //GUI_H

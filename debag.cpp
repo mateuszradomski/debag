@@ -896,6 +896,12 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
     }
 }
 
+static bool
+IsFile(char *Path)
+{
+    return access(Path, F_OK) == 0;
+}
+
 static char *
 DumpFile(arena *Arena, char *Path)
 {
@@ -991,20 +997,40 @@ DebugeeKill()
 static void
 DebugeeContinueOrStart()
 {
-    //Continue or start program
-    if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
+    if(IsFile(Debuger.DebugeeProgramPath))
     {
-        DebugeeStart();
-        DWARFRead();
+        GuiClearStatusText();
         
-        BreakAtMain();
+        //Continue or start program
+        if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
+        {
+            DebugeeStart();
+            DWARFRead();
+        
+            BreakAtMain();
 
-        size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
-        printf("LoadAddress = %lx\n", LoadAddress);
-    }
+            size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+            printf("LoadAddress = %lx\n", LoadAddress);
+        }
     
-    ContinueProgram(Debuger.DebugeePID);
-    UpdateInfo();
+        ContinueProgram(Debuger.DebugeePID);
+        UpdateInfo();
+    }
+    else
+    {
+        if(StringEmpty(Debuger.DebugeeProgramPath))
+        {
+            GuiSetStatusText("No program path given");
+        }
+        else
+        {
+            char Buff[384] = {};
+
+            sprintf(Buff, "File at [%s] does not exist", Debuger.DebugeeProgramPath);
+
+            GuiSetStatusText(Buff);
+        }
+    }
 }
 
 static void
@@ -1505,12 +1531,11 @@ DebugerMain()
 int
 main(i32 ArgCount, char **Args)
 {
-    if(ArgCount != 2)
+    if(ArgCount == 2)
     {
-        return -1;
+        StringCopy(Debuger.DebugeeProgramPath, Args[1]);
     }
     
-    StringCopy(Debuger.DebugeeProgramPath, Args[1]);
     DebugerMain();
     
     return 0;
