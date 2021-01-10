@@ -168,6 +168,20 @@ dbg Debuger;
 button KeyboardButtons[GLFW_KEY_LAST] = {};
 keyboard_modifiers KeyMods = {};
 
+#define STMNT(S) do{ S }while(0)
+
+#define SLL_STACK_PUSH_(H,N) N->Next=H,H=N
+#define SLL_STACK_POP_(H) H=H=H->Next
+#define SLL_QUEUE_PUSH_MULTIPLE_(F,L,FF,LL) if(LL){if(F){L->Next=FF;}else{F=FF;}L=LL;L->Next=0;}
+#define SLL_QUEUE_PUSH_(F,L,N) SLL_QUEUE_PUSH_MULTIPLE_(F,L,N,N)
+#define SLL_QUEUE_POP_(F,L) if (F==L) { F=L=0; } else { F=F->Next; }
+
+#define SLL_STACK_PUSH(H,N) (SLL_STACK_PUSH_((H),(N)))
+#define SLL_STACK_POP(H) (SLL_STACK_POP_((H)))
+#define SLL_QUEUE_PUSH_MULTIPLE(F,L,FF,LL) STMNT( SLL_QUEUE_PUSH_MULTIPLE_((F),(L),(FF),(LL)) )
+#define SLL_QUEUE_PUSH(F,L,N) STMNT( SLL_QUEUE_PUSH_((F),(L),(N)) )
+#define SLL_QUEUE_POP(F,L) STMNT( SLL_QUEUE_POP_((F),(L)) )
+
 static inline bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
 static arena *ArenaCreate(size_t Size);
 static arena *ArenaCreateZeros(size_t Size);

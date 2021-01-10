@@ -32,6 +32,26 @@ struct di_src_file
     u32 SrcLineCount;
 };
 
+struct di_exec_src_file
+{
+    char *Name;
+    char *Dir;
+};
+
+struct di_exec_src_file_bucket
+{
+    di_exec_src_file_bucket *Next;
+    di_exec_src_file *Files;
+    u32 Count;
+};
+
+struct di_exec_src_file_list
+{
+    di_exec_src_file_bucket *Head;
+    di_exec_src_file_bucket *Tail;
+    u32 Count;
+};
+
 struct di_variable
 {
     char *Name;
@@ -211,8 +231,9 @@ struct debug_info
     
     di_src_file *SourceFiles;
     u32 SourceFilesCount;
-    u32 SourceFilesInExec;
-    
+
+    di_exec_src_file_list ExecSrcFileList;
+
     di_variable *Variables;
     u32 VariablesCount;
     

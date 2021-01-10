@@ -595,10 +595,8 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 Dwarf_Line_Context LineCtx = 0;
                 DWARF_CALL(dwarf_srclines_b(SearchDie, &Version, &TableType, &LineCtx, 0x0));
                 
-                Dwarf_Signed SrcFilesCount = 0;
-                dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
-                DI->SourceFilesInExec += SrcFilesCount;
-                
+                //Dwarf_Signed SrcFilesCount = 0;
+                //dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
                 //printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
                 
                 Dwarf_Line *LineBuffer = 0;
@@ -914,6 +912,45 @@ ranges have been read then don't read the low-high
                     }break;
                 }
             }
+
+            Dwarf_Unsigned Version = 0;
+            Dwarf_Small TableType = 0;
+            Dwarf_Line_Context LineCtx = 0;
+            DWARF_CALL(dwarf_srclines_b(DIE, &Version, &TableType, &LineCtx, Error));
+
+            Dwarf_Signed BaseIdx = 0;
+            Dwarf_Signed Count = 0;
+            Dwarf_Signed EndIdx = 0;
+            DWARF_CALL(dwarf_srclines_files_indexes(LineCtx, &BaseIdx, &Count, &EndIdx, Error));
+
+            di_exec_src_file_bucket *Bucket = ArrayPush(DI->Arena, di_exec_src_file_bucket, 1);
+            Bucket->Files = ArrayPush(DI->Arena, di_exec_src_file, Count);
+
+            for(i64 I = BaseIdx; I < EndIdx; I++)
+            {
+                const char *FName = 0x0;
+                Dwarf_Unsigned DirIdx = 0x0;
+                DWARF_CALL(dwarf_srclines_files_data_b(LineCtx, I, &FName, &DirIdx, 0x0, 0x0, 0x0, Error));
+
+                const char *DName = 0x0;
+                i32 DirRes = dwarf_srclines_include_dir_data(LineCtx, DirIdx, &DName, Error);
+
+                if(DirRes == DW_DLV_OK)
+                {
+                    di_exec_src_file File = {};
+                    File.Dir  = StringDuplicate(DI->Arena, (char *)DName);
+                    File.Name = StringDuplicate(DI->Arena, (char *)FName);
+                    Bucket->Files[Bucket->Count++] = File;
+//                    printf("\t[%ld]:%s|%s\n", I, DName, FName);
+                }
+                else
+                {
+//                    printf("\t[%ld]:%s\n", I, FName);
+                }
+            }
+
+            printf("Pushing a bucket with %u entries\n", Bucket->Count);
+            SLL_QUEUE_PUSH(DI->ExecSrcFileList.Head, DI->ExecSrcFileList.Tail, Bucket);
             
             if(CompUnit->RangesCount >= 1)
             {

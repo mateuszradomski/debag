@@ -1299,6 +1299,13 @@ DebugerMain()
                     ImGuiShowBreakAtFunction();
                 }
             }
+
+            bool Ctrlp = KeyboardButtons[GLFW_KEY_P].Pressed && KeyMods.Control;
+
+            if(Ctrlp)
+            {
+                GuiShowOpenFile();
+            }
         }
         
         if(BreakAtFunction)

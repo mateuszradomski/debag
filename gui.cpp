@@ -562,6 +562,62 @@ ImGuiShowBreakAtAddress()
 }
 
 static void
+_ImGuiShowOpenFileModalWindow()
+{
+    char *AddressBreakLabel = "File to open";
+    
+    if(ImGui::BeginPopupModal(AddressBreakLabel))
+    {
+        ImGui::Text("Enter the file's name you wish to open");
+        ImGui::Separator();
+
+        for(auto Bucket = DI->ExecSrcFileList.Head; Bucket != 0x0; Bucket = Bucket->Next)
+        {
+            for(u32 I = 0; I < Bucket->Count; I++)
+            {
+                di_exec_src_file *File = &Bucket->Files[I];
+                
+                ImGui::Text("%s  /%s", File->Dir, File->Name);
+            }
+        }
+        
+        ImGui::InputText("Name", Gui->BreakAddress, sizeof(Gui->BreakAddress));
+        
+        if(ImGui::Button("OK", ImVec2(120, 0)))
+        {
+            BreakAtAddress(Gui->BreakAddress);
+            UpdateInfo();
+            
+            ImGui::CloseCurrentPopup(); 
+            memset(Gui->BreakAddress, 0, sizeof(Gui->BreakAddress));
+            Gui->ModalFuncShow = 0x0;
+        }
+        
+        ImGui::SetItemDefaultFocus();
+        ImGui::SameLine();
+        if(ImGui::Button("Cancel", ImVec2(120, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+            memset(Gui->BreakAddress, 0, sizeof(Gui->BreakAddress));
+            Gui->ModalFuncShow = 0x0;
+        }
+        ImGui::EndPopup();
+    }
+}
+
+static void
+GuiShowOpenFile()
+{
+    char *FileOpenLabel = "File to open";
+    ImGui::OpenPopup(FileOpenLabel);
+    ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+    ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    
+    Gui->ModalFuncShow = _ImGuiShowOpenFileModalWindow;
+
+}
+
+static void
 GuiSetStatusText(char *Str)
 {
     Gui->StatusText = StringDuplicate(Gui->Arena, Str);
