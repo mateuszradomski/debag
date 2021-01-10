@@ -1526,6 +1526,9 @@ DebugerMain()
         glfwPollEvents();
         glfwSwapBuffers(Window);
     }
+
+    ImGui::DestroyContext();
+    glfwTerminate();
 }
 
 int
