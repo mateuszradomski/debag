@@ -42,6 +42,7 @@
  *     the entry for the subprogram is heavily fragmented around the DWARF info
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
+ *   - When opening a file if there is nothing in a file, there is a segsev
  */
 
 static void
