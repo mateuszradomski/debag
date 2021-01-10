@@ -483,7 +483,7 @@ CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx)
 }
 
 static void
-DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum, u32 *LineIdxOut)
+DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum = 0, u32 *LineIdxOut = 0x0)
 {
     for(u32 I = 0; I < LineCount; I++)
     {
@@ -499,7 +499,7 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
             DWARF_CALL(dwarf_lineaddr(Lines[I], &Addr, 0x0));
             DWARF_CALL(dwarf_lineno(Lines[I], &LineNO, 0x0));
 
-            if(LineNO == LineNum)
+            if(LineIdxOut && LineNO == LineNum)
             {
                 *LineIdxOut = File->SrcLineCount;
             }
@@ -517,6 +517,65 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
     }
 }
 
+static void
+LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
+{
+    OpenDwarfSymbolsHandle();
+    
+    Dwarf_Unsigned CUHeaderLength = 0;
+    Dwarf_Half Version = 0;
+    Dwarf_Unsigned AbbrevOffset = 0;
+    Dwarf_Half AddressSize = 0;
+    Dwarf_Unsigned NextCUHeader = 0;
+    Dwarf_Error *Error = 0x0;
+    
+    Dwarf_Die SearchDie = 0x0;
+    for(;;)
+    {
+        i32 ResultI = dwarf_next_cu_header(DI->Debug, &CUHeaderLength,
+                                           &Version, &AbbrevOffset, &AddressSize,
+                                           &NextCUHeader, Error);
+                
+        assert(ResultI != DW_DLV_ERROR);
+                
+        Dwarf_Die CurrentDIE = 0;
+        ResultI = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
+        assert(ResultI != DW_DLV_ERROR && ResultI != DW_DLV_NO_ENTRY);
+                
+        SearchDie = FindDIEWithOffset(DI->Debug, CurrentDIE, CU->Offset);
+        if(SearchDie)
+        {
+            break;
+        }
+    }
+
+    if(SearchDie)
+    {
+        Dwarf_Unsigned Version = 0;
+        Dwarf_Small TableType = 0;
+        Dwarf_Line_Context LineCtx = 0;
+        DWARF_CALL(dwarf_srclines_b(SearchDie, &Version, &TableType, &LineCtx, 0x0));
+                
+        Dwarf_Line *LineBuffer = 0;
+        Dwarf_Signed LineCount = 0;
+        DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
+
+        char FileName[256] = {};
+        sprintf(FileName, "%s/%s", File->Dir, File->Name);
+        printf("Source path is [%s]\n", FileName);
+
+        //DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
+        u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, File->DwarfIndex);
+
+        di_src_file *NewFile = PushSourceFile(FileName, LinesMatching);
+        //printf("Pushing source file %s\n", FileName);
+
+        DumpLinesMatchingIndex(LineBuffer, LineCount, NewFile, File->DwarfIndex);
+    }
+
+    CloseDwarfSymbolsHandle();
+}
+
 static bool
 LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 {
@@ -524,7 +583,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     
     assert(OpenDwarfSymbolsHandle());
 
-    printf("Loading source that contains address %lx\n", Address);
+    //printf("Loading source that contains address %lx\n", Address);
     
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -537,7 +596,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     bool CUFound = false;
     if(DI->CompileUnitsCount > 0)
     {
-        printf("Searching for CU\n");
+        //printf("Searching for CU\n");
         for(u32 I = 0; I < DI->CompileUnitsCount; I++)
         {
             di_compile_unit *CompUnit = &DI->CompileUnits[I];
@@ -552,15 +611,15 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 {
                     CUDIEOffset = CompUnit->Offset;
                     CUFound = true;
-                    printf("LowPC is %lx, HighPC is %lx\n", LowPC, HighPC);
+                    //printf("LowPC is %lx, HighPC is %lx\n", LowPC, HighPC);
                 }
             }
         }
 
         if(CUFound)
         {
-            printf("Found CU with offset %lx\n", CUDIEOffset);
-            printf("Searching for that DIE\n");
+            //printf("Found CU with offset %lx\n", CUDIEOffset);
+            //printf("Searching for that DIE\n");
 
             Dwarf_Die SearchDie = 0x0;
             
@@ -585,7 +644,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
             
             if(SearchDie)
             {
-                printf("Found DIE\n");
+                //printf("Found DIE\n");
                 Dwarf_Half Tag = 0;
                 DWARF_CALL(dwarf_tag(SearchDie, &Tag, 0x0));
                 assert(Tag == DW_TAG_compile_unit);
@@ -604,7 +663,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
                 
                 //printf("There are %lld source lines\n", LineCount);
-                printf("Iterating over %lld lines\n", LineCount);
+                //printf("Iterating over %lld lines\n", LineCount);
                 for(i32 I = 0; I < LineCount; ++I)
                 {
                     Dwarf_Addr LineAddr = 0;
@@ -622,11 +681,11 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 
                         char *FileName = 0x0;
                         DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
-                        printf("Address %lx, FileName %p [%s]\n", Address, (void *)FileName, FileName);
+                        //printf("Address %lx, FileName %p [%s]\n", Address, (void *)FileName, FileName);
                         u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, FileNum);
 
                         di_src_file *File = PushSourceFile(FileName, LinesMatching);
-                        printf("Pushing source file %s\n", FileName);
+                        //printf("Pushing source file %s\n", FileName);
 
                         DumpLinesMatchingIndex(LineBuffer, LineCount, File, FileNum, LineNum, LineIdxOut);
 
@@ -923,8 +982,12 @@ ranges have been read then don't read the low-high
             Dwarf_Signed EndIdx = 0;
             DWARF_CALL(dwarf_srclines_files_indexes(LineCtx, &BaseIdx, &Count, &EndIdx, Error));
 
+            const char *CompileDir = 0x0;
+            DWARF_CALL(dwarf_srclines_comp_dir(LineCtx, &CompileDir, Error));
+
             di_exec_src_file_bucket *Bucket = ArrayPush(DI->Arena, di_exec_src_file_bucket, 1);
             Bucket->Files = ArrayPush(DI->Arena, di_exec_src_file, Count);
+            Bucket->CU = CompUnit;
 
             for(i64 I = BaseIdx; I < EndIdx; I++)
             {
@@ -938,8 +1001,21 @@ ranges have been read then don't read the low-high
                 if(DirRes == DW_DLV_OK)
                 {
                     di_exec_src_file File = {};
-                    File.Dir  = StringDuplicate(DI->Arena, (char *)DName);
+                    
+                    if(DName[0] == '/')
+                    {
+                        File.Dir = StringDuplicate(DI->Arena, (char *)DName);
+                    }
+                    else
+                    {
+                        // TODO(mateusz): This need polishing.
+                        char DirWithComp[128] = {};
+                        sprintf(DirWithComp, "%s/%s", CompileDir, DName);
+                        File.Dir = StringDuplicate(DI->Arena, (char *)DirWithComp);
+                    }
+                    
                     File.Name = StringDuplicate(DI->Arena, (char *)FName);
+                    File.DwarfIndex = I;
                     Bucket->Files[Bucket->Count++] = File;
 //                    printf("\t[%ld]:%s|%s\n", I, DName, FName);
                 }

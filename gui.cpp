@@ -571,14 +571,23 @@ _ImGuiShowOpenFileModalWindow()
         ImGui::Text("Enter the file's name you wish to open");
         ImGui::Separator();
 
-        for(auto Bucket = DI->ExecSrcFileList.Head; Bucket != 0x0; Bucket = Bucket->Next)
+        if(ImGui::BeginCombo("Files", "List of all files..."))
         {
-            for(u32 I = 0; I < Bucket->Count; I++)
+            for(auto Bucket = DI->ExecSrcFileList.Head; Bucket != 0x0; Bucket = Bucket->Next)
             {
-                di_exec_src_file *File = &Bucket->Files[I];
-                
-                ImGui::Text("%s  /%s", File->Dir, File->Name);
+                for(u32 I = 0; I < Bucket->Count; I++)
+                {
+                    di_exec_src_file *File = &Bucket->Files[I];
+
+                    if(ImGui::Selectable(File->Name))
+                    {
+                        printf("Selected %s\n", File->Name);
+                        LoadSourceCUFile(Bucket->CU, File);
+                    }
+                }
             }
+
+            ImGui::EndCombo();
         }
         
         ImGui::InputText("Name", Gui->BreakAddress, sizeof(Gui->BreakAddress));

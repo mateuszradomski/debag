@@ -36,12 +36,15 @@ struct di_exec_src_file
 {
     char *Name;
     char *Dir;
+    i32 DwarfIndex;
 };
 
+struct di_compile_unit;
 struct di_exec_src_file_bucket
 {
     di_exec_src_file_bucket *Next;
     di_exec_src_file *Files;
+    di_compile_unit *CU;
     u32 Count;
 };
 
@@ -309,6 +312,7 @@ static size_t GetDebugeeLoadAddress(i32 DebugeePID);
 static di_src_line *LineFindByNumber(u32 LineNum, u32 SrcFileIndex);
 static di_src_line *LineTableFindByAddress(size_t Address);
 static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
+static void LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File);
 static bool OpenDwarfSymbolsHandle();
 static di_src_file *PushSourceFile(char *Path, u32 SrcLineCount);
 static di_src_file *PushSourceFile(char *Path);

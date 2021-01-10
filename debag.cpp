@@ -42,7 +42,6 @@
  *     the entry for the subprogram is heavily fragmented around the DWARF info
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
- *   - Add an option to open a new source file
  */
 
 static void
@@ -1475,7 +1474,6 @@ DebugerMain()
             
                 ImGui::EndTabBar();
             }
-        
         }
         
         ImGui::PopStyleVar();
@@ -1533,6 +1531,7 @@ DebugerMain()
         glfwSwapBuffers(Window);
     }
 
+    CloseDwarfSymbolsHandle();
     ImGui::DestroyContext();
     glfwTerminate();
 }
