@@ -37,12 +37,14 @@
  * is running.
  * - Sort Registers maybe?
  * - Better Breakpoints window, give information like Enabled, LineNO, FileName
+ * - Show only files that are in the project
+ * - When the program seg faults show a backtrace
+ * - Define a rigorous way of being able to restart the program
  * - hamster_debug
  *   - While in a class/struct/union method you cannot see the variables, because they have no names
  *     the entry for the subprogram is heavily fragmented around the DWARF info
  *   - Can't switch between file tabs, it's broken???
  *   - Can't scroll it keeps snapping back
- *   - When opening a file if there is nothing in a file, there is a segsev
  */
 
 static void
@@ -1035,7 +1037,8 @@ DebugeeContinueOrStart()
 static void
 DeallocDebugInfo()
 {
-    CloseDwarfSymbolsHandle();
+    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    CloseDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
     
     ArenaDestroy(DI->Arena);
     memset(DI, 0, sizeof(debug_info));
@@ -1132,6 +1135,7 @@ DebugerMain()
         {
             auto MenuBarSize = ImGui::GetWindowSize();
             MenuBarHeight = MenuBarSize.y;
+            bool IsRunning = Debuger.Flags & DEBUGEE_FLAG_RUNNING;
             
             if(ImGui::BeginMenu("File"))
             {
@@ -1141,13 +1145,18 @@ DebugerMain()
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
                 ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
                 ImGui::PopItemWidth();
+
+                ImGui::Separator();
+
+                if(ImGui::MenuItem("Open new file", "Ctrl+P", false, IsRunning))
+                {
+                    GuiShowOpenFile();
+                }
                 
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Control"))
             {
-                bool IsRunning = Debuger.Flags & DEBUGEE_FLAG_RUNNING;
-                
                 if(ImGui::MenuItem("Start process", "F5", false, !IsRunning))
                 {
                     DebugeeContinueOrStart();
@@ -1532,7 +1541,8 @@ DebugerMain()
         glfwSwapBuffers(Window);
     }
 
-    CloseDwarfSymbolsHandle();
+    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    CloseDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
     ImGui::DestroyContext();
     glfwTerminate();
 }

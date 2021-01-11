@@ -286,6 +286,9 @@ struct debug_info
     Dwarf_Debug Debug;
     int DwarfFd;
 
+    i32 CFAFd = 0;
+    Dwarf_Debug CFADebug = 0;
+
     i32 DIEIndentLevel;
     i32 LastUnionIndent;
 };
@@ -296,7 +299,7 @@ static address_range AddressRangeCurrentAndNextLine(size_t StartAddress);
 static bool BaseTypeIsDoubleFloat(di_base_type *Type);
 static bool BaseTypeIsFloat(di_base_type *Type);
 static char *BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
-static void CloseDwarfSymbolsHandle();
+static void CloseDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
 static u32 CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx);
 static void DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT]);
 static size_t DWARFGetCFA(size_t PC);
@@ -313,7 +316,7 @@ static di_src_line *LineFindByNumber(u32 LineNum, u32 SrcFileIndex);
 static di_src_line *LineTableFindByAddress(size_t Address);
 static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
 static void LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File);
-static bool OpenDwarfSymbolsHandle();
+static bool OpenDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
 static di_src_file *PushSourceFile(char *Path, u32 SrcLineCount);
 static di_src_file *PushSourceFile(char *Path);
 static u32 SrcFileAssociatePath(char *Path);

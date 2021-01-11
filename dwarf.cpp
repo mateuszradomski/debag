@@ -1,24 +1,25 @@
 debug_info *DI = 0x0;
 
 static bool
-OpenDwarfSymbolsHandle()
+OpenDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 {
-    DI->DwarfFd = open(Debuger.DebugeeProgramPath, O_RDONLY);
-    assert(DI->DwarfFd != -1);
+    assert(*Fd == 0);
+    *Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
+    assert(*Fd != -1);
     
-    bool Result = dwarf_init(DI->DwarfFd, DW_DLC_READ, 0, 0, &DI->Debug, 0x0) == DW_DLV_OK;
+    bool Result = dwarf_init(*Fd, DW_DLC_READ, 0, 0, Debug, 0x0) == DW_DLV_OK;
     
     return Result;
 }
 
 static void
-CloseDwarfSymbolsHandle()
+CloseDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 {
-    if(DI->DwarfFd)
+    if(*Fd)
     {
-        assert(dwarf_finish(DI->Debug, 0x0) == DW_DLV_OK);
-        close(DI->DwarfFd);
-        DI->DwarfFd = 0;
+        assert(dwarf_finish(*Debug, 0x0) == DW_DLV_OK);
+        close(*Fd);
+        *Fd = 0;
     }
 }
 
@@ -518,7 +519,7 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
 static void
 LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
 {
-    OpenDwarfSymbolsHandle();
+    assert(OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug));
     
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -570,7 +571,7 @@ LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
         DumpLinesMatchingIndex(LineBuffer, LineCount, NewFile, File->DwarfIndex);
     }
 
-    CloseDwarfSymbolsHandle();
+    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
 }
 
 static bool
@@ -578,7 +579,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 {
     bool Result = false;
     
-    assert(OpenDwarfSymbolsHandle());
+    assert(OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug));
 
     //printf("Loading source that contains address %lx\n", Address);
     
@@ -689,16 +690,14 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                         *FileIdxOut = DI->SourceFilesCount - 1;
 
                         Result = true;
-                        return Result;
+                        break;
                     }
                 }
-
-                return Result;
             }
         }
     }
     
-    CloseDwarfSymbolsHandle();
+    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     return Result;
 }
@@ -2150,7 +2149,7 @@ DWARFRead()
     Dwarf_Unsigned NextCUHeader = 0;
     Dwarf_Error *Error = 0x0;
     
-    OpenDwarfSymbolsHandle();
+    OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
     DI->Arena = ArenaCreateZeros(Kilobytes(4096 * 4));
@@ -2227,15 +2226,16 @@ DWARFRead()
         DWARFReadDIEs(DI->Debug, CurrentDIE);
     }
     
-    CloseDwarfSymbolsHandle();
+    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     // NOTE(mateusz): This time without finish to preserve it
-    OpenDwarfSymbolsHandle();
+    OpenDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
+    
     Dwarf_Cie *CIEs;
     Dwarf_Signed CIECount;
     Dwarf_Fde *FDEs;
     Dwarf_Signed FDECount;
-    DWARF_CALL(dwarf_get_fde_list_eh(DI->Debug, &CIEs, &CIECount, &FDEs, &FDECount, Error));
+    DWARF_CALL(dwarf_get_fde_list_eh(DI->CFADebug, &CIEs, &CIECount, &FDEs, &FDECount, Error));
     
     di_frame_info *Frame = &DI->FrameInfo;
     Frame->CIECount = CIECount;
