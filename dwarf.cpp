@@ -22,8 +22,6 @@ CloseDwarfSymbolsHandle()
     }
 }
 
-static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
-
 static di_src_line *
 LineTableFindByAddress(size_t Address)
 {
@@ -559,13 +557,12 @@ LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
         Dwarf_Line *LineBuffer = 0;
         Dwarf_Signed LineCount = 0;
         DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
+        
+        u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, File->DwarfIndex);
 
         char FileName[256] = {};
         sprintf(FileName, "%s/%s", File->Dir, File->Name);
         printf("Source path is [%s]\n", FileName);
-
-        //DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
-        u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, File->DwarfIndex);
 
         di_src_file *NewFile = PushSourceFile(FileName, LinesMatching);
         //printf("Pushing source file %s\n", FileName);

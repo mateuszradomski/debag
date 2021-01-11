@@ -586,8 +586,10 @@ _ImGuiShowOpenFileModalWindow()
         for(u32 I = 0; I < Bucket->Count; I++)
         {
             di_exec_src_file *File = &Bucket->Files[I];
-
-            if(ImGui::Selectable(File->Name))
+            
+            bool NotInternal = File->Name[0] != '_'; // Generally files with '_' at the start are internal
+            bool CanShow = NotInternal;
+            if(CanShow && ImGui::Selectable(File->Name))
             {
                 Gui->ModalFuncShow = 0x0;
                 LoadSourceCUFile(Bucket->CU, File);

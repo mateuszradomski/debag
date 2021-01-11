@@ -1413,13 +1413,13 @@ DebugerMain()
                     
                         di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
                         di_src_line *DrawingLine = 0x0;
-                        for(u32 I = 0; I < Src->ContentLineCount + 1; I++)
+                        for(u32 I = 0; I < Src->ContentLineCount + 1 && Src->Content[I]; I++)
                         {
                             // NOTE(mateusz): Lines are indexed from 1
                             if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                             {
                                 DrawingLine = Line;
-                                ImGui::TextColored(CurrentLineColor, "%s", Src->Content[I]);
+                                ImGui::TextColored(CurrentLineColor, Src->Content[I]);
                             
                                 if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                                 {
@@ -1436,7 +1436,7 @@ DebugerMain()
                                    (BP = BreakpointFind(DrawingLine->Address)) &&
                                    BreakpointEnabled(BP))
                                 {
-                                    ImGui::TextColored(BreakpointLineColor, "%s", Src->Content[I]);
+                                    ImGui::TextColored(BreakpointLineColor, Src->Content[I]);
                                 }
                                 else
                                 {
