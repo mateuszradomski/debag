@@ -197,6 +197,11 @@ BreakAtMain()
     printf("entrypoint address is %lx\n", EntryPointAddress);
     assert(EntryPointAddress);
 
+#if CLEAR_BREAKPOINTS
+    breakpoint BP = BreakpointCreate(EntryPointAddress);
+    BreakpointEnable(&BP);
+    Breakpoints[BreakpointCount++] = BP;
+#else
     breakpoint *BP = BreakpointFind(EntryPointAddress);
     if(!BP)
     {
@@ -205,6 +210,7 @@ BreakAtMain()
         BreakpointEnable(&BP);
         Breakpoints[BreakpointCount++] = BP;
     }
+#endif
 }
 
 static bool

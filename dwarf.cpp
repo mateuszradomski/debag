@@ -795,12 +795,6 @@ GetDebugeeLoadAddress(i32 DebugeePID)
     return Result;
 }
 
-
-// TODO(mateusz): The bigest hack of all time, fix this, record when Struct is read
-// and when Union is read
-bool WasStruct = false;
-bool WasUnion = false;
-
 #define LOG_UNHANDLED(...) do { } while (0)
 
 static void
@@ -1726,12 +1720,12 @@ ranges have been read then don't read the low-high
 
             When there are structure types emplaced in the union instead of a member and a offset to it.
             */
-            if(WasUnion && DI->DIEIndentLevel == DI->LastUnionIndent + 1)
+            if(DI->WasUnion && DI->DIEIndentLevel == DI->LastUnionIndent + 1)
             {
                 // There is a possibility of there not being enough space for the member given the fact we don't count it
                 // when we are doing a pass over all the DIEs
                 di_union_member *Member = &DI->UnionMembers[DI->UnionMembersCount++];
-                
+
                 di_union_type *Union = &DI->UnionTypes[DI->UnionTypesCount - 1];
                 if(Union->MembersCount == 0)
                 {
@@ -1744,8 +1738,8 @@ ranges have been read then don't read the low-high
                 Member->ActualTypeOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             }
 
-            WasUnion = false;
-            WasStruct = true;
+            DI->WasUnion = false;
+            DI->WasStruct = true;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1807,8 +1801,8 @@ ranges have been read then don't read the low-high
             UnionType->DIEOffset = DIEOffset + DI->CompileUnits[DI->CompileUnitsCount - 1].Offset;
             UnionType->Name = "";
             
-            WasUnion = true;
-            WasStruct = false;
+            DI->WasUnion = true;
+            DI->WasStruct = false;
             
             for(u32 I = 0; I < AttrCount; I++)
             {
@@ -1863,13 +1857,13 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            if(!WasStruct && !WasUnion)
+            if(!DI->WasStruct && !DI->WasUnion)
             {
                 LOG_UNHANDLED("Unhandled class type\n");
                 return;
             }
             
-            if(WasStruct)
+            if(DI->WasStruct)
             {
                 di_struct_member *Member = &DI->StructMembers[DI->StructMembersCount++];
                 
@@ -1927,7 +1921,7 @@ ranges have been read then don't read the low-high
                     }
                 }
             }
-            else if(WasUnion)
+            else if(DI->WasUnion)
             {
                 di_union_member *Member = &DI->UnionMembers[DI->UnionMembersCount++];
                 

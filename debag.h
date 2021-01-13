@@ -30,6 +30,8 @@ typedef double f64;
 #define TIMER_START(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].start);
 #define TIMER_END(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].end); printf("Timer %d finished in %ld us\n", (id), (TPoints[(id)].end.tv_nsec - TPoints[(id)].start.tv_nsec) / 1000);
 
+#define CLEAR_BREAKPOINTS 1
+
 struct TimePoints
 {
     struct timespec start;

@@ -291,6 +291,9 @@ struct debug_info
 
     i32 DIEIndentLevel;
     i32 LastUnionIndent;
+    
+    bool WasStruct = false;
+    bool WasUnion = false;
 };
 
 static bool AddressInCompileUnit(di_compile_unit *CU, size_t Address);

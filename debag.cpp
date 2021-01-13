@@ -1040,6 +1040,11 @@ DeallocDebugInfo()
     CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     CloseDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
     
+#if CLEAR_BREAKPOINTS
+    memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
+    BreakpointCount = 0;
+#endif
+    
     ArenaDestroy(DI->Arena);
     memset(DI, 0, sizeof(debug_info));
 }
