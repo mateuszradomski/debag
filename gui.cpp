@@ -491,6 +491,15 @@ _ImGuiShowBreakAtFunctionModalWindow()
     
     if(ImGui::BeginPopupModal(FuncBreakLabel))
     {
+        if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
+        {
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+            Gui->ModalFuncShow = 0x0;
+            return;
+        }
+
         ImGui::Text("Enter the function name you wish to set a brekpoint");
         ImGui::Separator();
         
@@ -536,6 +545,15 @@ _ImGuiShowBreakAtAddressModalWindow()
     
     if(ImGui::BeginPopupModal(AddressBreakLabel))
     {
+        if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
+        {
+            ImGui::CloseCurrentPopup();
+            Imgui::EndPopup();
+            memset(Gui->BreakAddress, 0, sizeof(Gui->BreakAddress));
+            Gui->ModalFuncShow = 0x0;
+            return;
+        }
+
         struct AddressTextFilter
         {
             // Return 0 when we pass and 1 when we don't.
@@ -593,6 +611,12 @@ ImGuiShowBreakAtAddress()
 static void
 _ImGuiShowOpenFileModalWindow()
 {
+    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
+    {
+        Gui->ModalFuncShow = 0x0;
+        return;
+    }
+    
     ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
     ImGui::Begin("File to open", 0x0, WinFlags);
 
