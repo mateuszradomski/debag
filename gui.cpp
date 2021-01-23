@@ -35,7 +35,31 @@ GuiShowBreakpoints()
 {
     for(u32 I = 0; I < BreakpointCount; I++)
     {
-        ImGui::Text("Breakpoint at %lX\n", Breakpoints[I].Address);
+        breakpoint *BP = &Breakpoints[I];
+
+        ImVec4 Color = {};
+        char *StateString = 0x0;
+        if(BP->State.Enabled)
+        {
+            Color = ImVec4(0.0f, 0.8f, 0.2f, 1.0f);
+            StateString = "Enabled";
+        }
+        else
+        {
+            Color = ImVec4(0.8f, 0.2f, 0.0f, 1.0f);
+            StateString = "Disabled";
+        }
+
+        if(BP->SourceLine == 0)
+        {
+            ImGui::TextColored(Color, "Breakpoint at %lX [%s]\n", BP->Address, StateString);
+        }
+        else
+        {
+            char *FileName = StringFindLastChar(DI->SourceFiles[BP->FileIndex].Path, '/') + 1;
+            ImGui::TextColored(Color, "Breakpoint at %s:%u (%lX) [%s]\n",
+                               FileName, BP->SourceLine, BP->Address, StateString);
+        }
     }
 }
 
@@ -392,24 +416,42 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
 static void
 GuiShowVariables()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));                
+    ImGui::Columns(3, "tree", true);
+    ImGui::Text("Name"); ImGui::NextColumn();
+    ImGui::Text("Value"); ImGui::NextColumn();
+    ImGui::Text("Type"); ImGui::NextColumn();
+    ImGui::Separator();
+        
+    if(DI->Functions && DI->Variables)
+    {
+        di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
+        for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
+        {
+            di_variable *Var = &CU->GlobalVariables[I];
+            if(Var->LocationAtom)
+            {
+                ImGuiShowVariable(Var);
+            }
+        }
+    }
                 
+    ImGui::Separator();
+    
     di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
     if(Func && Func->FrameBaseIsCFA)
     {
         size_t FBReg = DWARFGetCFA(GetProgramCounter());
                     
-        ImGui::Columns(3, "tree", true);
-                    
-        ImGui::Text("Name"); ImGui::NextColumn();
-        ImGui::Text("Value"); ImGui::NextColumn();
-        ImGui::Text("Type"); ImGui::NextColumn();
-        ImGui::Separator();
-                    
-        for(u32 I = 0; I < Func->ParamCount; I++)
+        if(Func->ParamCount > 0)
         {
-            di_variable *Param = &Func->Params[I];
-            ImGuiShowVariable(Param, FBReg);
+            for(u32 I = 0; I < Func->ParamCount; I++)
+            {
+                di_variable *Param = &Func->Params[I];
+                ImGuiShowVariable(Param, FBReg);
+            }
+
+            ImGui::Separator();
         }
                     
         for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
@@ -438,21 +480,8 @@ GuiShowVariables()
         assert(false);
     }
 
-    if(DI->Functions && DI->Variables)
-    {
-        di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
-        for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
-        {
-            di_variable *Var = &CU->GlobalVariables[I];
-            if(Var->LocationAtom)
-            {
-                ImGuiShowVariable(Var);
-            }
-        }
-    }
-                
-    ImGui::PopStyleVar();
     ImGui::Columns(1);
+    ImGui::PopStyleVar();
 }
 
 static void

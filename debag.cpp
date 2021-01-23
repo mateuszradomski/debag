@@ -36,7 +36,6 @@
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
  * - Sort Registers maybe?
- * - Better Breakpoints window, give information like Enabled, LineNO, FileName
  * - Show only files that are in the project
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program
@@ -849,7 +848,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
             breakpoint *BP = 0x0; ;
             if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
             {
-                InstrInMemory[0] = BP->SavedOpCode;
+                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
             }
         }
         
@@ -881,7 +880,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
             breakpoint *BP = 0x0; ;
             if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
             {
-                InstrInMemory[0] = BP->SavedOpCode;
+                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
             }
         }
         
@@ -1479,7 +1478,8 @@ DebugerMain()
                                         }
                                         else
                                         {
-                                            BreakpointPushAtSourceLine(Src, DrawingLine->LineNum, Breakpoints, &BreakpointCount);
+                                            BreakpointPushAtSourceLine(Src, DrawingLine->LineNum,
+                                                                       Breakpoints, &BreakpointCount);
                                         }
                                     }
                                 }

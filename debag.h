@@ -58,12 +58,19 @@ struct keyboard_modifiers
     u8 NumLock  : 1;
 };
 
+struct breakpoint_state
+{
+    u8 Enabled : 1;
+    u8 ExectuedSavedOpCode : 1;
+};
+
 struct breakpoint
 {
-    u64 Address;
-    u8 SavedOpCode;
-    bool Enabled;
-    bool ExectuedSavedOpCode;
+    size_t Address;
+    size_t SavedOpCodes;
+    u32 SourceLine;
+    u32 FileIndex;
+    breakpoint_state State;
 };
 
 enum

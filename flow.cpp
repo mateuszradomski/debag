@@ -106,7 +106,7 @@ BreakpointFind(size_t Address)
 static bool
 BreakpointEnabled(breakpoint *BP)
 {
-    if(BP && BP->Enabled)
+    if(BP && BP->State.Enabled)
     {
         return true;
     }
@@ -118,37 +118,39 @@ static breakpoint
 BreakpointCreate(size_t Address)
 {
     breakpoint BP = {};
-    //u64 OpCodes = ptrace(PTRACE_PEEKDATA, DebugeePID, Address, 0x0);
-    //breakpoint *BP = &Breakpoints[BreakpointCount++];
-    //assert(BreakpointCount != MAX_BREAKPOINT_COUNT);
     
     BP.Address = Address;
+        
+    return BP;
+}
+
+static breakpoint
+BreakpointCreateAttachSourceLine(size_t Address)
+{
+    breakpoint BP = BreakpointCreate(Address);
     
+    di_src_line *Line = LineTableFindByAddress(Address);
+    BP.SourceLine = Line ? Line->LineNum : 0;
+
     return BP;
 }
 
 static void
 BreakpointEnable(breakpoint *BP)
 {
-    BP->Enabled = true;
-    // NOTE(mateusz): @Speed: The memory is only really volatile in instruction land
-    // if someone has a self-modifying exectuable. So if you don't want to support that
-    // just store the opcodes at Instruction Pointer in the struct of breakpoint, it will 
-    // speed this up a bit, I don't know how much of a problem this will be.
-    u64 OpCodes = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, BP->Address, 0x0);
-    BP->SavedOpCode = OpCodes & 0xff;
+    BP->State.Enabled = true;
+    BP->SavedOpCodes = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, BP->Address, 0x0);
+    
     u64 TrapInterupt = 0xcc; // int 3
-    u64 OpCodesInt3 = (OpCodes & ~0xff) | TrapInterupt;
+    u64 OpCodesInt3 = (BP->SavedOpCodes & ~0xff) | TrapInterupt;
     ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, OpCodesInt3);
 }
 
 static void
 BreakpointDisable(breakpoint *BP)
 {
-    BP->Enabled = false;
-    u64 OpCodes = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, BP->Address, 0x0);
-    u64 RestoredOpCodes = (OpCodes & ~0xff) | BP->SavedOpCode;
-    ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, RestoredOpCodes);
+    BP->State.Enabled = false;
+    ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, BP->SavedOpCodes);
 }
 
 static void
@@ -163,6 +165,8 @@ BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *
         if(NoBreakpointAtLine)
         {
             breakpoint BP = BreakpointCreate(Line->Address);
+            BP.SourceLine = LineNum;
+            BP.FileIndex = Src - DI->SourceFiles;
             BreakpointEnable(&BP);
             BPs[*Count] = BP;
             *Count += 1;
@@ -241,13 +245,13 @@ static void
 StepInstruction(i32 DebugeePID)
 {
     breakpoint *BP = BreakpointFind(GetProgramCounter());
-    if(BP && BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointDisable(BP); }
+    if(BP && BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
     ptrace(PTRACE_SINGLESTEP, DebugeePID, 0x0, 0x0);
     WaitForSignal(DebugeePID);
     
-    if(BP && !BreakpointEnabled(BP) && !BP->ExectuedSavedOpCode) { BreakpointEnable(BP); }
-    if(BP) { BP->ExectuedSavedOpCode = !BP->ExectuedSavedOpCode; }
+    if(BP && !BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointEnable(BP); }
+    if(BP) { BP->State.ExectuedSavedOpCode = !BP->State.ExectuedSavedOpCode; }
     
     Debuger.Regs = PeekRegisters(DebugeePID);
 
@@ -291,7 +295,7 @@ ContinueProgram(i32 DebugeePID)
         breakpoint *BP = BreakpointFind(OldPC);
         if(BreakpointEnabled(BP))
         {
-            BP->ExectuedSavedOpCode = false;
+            BP->State.ExectuedSavedOpCode = false;
         }
     }
     
@@ -323,7 +327,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             breakpoint *BP = 0x0; ;
             if((BP = BreakpointFind(CurrentAddress)) && BreakpointEnabled(BP))
             {
-                InstrInMemory[0] = BP->SavedOpCode;
+                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
             }
         }
         
