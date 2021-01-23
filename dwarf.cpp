@@ -798,7 +798,7 @@ GetDebugeeLoadAddress(i32 DebugeePID)
 #define LOG_UNHANDLED(...) do { } while (0)
 
 static void
-DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
+DWARFReadThisDIE(Dwarf_Debug Debug, Dwarf_Die DIE)
 {
     Dwarf_Error Error_ = {};
     Dwarf_Error *Error = &Error_;
@@ -998,8 +998,10 @@ ranges have been read then don't read the low-high
                     }
                     else
                     {
+                        // TODO(mateusz): Figure out a temporary memory stack for sprintfing
+                        // strings into :+))
                         // TODO(mateusz): This need polishing.
-                        char DirWithComp[128] = {};
+                        char DirWithComp[256] = {};
                         sprintf(DirWithComp, "%s/%s", CompileDir, DName);
                         File.Dir = StringDuplicate(DI->Arena, (char *)DirWithComp);
                     }
@@ -2066,6 +2068,16 @@ ranges have been read then don't read the low-high
             LOG_UNHANDLED("Unhandled Tag: %s\n", TagName);
         }break;
     }
+}
+
+static void
+DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
+{
+    Dwarf_Error Error_ = {};
+    Dwarf_Error *Error = &Error_;
+    Dwarf_Die CurrentDIE = DIE;
+
+    DWARFReadThisDIE(Debug, CurrentDIE);
     
     Dwarf_Die ChildDIE = 0;
     i32 Result = dwarf_child(CurrentDIE, &ChildDIE, Error);

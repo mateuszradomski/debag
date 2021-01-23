@@ -78,6 +78,18 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
         int RemainingBytes = sizeof(MachineWord);
         while(PChar[0] && IS_PRINTABLE(PChar[0]))
         {
+            if(TIndex == sizeof(Temp) - 8)
+            {
+                assert(RemainingBytes);
+
+                if(PChar[0])
+                {
+                    for(u32 i = 0; i < 5; i++) { Temp[TIndex++] = '.'; }
+                }
+                
+                break;
+            }
+
             Temp[TIndex++] = PChar[0];
             PChar += 1;
             
@@ -92,17 +104,21 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
             }
         }
     }
+    
     Temp[TIndex++] = '\"';
     assert(TIndex < sizeof(Temp));
-    
+
     char AddrTemp[24] = {};
-    sprintf(AddrTemp, " (%p)", (void *)DereferencedAddress);
-    
-    for(u32 I = 0; I < sizeof(AddrTemp); I++)
+    if(sizeof(AddrTemp) < sizeof(Temp) - TIndex)
     {
-        Temp[TIndex++] = AddrTemp[I];
+        sprintf(AddrTemp, " (%p)", (void *)DereferencedAddress);
+    
+        for(u32 I = 0; I < sizeof(AddrTemp); I++)
+        {
+            Temp[TIndex++] = AddrTemp[I];
+        }
+        assert(TIndex < sizeof(Temp));
     }
-    assert(TIndex < sizeof(Temp));
     
     ImGui::Text("%s", Temp);
 }
@@ -548,7 +564,7 @@ _ImGuiShowBreakAtAddressModalWindow()
         if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
         {
             ImGui::CloseCurrentPopup();
-            Imgui::EndPopup();
+            ImGui::EndPopup();
             memset(Gui->BreakAddress, 0, sizeof(Gui->BreakAddress));
             Gui->ModalFuncShow = 0x0;
             return;
