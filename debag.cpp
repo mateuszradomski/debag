@@ -375,6 +375,7 @@ StringToArgv(char *Str, char **ArgvOut, u32 *Argc)
     char ContainerStart = 0;
     
     char *Token = (char *)calloc(ARGV_TOKEN_MAX, sizeof(char));
+    assert(Token);
     
     u32 StrLen = StringLength(Str);
     for(u32 I = 0; I < StrLen; I++)
@@ -513,6 +514,7 @@ StringToArgv(char *Str, char **ArgvOut, u32 *Argc)
     
     assert(!InContainer);
     assert(!Escaped);
+    assert(Token);
     if(strlen(Token) != 0)
     {
         assert(*Argc < ARGV_MAX);
@@ -525,8 +527,10 @@ static arena *
 ArenaCreate(size_t Size)
 {
     arena *Result = (arena *)malloc(sizeof(arena));
+    assert(Result);
     
     Result->BasePtr = (u8 *)malloc(Size);
+    assert(Result->BasePtr);
     Result->CursorPtr = Result->BasePtr;
     Result->Size = Size;
     
