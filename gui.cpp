@@ -244,11 +244,14 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
     
     char TypeName[128] = {};
     StringConcat(TypeName, Underlaying.Name);
-    
+
     // TODO(mateusz): Stacked pointers dereference, like (void **)
     if(Underlaying.Flags & TYPE_IS_POINTER)
     {
-        VarAddress = MachineWord;
+        if(Underlaying.PointerCount == 1)
+        {
+            VarAddress = MachineWord;
+        }
         
         StringConcat(TypeName, " ");
         for(u32 I = 0; I < Underlaying.PointerCount; I++)
@@ -271,12 +274,18 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
     }
     else
     {
-        bool Open = ImGui::TreeNode(VarName, "%s", VarName);
-        ImGui::NextColumn();
-        ImGui::Text("0x%lx", VarAddress);
-        ImGui::NextColumn();
-        ImGui::Text("%s", TypeName);
-        ImGui::NextColumn();
+        bool AddressNonNull = VarAddress != 0x0;
+        bool NonStackedPointer = Underlaying.PointerCount < 2;
+        bool Open = false;
+        
+        if(AddressNonNull && NonStackedPointer) {
+            Open = ImGui::TreeNode(VarName, "%s", VarName);
+        } else {
+            ImGui::Text("%s", VarName);
+        } ImGui::NextColumn();
+        
+        ImGui::Text("0x%lx", VarAddress); ImGui::NextColumn();
+        ImGui::Text("%s", TypeName); ImGui::NextColumn();
         
         if(Open)
         {
