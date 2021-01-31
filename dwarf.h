@@ -32,11 +32,17 @@ struct di_src_file
     u32 SrcLineCount;
 };
 
+struct di_exec_src_file_flags
+{
+    u8 ShowToUser: 1;
+};
+
 struct di_exec_src_file
 {
     char *Name;
     char *Dir;
     i32 DwarfIndex;
+    di_exec_src_file_flags Flags;
 };
 
 struct di_compile_unit;

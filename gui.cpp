@@ -657,7 +657,8 @@ _ImGuiShowOpenFileModalWindow()
             di_exec_src_file *File = &Bucket->Files[I];
             
             bool NotInternal = File->Name[0] != '_'; // Generally files with '_' at the start are internal
-            bool CanShow = NotInternal;
+            bool ShowToUser  = File->Flags.ShowToUser;
+            bool CanShow = NotInternal && ShowToUser;
             if(CanShow && ImGui::Selectable(File->Name))
             {
                 Gui->ModalFuncShow = 0x0;

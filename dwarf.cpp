@@ -985,35 +985,42 @@ ranges have been read then don't read the low-high
                 Dwarf_Unsigned DirIdx = 0x0;
                 DWARF_CALL(dwarf_srclines_files_data_b(LineCtx, I, &FName, &DirIdx, 0x0, 0x0, 0x0, Error));
 
-                const char *DName = 0x0;
-                i32 DirRes = dwarf_srclines_include_dir_data(LineCtx, DirIdx, &DName, Error);
-
-                if(DirRes == DW_DLV_OK)
+                // NOTE(mateusz): We want to skip this "file" that appears as "<built-in>".
+                char *BuiltInStr = "<built-in>";
+                if(!StringsMatch((char *)FName, BuiltInStr))
                 {
+                    const char *DName = 0x0;
+                    i32 DirRes = dwarf_srclines_include_dir_data(LineCtx, DirIdx, &DName, Error);
+
+                    if(DName == 0x0) { assert(DirRes != DW_DLV_OK); };
+
                     di_exec_src_file File = {};
                     
-                    if(DName[0] == '/')
+                    if(DName)
                     {
-                        File.Dir = StringDuplicate(DI->Arena, (char *)DName);
+                        if(DName[0] == '/')
+                        {
+                            File.Dir = StringDuplicate(DI->Arena, (char *)DName);
+                        }
+                        else
+                        {
+                            // TODO(mateusz): Figure out a temporary memory stack for sprintfing
+                            // strings into :+))
+                            // TODO(mateusz): This need polishing.
+                            char DirWithComp[256] = {};
+                            sprintf(DirWithComp, "%s/%s", CompileDir, DName);
+                            File.Dir = StringDuplicate(DI->Arena, (char *)DirWithComp);
+                        }
                     }
                     else
                     {
-                        // TODO(mateusz): Figure out a temporary memory stack for sprintfing
-                        // strings into :+))
-                        // TODO(mateusz): This need polishing.
-                        char DirWithComp[256] = {};
-                        sprintf(DirWithComp, "%s/%s", CompileDir, DName);
-                        File.Dir = StringDuplicate(DI->Arena, (char *)DirWithComp);
+                        File.Dir = StringDuplicate(DI->Arena, (char *)CompileDir);
                     }
                     
+                    File.Flags.ShowToUser = !StringStartsWith(File.Dir, "/usr/");
                     File.Name = StringDuplicate(DI->Arena, (char *)FName);
                     File.DwarfIndex = I;
                     Bucket->Files[Bucket->Count++] = File;
-//                    printf("\t[%ld]:%s|%s\n", I, DName, FName);
-                }
-                else
-                {
-//                    printf("\t[%ld]:%s\n", I, FName);
                 }
             }
 
