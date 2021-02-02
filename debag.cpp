@@ -522,27 +522,26 @@ StringToArgv(char *Str, char **ArgvOut, u32 *Argc)
     }
 }
 
-static arena *
+static arena
 ArenaCreate(size_t Size)
 {
-    arena *Result = (arena *)malloc(sizeof(arena));
-    assert(Result);
+    arena Result = {};
     
-    Result->BasePtr = (u8 *)malloc(Size);
-    assert(Result->BasePtr);
-    Result->CursorPtr = Result->BasePtr;
-    Result->Size = Size;
+    Result.BasePtr = (u8 *)malloc(Size);
+    assert(Result.BasePtr);
+    Result.CursorPtr = Result.BasePtr;
+    Result.Size = Size;
     
     return Result;
 }
 
-static arena *
+static arena
 ArenaCreateZeros(size_t Size)
 {
-    arena *Result = 0x0;
+    arena Result = {};
     
     Result = ArenaCreate(Size);
-    memset(Result->BasePtr, 0, Size);
+    memset(Result.BasePtr, 0, Size);
     
     return Result;
 }
@@ -561,19 +560,22 @@ ArenaDestroy(arena *Arena)
     {
         free(Arena->BasePtr);
     }
-    
-    free(Arena);
 }
 
 static void *
 ArenaPush(arena *Arena, size_t Size)
 {
     void *Result = 0x0;
+    
     if(Arena)
     {
-        size_t BytesLeft = Arena->Size - (size_t)(Arena->CursorPtr - Arena->BasePtr);
-        if(Size <= BytesLeft)
+        size_t BytesLeft = ArenaFreeBytes(Arena);
+        // Calculates how many bytes we need to add to be aligned on the 16 bytes.
+        size_t PaddingNeeded = (0x10 - ((size_t)Arena->CursorPtr & 0xf)) & 0xf;
+        
+        if(Size + PaddingNeeded <= BytesLeft)
         {
+            Arena->CursorPtr += PaddingNeeded;
             Result = Arena->CursorPtr;
             Arena->CursorPtr += Size;
         }
@@ -590,7 +592,7 @@ ArenaPush(arena *Arena, size_t Size)
 static size_t
 ArenaFreeBytes(arena *Arena)
 {
-    size_t Result = Arena->Size - (Arena->CursorPtr - Arena->BasePtr);
+    size_t Result = Arena->Size - (size_t)(Arena->CursorPtr - Arena->BasePtr);
     
     return Result;
 }
@@ -760,17 +762,6 @@ GetProgramCounter()
 }
 
 static inline size_t
-GetProgramCounterOffsetLoadAddress()
-{
-    size_t Result = 0x0;
-
-    size_t PC = GetProgramCounter();
-    Result = PC - Debuger.DebugeeLoadAddress;
-
-    return Result;
-}
-
-static inline size_t
 GetReturnAddress()
 {
     return PeekDebugeeMemory(Debuger.Regs.RBP + 8, Debuger.DebugeePID);
@@ -871,20 +862,17 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 
         InstCount++;
         InstructionAddress += Instruction->size;
-        printf("Instruction->size = %u\n", Instruction->size);
-
+        
         cs_free(Instruction, 1);
     }
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
 
-    printf("There are %d instructions\n", InstCount);
-
-    assert(DisasmArena->Size > InstCount * sizeof(disasm_inst));
+    assert(DisasmArena.Size > InstCount * sizeof(disasm_inst));
     DisasmInstCount = 0;
     
     InstructionAddress = AddrRange.Start;
-    ArenaClear(DisasmArena);
-    DisasmInst = ArrayPush(DisasmArena, disasm_inst, InstCount);
+    ArenaClear(&DisasmArena);
+    DisasmInst = ArrayPush(&DisasmArena, disasm_inst, InstCount);
     for(u32 I = 0; I < InstCount; I++)
     {
         u8 InstrInMemory[16] = {};
@@ -907,8 +895,8 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
         DisasmInst[I].Address = InstructionAddress;
         InstructionAddress += Instruction->size;
         
-        DisasmInst[I].Mnemonic = StringDuplicate(DisasmArena, Instruction->mnemonic);
-        DisasmInst[I].Operation = StringDuplicate(DisasmArena, Instruction->op_str);
+        DisasmInst[I].Mnemonic = StringDuplicate(&DisasmArena, Instruction->mnemonic);
+        DisasmInst[I].Operation = StringDuplicate(&DisasmArena, Instruction->op_str);
         DisasmInstCount++;
         
         cs_free(Instruction, 1);
@@ -1064,7 +1052,7 @@ DeallocDebugInfo()
     BreakpointCount = 0;
 #endif
     
-    ArenaDestroy(DI->Arena);
+    ArenaDestroy(&DI->Arena);
     memset(DI, 0, sizeof(debug_info));
 }
 
@@ -1083,9 +1071,10 @@ DebugeeRestart()
 static void
 DebugerMain()
 {
+    debug_info _DI = {};
+    DI = &_DI;
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
-    DI = (debug_info *)calloc(1, sizeof(debug_info));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(Gui->WindowWidth, Gui->WindowHeight, "debag", NULL, NULL);

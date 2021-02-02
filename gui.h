@@ -5,7 +5,7 @@
 
 struct gui_data
 {
-    arena *Arena;
+    arena Arena;
     char *StatusText;
     char BreakFuncName[128];
     char BreakAddress[32];

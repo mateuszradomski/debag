@@ -168,7 +168,7 @@ struct arena
 breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;
 
-arena *DisasmArena = 0x0;
+arena DisasmArena;
 disasm_inst *DisasmInst = 0x0;
 u32 DisasmInstCount = 0;
 
@@ -193,8 +193,8 @@ keyboard_modifiers KeyMods = {};
 #define SLL_QUEUE_POP(F,L) STMNT( SLL_QUEUE_POP_((F),(L)) )
 
 static inline bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
-static arena *ArenaCreate(size_t Size);
-static arena *ArenaCreateZeros(size_t Size);
+static arena ArenaCreate(size_t Size);
+static arena ArenaCreateZeros(size_t Size);
 static void ArenaClear(arena *Arena);
 static void ArenaDestroy(arena *Arena);
 static size_t ArenaFreeBytes(arena *Arena);

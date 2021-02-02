@@ -402,12 +402,12 @@ PushSourceFile(char *Path, u32 SrcLineCount)
     
     Result = &DI->SourceFiles[DI->SourceFilesCount++];
     
-    Result->Path = StringDuplicate(DI->Arena, Path);
-    char *FileCont = DumpFile(DI->Arena, Path);
+    Result->Path = StringDuplicate(&DI->Arena, Path);
+    char *FileCont = DumpFile(&DI->Arena, Path);
     u32 LineCount = StringSplit(FileCont, '\n');
 
     Result->ContentLineCount = LineCount;
-    Result->Content = ArrayPush(DI->Arena, char *, LineCount);
+    Result->Content = ArrayPush(&DI->Arena, char *, LineCount);
 
     char *Line = FileCont;
     for(u32 I = 0; I < LineCount; I++)
@@ -417,7 +417,7 @@ PushSourceFile(char *Path, u32 SrcLineCount)
     }
 
     Result->SrcLineCount = 0;
-    Result->Lines = ArrayPush(DI->Arena, di_src_line, SrcLineCount);
+    Result->Lines = ArrayPush(&DI->Arena, di_src_line, SrcLineCount);
     
     return Result;
 }
@@ -843,7 +843,7 @@ DWARFReadThisDIE(Dwarf_Debug Debug, Dwarf_Die DIE)
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        CompUnit->Name = ArrayPush(DI->Arena, char, Size);
+                        CompUnit->Name = ArrayPush(&DI->Arena, char, Size);
                         StringCopy(CompUnit->Name, Name);
                     }break;
                     case DW_AT_low_pc:
@@ -873,7 +873,7 @@ ranges have been read then don't read the low-high
 */
                         if(CompUnit->RangesCount == 0)
                         {
-                            CompUnit->RangesLowPCs = ArrayPush(DI->Arena, size_t, 1);
+                            CompUnit->RangesLowPCs = ArrayPush(&DI->Arena, size_t, 1);
                             CompUnit->RangesCount = 1;
                             Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesLowPCs;
                             DWARF_CALL(dwarf_formaddr(Attribute, WritePoint, Error));
@@ -889,7 +889,7 @@ ranges have been read then don't read the low-high
                     {
                         if(CompUnit->RangesCount == 0 || (CompUnit->RangesCount == 1 && CompUnit->RangesLowPCs))
                         {
-                            CompUnit->RangesHighPCs = ArrayPush(DI->Arena, size_t, 1);
+                            CompUnit->RangesHighPCs = ArrayPush(&DI->Arena, size_t, 1);
                             Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesHighPCs;
                             
                             Dwarf_Half Form = 0;
@@ -917,8 +917,8 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_get_ranges_a(Debug, DebugRangesOffset, DIE, &Ranges,
                                                       &RangesCount, &ByteCount, Error));
                         
-                        CompUnit->RangesLowPCs = ArrayPush(DI->Arena, size_t, RangesCount);
-                        CompUnit->RangesHighPCs = ArrayPush(DI->Arena, size_t, RangesCount);
+                        CompUnit->RangesLowPCs = ArrayPush(&DI->Arena, size_t, RangesCount);
+                        CompUnit->RangesHighPCs = ArrayPush(&DI->Arena, size_t, RangesCount);
                         
                         size_t SelectedAddress = 0x0;
                         for(u32 I = 0; I < RangesCount; I++)
@@ -979,8 +979,8 @@ ranges have been read then don't read the low-high
             const char *CompileDir = 0x0;
             DWARF_CALL(dwarf_srclines_comp_dir(LineCtx, &CompileDir, Error));
 
-            di_exec_src_file_bucket *Bucket = ArrayPush(DI->Arena, di_exec_src_file_bucket, 1);
-            Bucket->Files = ArrayPush(DI->Arena, di_exec_src_file, Count);
+            di_exec_src_file_bucket *Bucket = ArrayPush(&DI->Arena, di_exec_src_file_bucket, 1);
+            Bucket->Files = ArrayPush(&DI->Arena, di_exec_src_file, Count);
             Bucket->CU = CompUnit;
 
             for(i64 I = BaseIdx; I < EndIdx; I++)
@@ -1004,7 +1004,7 @@ ranges have been read then don't read the low-high
                     {
                         if(DName[0] == '/')
                         {
-                            File.Dir = StringDuplicate(DI->Arena, (char *)DName);
+                            File.Dir = StringDuplicate(&DI->Arena, (char *)DName);
                         }
                         else
                         {
@@ -1013,16 +1013,16 @@ ranges have been read then don't read the low-high
                             // TODO(mateusz): This need polishing.
                             char DirWithComp[256] = {};
                             sprintf(DirWithComp, "%s/%s", CompileDir, DName);
-                            File.Dir = StringDuplicate(DI->Arena, (char *)DirWithComp);
+                            File.Dir = StringDuplicate(&DI->Arena, (char *)DirWithComp);
                         }
                     }
                     else
                     {
-                        File.Dir = StringDuplicate(DI->Arena, (char *)CompileDir);
+                        File.Dir = StringDuplicate(&DI->Arena, (char *)CompileDir);
                     }
                     
                     File.Flags.ShowToUser = !StringStartsWith(File.Dir, "/usr/");
-                    File.Name = StringDuplicate(DI->Arena, (char *)FName);
+                    File.Name = StringDuplicate(&DI->Arena, (char *)FName);
                     File.DwarfIndex = I;
                     Bucket->Files[Bucket->Count++] = File;
                 }
@@ -1076,7 +1076,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Func->Name = ArrayPush(DI->Arena, char, Size);
+                        Func->Name = ArrayPush(&DI->Arena, char, Size);
                         StringCopy(Func->Name, Name);
                     }break;
                     case DW_AT_type:
@@ -1207,8 +1207,8 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_get_ranges_a(Debug, DebugRangesOffset, DIE, &Ranges,
                                                       &RangesCount, &ByteCount, Error));
                         
-                        LexScope->RangesLowPCs = ArrayPush(DI->Arena, size_t, RangesCount);
-                        LexScope->RangesHighPCs = ArrayPush(DI->Arena, size_t, RangesCount);
+                        LexScope->RangesLowPCs = ArrayPush(&DI->Arena, size_t, RangesCount);
+                        LexScope->RangesHighPCs = ArrayPush(&DI->Arena, size_t, RangesCount);
                         
                         di_compile_unit *CU = &DI->CompileUnits[DI->CompileUnitsCount - 1];
                         size_t SelectedAddress = 0x0;
@@ -1324,7 +1324,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
 
                             u32 Size = strlen(Name) + 1;
-                            Var->Name = ArrayPush(DI->Arena, char, Size);
+                            Var->Name = ArrayPush(&DI->Arena, char, Size);
                             StringCopy(Var->Name, Name);
                         }break;
                     case DW_AT_type:
@@ -1420,7 +1420,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Param->Name = ArrayPush(DI->Arena, char, Size);
+                            Param->Name = ArrayPush(&DI->Arena, char, Size);
                             StringCopy(Param->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -1509,7 +1509,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Type->Name = ArrayPush(DI->Arena, char, Size);
+                        Type->Name = ArrayPush(&DI->Arena, char, Size);
                         StringCopy(Type->Name, Name);
                     }break;
                     case DW_AT_encoding:
@@ -1558,7 +1558,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        Typedef->Name = ArrayPush(DI->Arena, char, Size);
+                        Typedef->Name = ArrayPush(&DI->Arena, char, Size);
                         StringCopy(Typedef->Name, Name);
                     }break;
                     case DW_AT_type:
@@ -1782,7 +1782,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        StructType->Name = ArrayPush(DI->Arena, char, Size);
+                        StructType->Name = ArrayPush(&DI->Arena, char, Size);
                         StringCopy(StructType->Name, Name);
                     }break;
                     case DW_AT_byte_size:
@@ -1845,7 +1845,7 @@ ranges have been read then don't read the low-high
                         DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                         
                         u32 Size = strlen(Name) + 1;
-                        UnionType->Name = ArrayPush(DI->Arena, char, Size);
+                        UnionType->Name = ArrayPush(&DI->Arena, char, Size);
                         StringCopy(UnionType->Name, Name);
                     }break;
                     case DW_AT_byte_size:
@@ -1917,7 +1917,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Member->Name = ArrayPush(DI->Arena, char, Size);
+                            Member->Name = ArrayPush(&DI->Arena, char, Size);
                             StringCopy(Member->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -1976,7 +1976,7 @@ ranges have been read then don't read the low-high
                             DWARF_CALL(dwarf_formstring(Attribute, &Name, Error));
                             
                             u32 Size = strlen(Name) + 1;
-                            Member->Name = ArrayPush(DI->Arena, char, Size);
+                            Member->Name = ArrayPush(&DI->Arena, char, Size);
                             StringCopy(Member->Name, Name);
                         }break;
                         case DW_AT_type:
@@ -2207,22 +2207,22 @@ DWARFRead()
     
     //TIMER_START(0);
     
-    DI->CompileUnits = ArrayPush(DI->Arena, di_compile_unit, CountTable[DW_TAG_compile_unit]);
-    DI->Functions = ArrayPush(DI->Arena, di_function, CountTable[DW_TAG_subprogram]);
-    DI->BaseTypes = ArrayPush(DI->Arena, di_base_type, CountTable[DW_TAG_base_type]);
-    DI->Typedefs = ArrayPush(DI->Arena, di_typedef, CountTable[DW_TAG_typedef]);
-    DI->PointerTypes = ArrayPush(DI->Arena, di_pointer_type, CountTable[DW_TAG_pointer_type]);
-    DI->ConstTypes = ArrayPush(DI->Arena, di_const_type, CountTable[DW_TAG_const_type]);
-    DI->RestrictTypes = ArrayPush(DI->Arena, di_restrict_type, CountTable[DW_TAG_restrict_type]);
-    DI->Variables = ArrayPush(DI->Arena, di_variable, CountTable[DW_TAG_variable]);
-    DI->Params = ArrayPush(DI->Arena, di_variable, CountTable[DW_TAG_formal_parameter]);
-    DI->LexScopes = ArrayPush(DI->Arena, di_lexical_scope, CountTable[DW_TAG_lexical_block]);
-    DI->StructMembers = ArrayPush(DI->Arena, di_struct_member, CountTable[DW_TAG_member]);
-    DI->StructTypes = ArrayPush(DI->Arena, di_struct_type, CountTable[DW_TAG_structure_type]);
-    DI->UnionMembers = ArrayPush(DI->Arena, di_union_member, CountTable[DW_TAG_member]);
-    DI->UnionTypes = ArrayPush(DI->Arena, di_union_type, CountTable[DW_TAG_union_type]);
-    DI->ArrayTypes = ArrayPush(DI->Arena, di_array_type, CountTable[DW_TAG_array_type]);
-    DI->SourceFiles = ArrayPush(DI->Arena, di_src_file, MAX_DI_SOURCE_FILES);
+    DI->CompileUnits = ArrayPush(&DI->Arena, di_compile_unit, CountTable[DW_TAG_compile_unit]);
+    DI->Functions = ArrayPush(&DI->Arena, di_function, CountTable[DW_TAG_subprogram]);
+    DI->BaseTypes = ArrayPush(&DI->Arena, di_base_type, CountTable[DW_TAG_base_type]);
+    DI->Typedefs = ArrayPush(&DI->Arena, di_typedef, CountTable[DW_TAG_typedef]);
+    DI->PointerTypes = ArrayPush(&DI->Arena, di_pointer_type, CountTable[DW_TAG_pointer_type]);
+    DI->ConstTypes = ArrayPush(&DI->Arena, di_const_type, CountTable[DW_TAG_const_type]);
+    DI->RestrictTypes = ArrayPush(&DI->Arena, di_restrict_type, CountTable[DW_TAG_restrict_type]);
+    DI->Variables = ArrayPush(&DI->Arena, di_variable, CountTable[DW_TAG_variable]);
+    DI->Params = ArrayPush(&DI->Arena, di_variable, CountTable[DW_TAG_formal_parameter]);
+    DI->LexScopes = ArrayPush(&DI->Arena, di_lexical_scope, CountTable[DW_TAG_lexical_block]);
+    DI->StructMembers = ArrayPush(&DI->Arena, di_struct_member, CountTable[DW_TAG_member]);
+    DI->StructTypes = ArrayPush(&DI->Arena, di_struct_type, CountTable[DW_TAG_structure_type]);
+    DI->UnionMembers = ArrayPush(&DI->Arena, di_union_member, CountTable[DW_TAG_member]);
+    DI->UnionTypes = ArrayPush(&DI->Arena, di_union_type, CountTable[DW_TAG_union_type]);
+    DI->ArrayTypes = ArrayPush(&DI->Arena, di_array_type, CountTable[DW_TAG_array_type]);
+    DI->SourceFiles = ArrayPush(&DI->Arena, di_src_file, MAX_DI_SOURCE_FILES);
 
 #if 0
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)

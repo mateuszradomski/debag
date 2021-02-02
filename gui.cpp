@@ -702,7 +702,7 @@ GuiShowOpenFile()
 static void
 GuiSetStatusText(char *Str)
 {
-    Gui->StatusText = StringDuplicate(Gui->Arena, Str);
+    Gui->StatusText = StringDuplicate(&Gui->Arena, Str);
 }
 
 static void

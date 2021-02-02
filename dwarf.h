@@ -236,7 +236,7 @@ struct di_compile_unit
 
 struct debug_info
 {
-    arena *Arena;
+    arena Arena;
     
     di_src_file *SourceFiles;
     u32 SourceFilesCount;
