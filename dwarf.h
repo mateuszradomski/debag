@@ -8,6 +8,12 @@
 // to this and we really need a hashmap
 #define DWARF_TAGS_COUNT 0xffff
 
+#ifdef DEBUG
+#define LOG_DWARF(fmt, ...) if(Debuger.Log.DwarfLogs) { printf(fmt, ##__VA_ARGS__); }
+#else
+#define LOG_DWARF(...) do { } while (0)
+#endif
+
 enum
 {
     DI_COMP_UNIT_NULL = 0x0,

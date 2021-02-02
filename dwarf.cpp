@@ -288,7 +288,7 @@ BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
             }break;
             default:
             {
-                printf("Unsupported byte size = %d", Type->ByteSize);
+                LOG_DWARF("Unsupported byte size = %d", Type->ByteSize);
                 Result = "";
             }break;
         }
@@ -509,7 +509,7 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
             Dwarf_Signed LineOffset = 0;
             DWARF_CALL(dwarf_lineoff(Lines[I], &LineOffset, 0x0));
             
-            //printf("Pair Addr - LineNO => %llx - %llu, with offset = %llx\n", Addr, LineNO, LineOffset);
+            LOG_DWARF("Pair Addr - LineNO => %llx - %llu, with offset = %llx\n", Addr, LineNO, LineOffset);
 
             File->Lines[File->SrcLineCount++] = Line;
         }
@@ -563,10 +563,10 @@ LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
 
         char FileName[256] = {};
         sprintf(FileName, "%s/%s", File->Dir, File->Name);
-        printf("Source path is [%s]\n", FileName);
+        LOG_DWARF("Source path is [%s]\n", FileName);
 
         di_src_file *NewFile = PushSourceFile(FileName, LinesMatching);
-        //printf("Pushing source file %s\n", FileName);
+        LOG_DWARF("Pushing source file %s\n", FileName);
 
         DumpLinesMatchingIndex(LineBuffer, LineCount, NewFile, File->DwarfIndex);
     }
@@ -581,7 +581,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     
     assert(OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug));
 
-    //printf("Loading source that contains address %lx\n", Address);
+    LOG_DWARF("Loading source that contains address %lx\n", Address);
     
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -594,30 +594,30 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
     bool CUFound = false;
     if(DI->CompileUnitsCount > 0)
     {
-        //printf("Searching for CU\n");
+        LOG_DWARF("Searching for CU\n");
         for(u32 I = 0; I < DI->CompileUnitsCount; I++)
         {
             di_compile_unit *CompUnit = &DI->CompileUnits[I];
             for(u32 RI = 0; RI < CompUnit->RangesCount; RI++)
             {
-                //printf("%lx, %lx, Address = %lx\n", CompUnit->RangesLowPCs[RI], CompUnit->RangesHighPCs[RI], Address);
+                LOG_DWARF("%lx, %lx, Address = %lx\n", CompUnit->RangesLowPCs[RI], CompUnit->RangesHighPCs[RI], Address);
                 ssize_t LowPC = CompUnit->RangesLowPCs[RI];
                 ssize_t HighPC = CompUnit->RangesHighPCs[RI];
-                //printf("compunit, LOWPC, HIGHPC = %lx, %lx, Address = %lx\n", LowPC, HighPC, Address);
+                LOG_DWARF("compunit, LOWPC, HIGHPC = %lx, %lx, Address = %lx\n", LowPC, HighPC, Address);
                 
                 if(AddressBetween(Address, LowPC, HighPC))
                 {
                     CUDIEOffset = CompUnit->Offset;
                     CUFound = true;
-                    //printf("LowPC is %lx, HighPC is %lx\n", LowPC, HighPC);
+                    LOG_DWARF("LowPC is %lx, HighPC is %lx\n", LowPC, HighPC);
                 }
             }
         }
 
         if(CUFound)
         {
-            //printf("Found CU with offset %lx\n", CUDIEOffset);
-            //printf("Searching for that DIE\n");
+            LOG_DWARF("Found CU with offset %lx\n", CUDIEOffset);
+            LOG_DWARF("Searching for that DIE\n");
 
             Dwarf_Die SearchDie = 0x0;
             
@@ -642,7 +642,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
             
             if(SearchDie)
             {
-                //printf("Found DIE\n");
+                LOG_DWARF("Found DIE\n");
                 Dwarf_Half Tag = 0;
                 DWARF_CALL(dwarf_tag(SearchDie, &Tag, 0x0));
                 assert(Tag == DW_TAG_compile_unit);
@@ -652,16 +652,12 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 Dwarf_Line_Context LineCtx = 0;
                 DWARF_CALL(dwarf_srclines_b(SearchDie, &Version, &TableType, &LineCtx, 0x0));
                 
-                //Dwarf_Signed SrcFilesCount = 0;
-                //dwarf_srclines_files_count(LineCtx, &SrcFilesCount, Error);
-                //printf("There are %lld source files in this compilation unit\n", SrcFilesCount);
-                
                 Dwarf_Line *LineBuffer = 0;
                 Dwarf_Signed LineCount = 0;
                 DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
                 
-                //printf("There are %lld source lines\n", LineCount);
-                //printf("Iterating over %lld lines\n", LineCount);
+                LOG_DWARF("There are %lld source lines\n", LineCount);
+                LOG_DWARF("Iterating over %lld lines\n", LineCount);
                 for(i32 I = 0; I < LineCount; ++I)
                 {
                     Dwarf_Addr LineAddr = 0;
@@ -679,15 +675,15 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                     if(Address == LineAddr)
                     {
                         // Dump this file into memory
-                        //printf("Address = %lx, LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", Address, LineAddr, FileNum, LineNum);
+                        LOG_DWARF("Address = %lx, LineAddr = %llx, FileNum = %llu, LineNum = %llu\n", Address, LineAddr, FileNum, LineNum);
 
                         char *FileName = 0x0;
                         DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
-                        //printf("Address %lx, FileName %p [%s]\n", Address, (void *)FileName, FileName);
+                        LOG_DWARF("Address %lx, FileName %p [%s]\n", Address, (void *)FileName, FileName);
                         u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, FileNum);
 
                         di_src_file *File = PushSourceFile(FileName, LinesMatching);
-                        //printf("Pushing source file %s\n", FileName);
+                        LOG_DWARF("Pushing source file %s\n", FileName);
 
                         DumpLinesMatchingIndex(LineBuffer, LineCount, File, FileNum, LineNum, LineIdxOut);
 
@@ -714,11 +710,11 @@ AddressRangeCurrentAndNextLine(size_t StartAddress)
     di_src_line *Current = LineTableFindByAddress(StartAddress);
     if(!Current)
     {
-        printf("Didn't find line with address = %lx\n", StartAddress);
+        LOG_DWARF("Didn't find line with address = %lx\n", StartAddress);
         assert(false);
     }
     di_src_file *File = &DI->SourceFiles[Current->SrcFileIndex];
-printf("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Address, Current->SrcFileIndex);
+LOG_DWARF("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Address, Current->SrcFileIndex);
 
     u32 LineIdx = Current - File->Lines;
     for(u32 I = LineIdx; I < File->SrcLineCount; I++)
@@ -735,8 +731,8 @@ printf("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Address,
             di_src_line *Next = &File->Lines[I];
             if(Next->LineNum != Current->LineNum && Next->Address != Current->Address)
             {
-                printf("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
-                printf("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
+                LOG_DWARF("Next->LineNum = %d, Current->LineNum = %d\n",Next->LineNum, Current->LineNum);
+                LOG_DWARF("Next->Address = %lX, Current->Address = %lX\n",Next->Address, Current->Address);
                 Result.Start = Current->Address;
                 Result.End = Next->Address;
 
@@ -757,7 +753,7 @@ FindEntryPointAddress()
     {
         if(StringsMatch(DI->Functions[I].Name, "main"))
         {
-            printf("entrypoint: %s\n", DI->Functions[I].Name);
+            LOG_DWARF("entrypoint: %s\n", DI->Functions[I].Name);
             Result = DI->Functions[I].FuncLexScope.LowPC;
             break;
         }
@@ -771,7 +767,7 @@ GetDebugeeLoadAddress(i32 DebugeePID)
 {
     char Path[64] = {};
     sprintf(Path, "/proc/%d/maps", DebugeePID);
-    printf("Load Path is %s\n", Path);
+    LOG_DWARF("Load Path is %s\n", Path);
     
     char AddrStr[16] = {};
     FILE *FileHandle = fopen(Path, "r");
@@ -799,8 +795,6 @@ GetDebugeeLoadAddress(i32 DebugeePID)
     return Result;
 }
 
-#define LOG_UNHANDLED(...) do { } while (0)
-
 static void
 DWARFReadThisDIE(Dwarf_Debug Debug, Dwarf_Die DIE)
 {
@@ -815,7 +809,7 @@ DWARFReadThisDIE(Dwarf_Debug Debug, Dwarf_Die DIE)
     {
         case DW_TAG_compile_unit:
         {
-            //LOG_UNHANDLED("libdwarf: Compile Unit\n");
+            LOG_DWARF("libdwarf: Compile Unit\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -960,7 +954,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("CompUnit Unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("CompUnit Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1028,7 +1022,7 @@ ranges have been read then don't read the low-high
                 }
             }
 
-            printf("Pushing a bucket with %u entries\n", Bucket->Count);
+            LOG_DWARF("Pushing a bucket with %u entries\n", Bucket->Count);
             SLL_QUEUE_PUSH(DI->ExecSrcFileList.Head, DI->ExecSrcFileList.Tail, Bucket);
             
             if(CompUnit->RangesCount >= 1)
@@ -1047,7 +1041,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_subprogram:
         {
-            //LOG_UNHANDLED("Subprogram\n");
+            LOG_DWARF("Subprogram\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1130,14 +1124,14 @@ ranges have been read then don't read the low-high
                             Dwarf_Unsigned OffsetBranch = 0;
                             DWARF_CALL(dwarf_get_location_op_value_c(IDK, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
                             
-                            //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                            LOG_DWARF("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                             
                             if(AtomOut != DW_OP_call_frame_cfa)
                             {
                                 const char *OpName = 0x0;
                                 dwarf_get_OP_name(AtomOut, &OpName);
 
-                                printf("AtomOut is = %d, %s\n", AtomOut, OpName);
+                                LOG_DWARF("AtomOut is = %d, %s\n", AtomOut, OpName);
                                 assert(!"Call frame is not CFA");
                             }
                             Func->FrameBaseIsCFA = true;
@@ -1157,7 +1151,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Func Unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Func Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1168,7 +1162,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_lexical_block:
         {
-            //LOG_UNHANDLED("libdwarf: Lexical block\n");
+            LOG_DWARF("libdwarf: Lexical block\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1268,7 +1262,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Lexical Scope Unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Lexical Scope Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1279,7 +1273,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_variable:
         {
-            //LOG_UNHANDLED("libdwarf: Variable\n");
+            LOG_DWARF("libdwarf: Variable\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1363,7 +1357,7 @@ ranges have been read then don't read the low-high
                                 Dwarf_Unsigned OffsetBranch = 0;
                                 DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
 
-                                //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                                LOG_DWARF("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
 
                                 Var->LocationAtom = AtomOut;
                                 Var->Offset = Operand1;
@@ -1382,7 +1376,7 @@ ranges have been read then don't read the low-high
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                LOG_UNHANDLED("Variable Unhandled Attribute: %s\n", AttrName);
+                                LOG_DWARF("Variable Unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                 }
@@ -1391,7 +1385,7 @@ ranges have been read then don't read the low-high
         case DW_TAG_formal_parameter:
         {
             // NOTE(mateusz): This is copy pasta from the variable code higher up
-            //LOG_UNHANDLED("Variable\n");
+            LOG_DWARF("Variable\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1459,7 +1453,7 @@ ranges have been read then don't read the low-high
                                 Dwarf_Unsigned OffsetBranch = 0;
                                 DWARF_CALL(dwarf_get_location_op_value_c(LocDesc, I, &AtomOut, &Operand1, &Operand2, &Operand3, &OffsetBranch, Error));
                                 
-                                //LOG_UNHANDLED("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
+                                LOG_DWARF("AtomOut = %d, Oper1 = %lld, Oper2 = %llu, Oper3 = %llu, OffsetBranch = %llu\n", AtomOut, Operand1, Operand2, Operand3, OffsetBranch);
                                 
                                 Param->LocationAtom = AtomOut;
                                 Param->Offset = Operand1;
@@ -1477,7 +1471,7 @@ ranges have been read then don't read the low-high
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                LOG_UNHANDLED("Formal Parameter Unhandled Attribute: %s\n", AttrName);
+                                LOG_DWARF("Formal Parameter Unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -1486,7 +1480,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_base_type:
         {
-            //LOG_UNHANDLED("libdwarf: Base Type\n");
+            LOG_DWARF("libdwarf: Base Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1529,7 +1523,7 @@ ranges have been read then don't read the low-high
                     {
                         const char *AttrName = 0x0;
                         DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                        LOG_UNHANDLED("Base Type Unhandled Attribute: %s\n", AttrName);
+                        LOG_DWARF("Base Type Unhandled Attribute: %s\n", AttrName);
                     }break;
                 }
             }
@@ -1578,7 +1572,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Base Type Unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Base Type Unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1586,7 +1580,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_pointer_type:
         {
-            //LOG_UNHANDLED("libdwarf: Pointer Type\n");
+            LOG_DWARF("libdwarf: Pointer Type\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1628,7 +1622,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_const_type:
         {
-            //LOG_UNHANDLED("libdwarf: Const Type\n");
+            LOG_DWARF("libdwarf: Const Type\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1664,7 +1658,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_restrict_type:
         {
-            //LOG_UNHANDLED("libdwarf: Restrict Type\n");
+            LOG_DWARF("libdwarf: Restrict Type\n");
             
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
@@ -1699,7 +1693,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_structure_type:
         {
-            //LOG_UNHANDLED("libdwarf: Strcture Type\n");
+            LOG_DWARF("libdwarf: Strcture Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1809,7 +1803,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Structure type unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Structure type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1818,7 +1812,7 @@ ranges have been read then don't read the low-high
         case DW_TAG_union_type:
         {
             DI->LastUnionIndent = DI->DIEIndentLevel;
-            //LOG_UNHANDLED("libdwarf: Union Type\n");
+            LOG_DWARF("libdwarf: Union Type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -1872,7 +1866,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Union type unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Union type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -1880,14 +1874,14 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_member:
         {
-            //LOG_UNHANDLED("libdwarf: Strcture/Union member\n");
+            LOG_DWARF("libdwarf: Strcture/Union member\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
             if(!DI->WasStruct && !DI->WasUnion)
             {
-                LOG_UNHANDLED("Unhandled class type\n");
+                LOG_DWARF("Unhandled class type\n");
                 return;
             }
             
@@ -1943,7 +1937,7 @@ ranges have been read then don't read the low-high
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                LOG_UNHANDLED("Structure member unhandled Attribute: %s\n", AttrName);
+                                LOG_DWARF("Structure member unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -1995,7 +1989,7 @@ ranges have been read then don't read the low-high
                             {
                                 const char *AttrName = 0x0;
                                 DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                                LOG_UNHANDLED("Unionure member unhandled Attribute: %s\n", AttrName);
+                                LOG_DWARF("Unionure member unhandled Attribute: %s\n", AttrName);
                             }
                         }break;
                     }
@@ -2004,7 +1998,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_array_type:
         {
-            //LOG_UNHANDLED("libdwarf: Array type\n");
+            LOG_DWARF("libdwarf: Array type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
@@ -2036,7 +2030,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Array type unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Array type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -2044,7 +2038,7 @@ ranges have been read then don't read the low-high
         }break;
         case DW_TAG_subrange_type:
         {
-            //LOG_UNHANDLED("libdwarf: Subrange type\n");
+            LOG_DWARF("libdwarf: Subrange type\n");
             Dwarf_Signed AttrCount = 0;
             Dwarf_Attribute *AttrList = {};
             if(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error) != DW_DLV_OK)
@@ -2081,7 +2075,7 @@ ranges have been read then don't read the low-high
                         {
                             const char *AttrName = 0x0;
                             DWARF_CALL(dwarf_get_AT_name(AttrTag, &AttrName));
-                            LOG_UNHANDLED("Array type unhandled Attribute: %s\n", AttrName);
+                            LOG_DWARF("Array type unhandled Attribute: %s\n", AttrName);
                         }
                     }break;
                 }
@@ -2091,7 +2085,7 @@ ranges have been read then don't read the low-high
         {
             const char *TagName = 0x0;
             DWARF_CALL(dwarf_get_TAG_name(Tag, &TagName));
-            LOG_UNHANDLED("Unhandled Tag: %s\n", TagName);
+            LOG_DWARF("Unhandled Tag: %s\n", TagName);
         }break;
     }
 }
@@ -2231,7 +2225,7 @@ DWARFRead()
         {
             const char *A = 0x0;
             dwarf_get_TAG_name(I, &A);
-            printf("[%s]: %d\n", A, CountTable[I]);
+            LOG_DWARF("[%s]: %d\n", A, CountTable[I]);
         }
     }
 #endif
@@ -2304,7 +2298,7 @@ DWARFGetCFA(size_t PC)
             assert(OffsetRel == 1);
             size_t RegVal = GetRegisterByABINumber(Debuger.Regs, RegnumOut);
             
-            //printf("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
+            LOG_DWARF("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
             return RegVal + OffsetOut;
         }
     }

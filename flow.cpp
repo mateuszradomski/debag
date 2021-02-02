@@ -1,3 +1,9 @@
+#ifdef DEBUG
+#define LOG_FLOW(fmt, ...) if(Debuger.Log.FlowLogs) { printf(fmt, ##__VA_ARGS__); }
+#else
+#define LOG_FLOW(...) do { } while (0)
+#endif
+
 static bool
 AddressInDiffrentLine(size_t Address)
 {
@@ -6,7 +12,7 @@ AddressInDiffrentLine(size_t Address)
     assert(Current);
     assert(Diff);
 
-    printf("LineNum: Current = %u, Diff = %u / Address: Current = %lx, Diff = %lx\n", Current->LineNum, Diff->LineNum, Current->Address, Diff->Address);
+    LOG_FLOW("LineNum: Current = %u, Diff = %u / Address: Current = %lx, Diff = %lx\n", Current->LineNum, Diff->LineNum, Current->Address, Diff->Address);
 
     bool SameLineDiffFiles = (Current->LineNum == Diff->LineNum) && (Current->SrcFileIndex != Diff->SrcFileIndex);
     bool SameFileDiffLines = (Current->LineNum != Diff->LineNum) && (Current->Address != Diff->Address);
@@ -74,7 +80,7 @@ WaitForSignal(i32 DebugeePID)
     }
     else
     {
-        printf("Unhandled signal = [%s]", strsignal(SigInfo.si_signo));
+        LOG_FLOW("Unhandled signal = [%s]", strsignal(SigInfo.si_signo));
     }
 }
 
@@ -198,7 +204,7 @@ static void
 BreakAtMain()
 {
     size_t EntryPointAddress = FindEntryPointAddress();
-    printf("entrypoint address is %lx\n", EntryPointAddress);
+    LOG_FLOW("entrypoint address is %lx\n", EntryPointAddress);
     assert(EntryPointAddress);
 
 #if CLEAR_BREAKPOINTS
@@ -209,7 +215,7 @@ BreakAtMain()
     breakpoint *BP = BreakpointFind(EntryPointAddress);
     if(!BP)
     {
-        printf("Breakpoint is set\n");
+        LOG_FLOW("Breakpoint is set\n");
         breakpoint BP = BreakpointCreate(EntryPointAddress);
         BreakpointEnable(&BP);
         Breakpoints[BreakpointCount++] = BP;
@@ -262,7 +268,7 @@ static void
 NextInstruction(i32 DebugeePID)
 {
     (void)DebugeePID;
-    printf("Unimplemented method!");
+    LOG_FLOW("Unimplemented method!");
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;
 }
 
@@ -347,7 +353,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             // values i.e. jump tables
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
-            printf("Breaking because of call\n");
+            LOG_FLOW("Breaking because of call\n");
             size_t CallAddress = Instruction->detail->x86.operands[0].imm;
             
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(CallAddress) != 0x0;
@@ -382,7 +388,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
             size_t JumpAddress = Instruction->detail->x86.operands[0].imm;
-            //printf("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
+            LOG_FLOW("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
             
             bool AddressWithoutBreakpoint = !BreakpointFind(JumpAddress, Breakpoints, (*BreakpointsCount));
             if(AddressWithoutBreakpoint)
@@ -391,7 +397,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
                 bool DiffrentLine = AddressInDiffrentLine(JumpAddress);
                 if(!Between && DiffrentLine)
                 {
-                    printf("Breaking rel branch: %lX\n", JumpAddress);
+                    LOG_FLOW("Breaking rel branch: %lX\n", JumpAddress);
 
                     breakpoint BP = BreakpointCreate(JumpAddress);
                     BreakpointEnable(&BP);
@@ -418,7 +424,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine(GetProgramCounter());
     
-    printf("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", GetProgramCounter(), Range.Start, Range.End);
+    LOG_FLOW("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", GetProgramCounter(), Range.Start, Range.End);
     
     breakpoint TempBreakpoints[32] = {};
     u32 TempBreakpointsCount = 0;
@@ -427,10 +433,10 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     
     ContinueProgram(DebugeePID);
     
-    printf("TempBreakpointsCount = %d\n", TempBreakpointsCount);
+    LOG_FLOW("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
     {
-        printf("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
+        LOG_FLOW("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
     

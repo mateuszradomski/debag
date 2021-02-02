@@ -27,8 +27,16 @@ typedef double f64;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#define ARRAY_LENGTH(a) (sizeof((a))/sizeof((a)[0]))
+
 #define TIMER_START(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].start);
 #define TIMER_END(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].end); printf("Timer %d finished in %ld us\n", (id), (TPoints[(id)].end.tv_nsec - TPoints[(id)].start.tv_nsec) / 1000);
+
+#ifdef DEBUG
+#define LOG_MAIN(fmt, ...) if(Debuger.Log.MainLogs) { printf(fmt, ##__VA_ARGS__); }
+#else
+#define LOG_MAIN(...) do { } while (0)
+#endif
 
 #define CLEAR_BREAKPOINTS 1
 
@@ -144,6 +152,15 @@ enum
 
 typedef i32 debugee_flag;
 
+struct logging_switches
+{
+    bool DwarfLogs;
+    bool VarLogs;
+    bool MainLogs;
+    bool DisasmLogs;
+    bool FlowLogs;
+};
+
 struct dbg
 {
     debugee_flag Flags;
@@ -153,6 +170,8 @@ struct dbg
     char PathToRunIn[256];
     char DebugeeProgramPath[256];
     size_t DebugeeLoadAddress;
+
+    logging_switches Log;
 
     x64_registers Regs;
 };

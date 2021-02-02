@@ -581,7 +581,7 @@ ArenaPush(arena *Arena, size_t Size)
         }
         else
         {
-            printf("%lu\n", (size_t)(Arena->CursorPtr - Arena->BasePtr));
+            LOG_MAIN("%lu\n", (size_t)(Arena->CursorPtr - Arena->BasePtr));
             assert(false);
         }
     }
@@ -835,7 +835,7 @@ GetInstructionType(cs_insn *Instruction)
 static void
 DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 {
-    printf("AddrRange = %lx - %lx\n", AddrRange.Start, AddrRange.End);
+    LOG_MAIN("AddrRange = %lx - %lx\n", AddrRange.Start, AddrRange.End);
     u32 InstCount = 0;
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_OFF); 
 
@@ -937,7 +937,7 @@ UpdateInfo()
         address_range LexScopeRange = {};
         LexScopeRange.Start = Func->FuncLexScope.LowPC;
         LexScopeRange.End = Func->FuncLexScope.HighPC;
-        printf("LexScope of %s is %lx-%lx\n", Func->Name, LexScopeRange.Start, LexScopeRange.End);
+        LOG_MAIN("LexScope of %s is %lx-%lx\n", Func->Name, LexScopeRange.Start, LexScopeRange.End);
         
         DisassembleAroundAddress(LexScopeRange, Debuger.DebugeePID);
     }
@@ -965,7 +965,7 @@ DebugeeStart()
             assert(Result == 0);
             
 //            char CWDStr[128] = {};
-//            printf("child getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
+//            LOG_MAIN("child getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
         }
         
         personality(ADDR_NO_RANDOMIZE);
@@ -1014,7 +1014,7 @@ DebugeeContinueOrStart()
             DebugeeStart();
             
             Debuger.DebugeeLoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
-            printf("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
+            LOG_MAIN("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
             
             DWARFRead();
         
@@ -1229,6 +1229,26 @@ DebugerMain()
                 
                 ImGui::EndMenu();
             }
+#ifdef DEBUG
+            if(ImGui::BeginMenu("Debug"))
+            {
+                char *Labels[] = {
+                    "Show Dwarf Logs",
+                    "Show Var Logs",
+                    "Show Main Logs",
+                    "Show Disasm Logs",
+                    "Show Flow Logs",
+                };
+
+                bool *Logs = (bool *)&Debuger.Log;
+                for(u32 I = 0; I < ARRAY_LENGTH(Labels); I++)
+                {
+                    ImGui::Checkbox(Labels[I], &Logs[I]);
+                }
+
+                ImGui::EndMenu();
+            }
+#endif
 
             ImGui::Text("(%.1f FPS)", ImGui::GetIO().Framerate);
             
@@ -1424,10 +1444,11 @@ DebugerMain()
                     }
                 
                     char *FileName = StringFindLastChar(DI->SourceFiles[SrcFileIndex].Path, '/') + 1;
-                    //                printf("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
+                    LOG_MAIN("Filename = %s, Path = %s\n", FileName, DI->SourceFiles[SrcFileIndex].Path);
+                    
                     if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
                     {
-                        //printf("child on %u\n", SrcFileIndex);
+                        //LOG_MAIN("child on %u\n", SrcFileIndex);
                         ImGui::BeginChild("srcfile");
                     
                         di_src_file *Src = &DI->SourceFiles[SrcFileIndex];

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Debuging build
-optim='-g -fsanitize=address'
+optim='-g -fsanitize=address -DDEBUG'
 # Relase build
 # optim='-O2'
 

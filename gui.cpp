@@ -214,7 +214,7 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
             }break;
             default:
             {
-                printf("Unsupported byte size = %d", BType->ByteSize);
+                LOG_GUI("Unsupported byte size = %d", BType->ByteSize);
             }break;
         }
     }
@@ -363,7 +363,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
             }
             else
             {
-                //printf("Var [%s] doesn't have a type\n", VarName);
+                LOG_GUI("Var [%s] doesn't have a type\n", VarName);
                 //assert(false);
             }
         }
