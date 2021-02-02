@@ -152,6 +152,7 @@ struct dbg
     char ProgramArgs[128];
     char PathToRunIn[256];
     char DebugeeProgramPath[256];
+    size_t DebugeeLoadAddress;
 
     x64_registers Regs;
 };
@@ -211,6 +212,7 @@ static char *DumpFile(arena *Arena, char *Path);
 static void GLFWModsToKeyboardModifiers(int Mods);
 static inst_type GetInstructionType(cs_insn *Instruction);
 static size_t GetProgramCounter();
+static inline size_t GetProgramCounterOffsetLoadAddress();
 static size_t GetReturnAddress();
 static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
 static char *GetRegisterNameByIndex(u32 Index);
@@ -221,7 +223,7 @@ static void MousePositionCallback(GLFWwindow *Window, double X, double Y);
 static user_regs_struct ParseToUserRegsStruct(x64_registers Regs);
 static x64_registers ParseUserRegsStruct(user_regs_struct URS);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
-static void PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
+static void PeekDebugeeMemoryArray(size_t StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
 static x64_registers PeekRegisters(i32 DebugeePID);
 static void SetRegisters(x64_registers Regs, i32 DebugeePID);
 static void StringConcat(char *Dest, char *Src);

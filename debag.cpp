@@ -35,8 +35,8 @@
  * - When breaking at an function or address we need to have DebugInfo loaded about that file
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
+ * - Distinguish between PIE and non-PIE
  * - Sort Registers maybe?
- * - Show only files that are in the project
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program
  * - hamster_debug
@@ -760,6 +760,17 @@ GetProgramCounter()
 }
 
 static inline size_t
+GetProgramCounterOffsetLoadAddress()
+{
+    size_t Result = 0x0;
+
+    size_t PC = GetProgramCounter();
+    Result = PC - Debuger.DebugeeLoadAddress;
+
+    return Result;
+}
+
+static inline size_t
 GetReturnAddress()
 {
     return PeekDebugeeMemory(Debuger.Regs.RBP + 8, Debuger.DebugeePID);
@@ -769,7 +780,7 @@ static size_t
 PeekDebugeeMemory(size_t Address, i32 DebugeePID)
 {
     size_t MachineWord = 0;
-    
+
     MachineWord = ptrace(PTRACE_PEEKDATA, DebugeePID, Address, 0x0);
     
     return MachineWord;
@@ -777,7 +788,7 @@ PeekDebugeeMemory(size_t Address, i32 DebugeePID)
 
 // Out array has be a multiple of 8 sized 
 static void
-PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead)
+PeekDebugeeMemoryArray(size_t StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead)
 {
     size_t *MemoryPtr = (size_t *)OutArray;
     
@@ -786,7 +797,7 @@ PeekDebugeeMemoryArray(u32 StartAddress, u32 EndAddress, i32 DebugeePID, u8 *Out
     {
         *MemoryPtr = PeekDebugeeMemory(TempAddress, DebugeePID);
         MemoryPtr += 1;
-        TempAddress += 1;
+        TempAddress += 8;
         if(TempAddress >= EndAddress)
         {
             break;
@@ -833,6 +844,7 @@ GetInstructionType(cs_insn *Instruction)
 static void
 DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 {
+    printf("AddrRange = %lx - %lx\n", AddrRange.Start, AddrRange.End);
     u32 InstCount = 0;
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_OFF); 
 
@@ -859,10 +871,13 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
 
         InstCount++;
         InstructionAddress += Instruction->size;
+        printf("Instruction->size = %u\n", Instruction->size);
 
         cs_free(Instruction, 1);
     }
-    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
+    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
+
+    printf("There are %d instructions\n", InstCount);
 
     assert(DisasmArena->Size > InstCount * sizeof(disasm_inst));
     DisasmInstCount = 0;
@@ -1009,12 +1024,13 @@ DebugeeContinueOrStart()
         if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
         {
             DebugeeStart();
+            
+            Debuger.DebugeeLoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+            printf("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
+            
             DWARFRead();
         
             BreakAtMain();
-
-            size_t LoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
-            printf("LoadAddress = %lx\n", LoadAddress);
         }
     
         ContinueProgram(Debuger.DebugeePID);
@@ -1094,9 +1110,6 @@ DebugerMain()
     style.WindowRounding = 0.0f;
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
-    
-    // u32 DirLenght = StringFindLastChar(Debuger.DebugeeProgramPath, '/') - Debuger.DebugeeProgramPath;
-    // strncpy(Debuger.PathToRunIn, Debuger.DebugeeProgramPath, DirLenght);
     
     Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -1430,7 +1443,7 @@ DebugerMain()
                     
                         di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
                         di_src_line *DrawingLine = 0x0;
-                        for(u32 I = 0; I < Src->ContentLineCount + 1 && Src->Content[I]; I++)
+                        for(u32 I = 0; I < Src->ContentLineCount && Src->Content[I]; I++)
                         {
                             // NOTE(mateusz): Lines are indexed from 1
                             if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
