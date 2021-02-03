@@ -409,7 +409,6 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 static void
 ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
 {
-    // TODO(mateusz): Other ways of accessing variables
     if(Var->LocationAtom == DW_OP_fbreg)
     {
         size_t VarAddress = FBReg + Var->Offset;
@@ -418,6 +417,13 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
     else if(Var->LocationAtom == DW_OP_addr)
     {
         size_t VarAddress = Var->Offset + Debuger.DebugeeLoadAddress;
+        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
+    }
+    else if(Var->LocationAtom >= DW_OP_breg0 && Var->LocationAtom <= DW_OP_breg15)
+    {
+        size_t Register = GetRegisterByABINumber(Debuger.Regs, Var->LocationAtom - DW_OP_breg0);
+        size_t VarAddress = Var->Offset + Register;
+        
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else
