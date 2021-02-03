@@ -1455,12 +1455,43 @@ DebugerMain()
                         di_src_line *DrawingLine = 0x0;
                         for(u32 I = 0; I < Src->ContentLineCount && Src->Content[I]; I++)
                         {
+                            u32 LineNum = I + 1;
+                            char *Spaces = 0x0;
+                            if(LineNum >= 1 && LineNum <= 10)
+                            {
+                                Spaces = "     ";
+                            }
+                            else if(LineNum >= 10 && LineNum <= 100)
+                            {
+                                Spaces = "    ";
+                            }
+                            else if(LineNum >= 100 && LineNum <= 1000)
+                            {
+                                Spaces = "   ";
+                            }
+                            else if(LineNum >= 1000 && LineNum <= 10000)
+                            {
+                                Spaces = "  ";
+                            }
+                            else if(LineNum >= 10000 && LineNum <= 100000)
+                            {
+                                Spaces = " ";
+                            }
+                            else
+                            {
+                                assert(false && "A file with over 100k lines? please...");
+                            }
+
+                            // NOTE(mateusz): use ImGui::ImageButton for break points
+                            ImGui::PushID(I);
+                            bool Button = ImGui::SmallButton("##LINEBUTTON"); ImGui::SameLine();
+                            ImGui::PopID();
+
                             // NOTE(mateusz): Lines are indexed from 1
                             if(Line && SrcFileIndex == Line->SrcFileIndex && Line->LineNum == I + 1)
                             {
                                 DrawingLine = Line;
-                                ImGui::TextColored(CurrentLineColor, Src->Content[I]);
-                            
+                                ImGui::TextColored(CurrentLineColor, "%d%s%s", LineNum, Spaces, Src->Content[I]);                          
                                 if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                                 {
                                     ImGui::SetScrollHereY(0.5f);
@@ -1476,34 +1507,32 @@ DebugerMain()
                                    (BP = BreakpointFind(DrawingLine->Address)) &&
                                    BreakpointEnabled(BP))
                                 {
-                                    ImGui::TextColored(BreakpointLineColor, Src->Content[I]);
+                                    ImGui::TextColored(BreakpointLineColor, "%d%s%s", LineNum, Spaces, Src->Content[I]);
                                 }
                                 else
                                 {
-                                    ImGui::TextUnformatted(Src->Content[I]);
+                                    ImGui::Text("%d%s%s", LineNum, Spaces, Src->Content[I]);
                                 }
                             }
                         
-                            if(ImGui::IsItemClicked())
+                            if(Button && DrawingLine)
                             {
-                                if(DrawingLine)
+                                
+                                breakpoint *BP = BreakpointFind(DrawingLine->Address);
+                                if(BreakpointEnabled(BP))
                                 {
-                                    breakpoint *BP = BreakpointFind(DrawingLine->Address);
-                                    if(BreakpointEnabled(BP))
+                                    BreakpointDisable(BP);
+                                }
+                                else
+                                {
+                                    if(BP)
                                     {
-                                        BreakpointDisable(BP);
+                                        BreakpointEnable(BP);
                                     }
                                     else
                                     {
-                                        if(BP)
-                                        {
-                                            BreakpointEnable(BP);
-                                        }
-                                        else
-                                        {
-                                            BreakpointPushAtSourceLine(Src, DrawingLine->LineNum,
-                                                                       Breakpoints, &BreakpointCount);
-                                        }
+                                        BreakpointPushAtSourceLine(Src, DrawingLine->LineNum,
+                                                                   Breakpoints, &BreakpointCount);
                                     }
                                 }
                             }
