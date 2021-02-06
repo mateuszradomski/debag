@@ -885,11 +885,12 @@ ranges have been read then don't read the low-high
                         {
                             CompUnit->RangesHighPCs = ArrayPush(&DI->Arena, size_t, 1);
                             Dwarf_Addr *WritePoint = (Dwarf_Addr *)CompUnit->RangesHighPCs;
-                            
+
                             Dwarf_Half Form = 0;
                             Dwarf_Form_Class FormType = {};
                             DWARF_CALL(dwarf_highpc_b(DIE, WritePoint, &Form, &FormType, 0x0));
-                            if (FormType == DW_FORM_CLASS_CONSTANT) {
+                            if(FormType == DW_FORM_CLASS_CONSTANT)
+                            {
                                 CompUnit->RangesHighPCs[0] += CompUnit->RangesLowPCs[0];
                             }
                         }

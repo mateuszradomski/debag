@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <fcntl.h>
+#include <stdint.h>
 
 #include <GLFW/glfw3.h>
 #include <capstone/capstone.h>
@@ -42,8 +43,6 @@
  * - hamster_debug
  *   - While in a class/struct/union method you cannot see the variables, because they have no names
  *     the entry for the subprogram is heavily fragmented around the DWARF info
- *   - Can't switch between file tabs, it's broken???
- *   - Can't scroll it keeps snapping back
  */
 
 static void
@@ -1099,6 +1098,43 @@ DebugerMain()
     style.WindowRounding = 0.0f;
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+
+    // Create the breakpoint texture
+    #define TEX_WIDTH 16
+    #define TEX_HEIGHT 16
+    #define PNG_CHANNEL 4
+    u8 ImageBuffer[TEX_HEIGHT * TEX_WIDTH * PNG_CHANNEL] = {};
+
+    for(int y = 0; y < TEX_HEIGHT; y++)
+    {
+        for(int x = 0; x < TEX_WIDTH; x++)
+        {
+            u8 Color = 0;
+
+            f32 MidY = TEX_WIDTH * 0.5f;
+            f32 MidX = TEX_HEIGHT * 0.5f;
+            f32 OffX = (f32)x - MidY;
+            f32 OffY = (f32)y - MidX;
+            if(OffX * OffX + OffY * OffY < MidY*MidY*0.65f)
+            {
+                Color = 255;
+            }
+
+            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 0] = Color;
+            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 1] = 0;
+            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 2] = 0;
+            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 3] = 255;
+        }
+    }
+
+    GLuint BPTexture = 0;
+    glGenTextures(1, &BPTexture);
+    glBindTexture(GL_TEXTURE_2D, BPTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, ImageBuffer);
     
     Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -1448,7 +1484,7 @@ DebugerMain()
                     
                     if(ImGui::BeginTabItem(FileName, NULL, TIFlags))
                     {
-                        //LOG_MAIN("child on %u\n", SrcFileIndex);
+                        LOG_MAIN("child on %u\n", SrcFileIndex);
                         ImGui::BeginChild("srcfile");
                     
                         di_src_file *Src = &DI->SourceFiles[SrcFileIndex];
@@ -1471,23 +1507,23 @@ DebugerMain()
                             {
                                 u32 LineNum = I + 1;
                                 char *Spaces = 0x0;
-                                if(LineNum >= 1 && LineNum <= 10)
+                                if(LineNum >= 1 && LineNum < 10)
                                 {
                                     Spaces = "     ";
                                 }
-                                else if(LineNum >= 10 && LineNum <= 100)
+                                else if(LineNum >= 10 && LineNum < 100)
                                 {
                                     Spaces = "    ";
                                 }
-                                else if(LineNum >= 100 && LineNum <= 1000)
+                                else if(LineNum >= 100 && LineNum < 1000)
                                 {
                                     Spaces = "   ";
                                 }
-                                else if(LineNum >= 1000 && LineNum <= 10000)
+                                else if(LineNum >= 1000 && LineNum < 10000)
                                 {
                                     Spaces = "  ";
                                 }
-                                else if(LineNum >= 10000 && LineNum <= 100000)
+                                else if(LineNum >= 10000 && LineNum < 100000)
                                 {
                                     Spaces = " ";
                                 }
@@ -1496,9 +1532,28 @@ DebugerMain()
                                     assert(false && "A file with over 100k lines? please...");
                                 }
 
-                                // NOTE(mateusz): use ImGui::ImageButton for break points
+                                bool LineHasBreakpoint = false;
+                                DrawingLine = LineFindByNumber(I + 1, SrcFileIndex);
+                                breakpoint *BP = 0x0;
+                                if(DrawingLine && (BP = BreakpointFind(DrawingLine->Address)) && BreakpointEnabled(BP))
+                                {
+                                    LineHasBreakpoint = true;
+                                }
+
                                 ImGui::PushID(I);
-                                bool Button = ImGui::SmallButton("##LINEBUTTON"); ImGui::SameLine();
+                                
+                                ImTextureID TexId = (void *)(uintptr_t)BPTexture;
+                                ImVec2 ButtonSize = ImVec2((f32)TEX_WIDTH, (f32)TEX_HEIGHT);
+                                ImVec2 UV0 = ImVec2(0.0f, 0.0f);
+                                ImVec2 UV1 = ImVec2(1.0f, 1.0f);
+                                ImVec4 BGColor = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+                                ImVec4 NoTint = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+                                ImVec4 BlackoutTint = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+                                ImVec4 TintColor = LineHasBreakpoint ? NoTint : BlackoutTint;
+
+                                bool Button = ImGui::ImageButton(TexId, ButtonSize, UV0, UV1, 0, BGColor, TintColor);
+                                ImGui::SameLine();
+                                
                                 ImGui::PopID();
 
                                 // NOTE(mateusz): Lines are indexed from 1
@@ -1514,19 +1569,7 @@ DebugerMain()
                                 }
                                 else
                                 {
-                                    DrawingLine = LineFindByNumber(I + 1, SrcFileIndex);
-                            
-                                    breakpoint *BP = 0x0;
-                                    if(DrawingLine &&
-                                       (BP = BreakpointFind(DrawingLine->Address)) &&
-                                       BreakpointEnabled(BP))
-                                    {
-                                        ImGui::TextColored(BreakpointLineColor, "%d%s%s", LineNum, Spaces, Src->Content[I]);
-                                    }
-                                    else
-                                    {
-                                        ImGui::Text("%d%s%s", LineNum, Spaces, Src->Content[I]);
-                                    }
+                                    ImGui::Text("%d%s%s", LineNum, Spaces, Src->Content[I]);
                                 }
                         
                                 if(Button && DrawingLine)
