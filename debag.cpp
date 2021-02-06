@@ -1097,6 +1097,16 @@ DebugerMain()
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 0.0f;
     GuiCreateBreakpointTexture();
+    Gui->SpacesArray[0] = "";
+    Gui->SpacesArray[1] = " ";
+    Gui->SpacesArray[2] = "  ";
+    Gui->SpacesArray[3] = "   ";
+    Gui->SpacesArray[4] = "    ";
+    Gui->SpacesArray[5] = "     ";
+    Gui->SpacesArray[6] = "      ";
+    Gui->SpacesArray[7] = "       ";
+    Gui->SpacesArray[8] = "        ";
+    Gui->SpacesArray[9] = "         ";
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
@@ -1398,12 +1408,15 @@ DebugerMain()
                 for(int I = Clipper.DisplayStart; I < Clipper.DisplayEnd; I++)
                 {
                     disasm_inst *Inst = &DisasmInst[I];
+                    u32 BaseMnemonicLength = 3; // The shortest mnenomic is of lenght 3
+                    u32 MnenomicLengthDiff = StringLength(Inst->Mnemonic) - BaseMnemonicLength;
+                    char *Spaces = Gui->SpacesArray[8 - MnenomicLengthDiff];
                 
                     if(Inst->Address == PC)
                     {
                         ImGui::TextColored(CurrentLineColor,
-                                           "0x%" PRIx64 ":\t%s\t\t%s\n",
-                                           Inst->Address, Inst->Mnemonic, Inst->Operation);
+                                           "0x%" PRIx64 ":\t%s%s%s\n",
+                                           Inst->Address, Inst->Mnemonic, Spaces, Inst->Operation);
                     
                         if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
                         {
@@ -1413,8 +1426,8 @@ DebugerMain()
                     }
                     else
                     {
-                        ImGui::Text("0x%" PRIx64 ":\t%s\t\t%s\n",
-                                    Inst->Address, Inst->Mnemonic, Inst->Operation);
+                        ImGui::Text("0x%" PRIx64 ":\t%s%s%s\n",
+                                    Inst->Address, Inst->Mnemonic, Spaces, Inst->Operation);
                     }
                 }
             }

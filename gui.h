@@ -11,6 +11,7 @@ struct gui_data
     char BreakAddress[32];
     void (* ModalFuncShow)();
     ImTextureID BreakpointTexture;
+    char *SpacesArray[10];
     
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
