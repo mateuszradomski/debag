@@ -1096,45 +1096,9 @@ DebugerMain()
     // Make windows square not round
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 0.0f;
+    GuiCreateBreakpointTexture();
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
-
-    // Create the breakpoint texture
-    #define TEX_WIDTH 16
-    #define TEX_HEIGHT 16
-    #define PNG_CHANNEL 4
-    u8 ImageBuffer[TEX_HEIGHT * TEX_WIDTH * PNG_CHANNEL] = {};
-
-    for(int y = 0; y < TEX_HEIGHT; y++)
-    {
-        for(int x = 0; x < TEX_WIDTH; x++)
-        {
-            u8 Color = 0;
-
-            f32 MidY = TEX_WIDTH * 0.5f;
-            f32 MidX = TEX_HEIGHT * 0.5f;
-            f32 OffX = (f32)x - MidY;
-            f32 OffY = (f32)y - MidX;
-            if(OffX * OffX + OffY * OffY < MidY*MidY*0.65f)
-            {
-                Color = 255;
-            }
-
-            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 0] = Color;
-            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 1] = 0;
-            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 2] = 0;
-            ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 3] = 255;
-        }
-    }
-
-    GLuint BPTexture = 0;
-    glGenTextures(1, &BPTexture);
-    glBindTexture(GL_TEXTURE_2D, BPTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, ImageBuffer);
     
     Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     
@@ -1542,7 +1506,6 @@ DebugerMain()
                             ImGui::PushID(I);
 
                             auto Font = ImGui::GetFont();
-                            ImTextureID TexId = (void *)(uintptr_t)BPTexture;
                             ImVec2 ButtonSize = ImVec2(Font->FontSize, Font->FontSize);
                             ImVec2 UV0 = ImVec2(0.0f, 0.0f);
                             ImVec2 UV1 = ImVec2(1.0f, 1.0f);
@@ -1551,7 +1514,8 @@ DebugerMain()
                             ImVec4 BlackoutTint = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
                             ImVec4 TintColor = LineHasBreakpoint ? NoTint : BlackoutTint;
 
-                            bool Button = ImGui::ImageButton(TexId, ButtonSize, UV0, UV1, 0, BGColor, TintColor);
+                            bool Button = ImGui::ImageButton(Gui->BreakpointTexture, ButtonSize,
+                                                             UV0, UV1, 0, BGColor, TintColor);
                             ImGui::SameLine();
 
                             ImGui::PopID();
@@ -1574,7 +1538,6 @@ DebugerMain()
 
                             if(Button && DrawingLine)
                             {
-
                                 breakpoint *BP = BreakpointFind(DrawingLine->Address);
                                 if(BreakpointEnabled(BP))
                                 {

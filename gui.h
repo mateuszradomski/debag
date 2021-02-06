@@ -10,6 +10,7 @@ struct gui_data
     char BreakFuncName[128];
     char BreakAddress[32];
     void (* ModalFuncShow)();
+    ImTextureID BreakpointTexture;
     
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
@@ -32,7 +33,6 @@ gui_data *Gui = &_Gui;
 #define LOG_GUI(...) do { } while (0)
 #endif
 
-
 static void ImGuiEndFrame();
 static void ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
 static void ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
@@ -48,5 +48,6 @@ static void _ImGuiShowBreakAtAddressModalWindow();
 static void _ImGuiShowBreakAtFunctionModalWindow();
 static void GuiSetStatusText(char *Str);
 static void GuiClearStatusText();
+static void GuiCreateBreakpointTexture();
 
 #endif //GUI_H
