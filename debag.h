@@ -230,6 +230,7 @@ static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
 static char *DumpFile(arena *Arena, char *Path);
 static void GLFWModsToKeyboardModifiers(int Mods);
 static inst_type GetInstructionType(cs_insn *Instruction);
+static u32 CapstoneRegisterToABINumber(x86_reg Register);
 static size_t GetProgramCounter();
 static inline size_t GetProgramCounterOffsetLoadAddress();
 static size_t GetReturnAddress();

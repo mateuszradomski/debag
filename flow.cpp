@@ -346,15 +346,26 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         
         if((Type & INST_TYPE_CALL) && BreakCalls)
         {
+            LOG_FLOW("Breaking because of call\n");
+            
             // NOTE(mateusz): Should always be one, otherwise not a valid opcode
             assert(Instruction->detail->x86.op_count == 1);
-            // TODO(mateusz): This is here just for me to remeber to implement jumps
-            // that are not specified by fixed memory locations but rather register
-            // values i.e. jump tables
-            assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
-            LOG_FLOW("Breaking because of call\n");
-            size_t CallAddress = Instruction->detail->x86.operands[0].imm;
+            size_t CallAddress = 0x0;
+            auto Operand = &Instruction->detail->x86.operands[0];
+            if(Operand->type == X86_OP_IMM)
+            {
+                CallAddress = Operand->imm;
+            }
+            else if(Operand->type == X86_OP_REG)
+            {
+                u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
+                CallAddress = GetRegisterByABINumber(Debuger.Regs, ABINumber);
+            }
+            else
+            {
+                assert(false && "A jmp instruction that is not imm and not a reg.");
+            }
             
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(CallAddress) != 0x0;
             if(AddressInAnyCompileUnit && !BreakpointFind(CallAddress, Breakpoints, (*BreakpointsCount)))

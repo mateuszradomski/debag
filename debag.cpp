@@ -606,6 +606,68 @@ AddressBetween(size_t Address, size_t Lower, size_t Upper)
     return Result;
 }
 
+static u32
+CapstoneRegisterToABINumber(x86_reg Register)
+{
+    u32 Result = 0;
+
+    switch(Register)
+    {
+    case X86_REG_RAX:
+        Result = 0;
+        break;
+    case X86_REG_RDX:
+        Result = 1;
+        break;
+    case X86_REG_RCX:
+        Result = 2;
+        break;
+    case X86_REG_RBX:
+        Result = 3;
+        break;
+    case X86_REG_RSI:
+        Result = 4;
+        break;
+    case X86_REG_RDI:
+        Result = 5;
+        break;
+    case X86_REG_RBP:
+        Result = 6;
+        break;
+    case X86_REG_RSP:
+        Result = 7;
+        break;
+    case X86_REG_R8:
+        Result = 8;
+        break;
+    case X86_REG_R9:
+        Result = 9;
+        break;
+    case X86_REG_R10:
+        Result = 10;
+        break;
+    case X86_REG_R11:
+        Result = 11;
+        break;
+    case X86_REG_R12:
+        Result = 12;
+        break;
+    case X86_REG_R13:
+        Result = 13;
+        break;
+    case X86_REG_R14:
+        Result = 14;
+        break;
+    case X86_REG_R15:
+        Result = 15;
+        break;
+    default:
+        assert(false && "Unhandled ABI register");
+    };
+
+    return Result;
+}
+
 static x64_registers
 ParseUserRegsStruct(user_regs_struct URS)
 {
