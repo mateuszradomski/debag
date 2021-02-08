@@ -759,3 +759,38 @@ GuiCreateBreakpointTexture()
 
     Gui->BreakpointTexture = (void *)(uintptr_t)BPTexture;
 }
+
+static void
+GuiShowBacktrace()
+{
+    size_t StartAddress = GetProgramCounter();
+    size_t BaseAddress = DwarfGetCFA(StartAddress) - 0x10;
+    x64_registers FrameRegisters = Debuger.Regs;
+
+    // TODO(mateusz): Linked list or a growing array
+    char *FunctionStack[32];
+    u32 StackLength = 0;
+
+    while(true)
+    {
+        // This is where I am starting
+        di_function *Func = FindFunctionConfiningAddress(StartAddress);
+        if(!Func) { break; }
+
+        FunctionStack[StackLength++] = Func->Name;
+
+        // The next function has this return address
+        size_t ReturnAddress = PeekDebugeeMemory(BaseAddress + 8, Debuger.DebugeePID);
+        if(!DwarfAddressInFrame(ReturnAddress)) { break; }
+        StartAddress = ReturnAddress;
+        
+        // And this is the restored registers for that frame and BaseAddress
+        FrameRegisters = DwarfGetFrameRegisters(ReturnAddress, FrameRegisters);
+        BaseAddress = FrameRegisters.RBP;
+    }
+
+    for(u32 I = 0; I < StackLength; I++)
+    {
+        ImGui::Text("%02d: %s()", StackLength - I, FunctionStack[I]);
+    }
+}

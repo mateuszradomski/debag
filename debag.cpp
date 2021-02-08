@@ -40,6 +40,7 @@
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
  * - Distinguish between PIE and non-PIE
+ * - Force step the 'push rbp', 'mov rbp rsp' preamble, that fixes a lot of issues
  * - compiling with -fomit-frame-pointer destroyes stepping
  * - Sort Registers maybe?
  * - When the program seg faults show a backtrace
@@ -1470,31 +1471,6 @@ DebugerMain()
             {
                 GuiShowOpenFile();
             }
-
-            if(KeyboardButtons[GLFW_KEY_J].Pressed)
-            {
-                size_t StartAddress = GetProgramCounter();
-                size_t BaseAddress = DwarfGetCFA(StartAddress) - 0x10;
-                x64_registers FrameRegisters = Debuger.Regs;
-                
-                for(int i = 0; i < 10; i++)
-                {
-                    // This is where I am starting
-                    di_function *Func = FindFunctionConfiningAddress(StartAddress);
-                    if(!Func) { break; }
-
-                    printf("Func->Name = %s\n", Func->Name);
-
-                    // The next function has this return address
-                    size_t ReturnAddress = PeekDebugeeMemory(BaseAddress + 8, Debuger.DebugeePID);
-                    if(!DwarfAddressInFrame(ReturnAddress)) { break; }
-                    StartAddress = ReturnAddress;
-                    // And this base address                    
-                    FrameRegisters = DwarfGetFrameRegisters(ReturnAddress, FrameRegisters);
-                    
-                    BaseAddress = FrameRegisters.RBP;
-                }
-            }
         }
 
         if(BreakAtFunction)
@@ -1737,6 +1713,17 @@ DebugerMain()
                     ImGui::BeginChild("regs");
                     GuiShowVariables();
                     ImGui::EndChild();
+                }
+                
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Backtrace"))
+            {
+                if(Debuger.Flags && DEBUGEE_FLAG_RUNNING)
+                {
+                    ImGui::BeginChild("regs");
+                    GuiShowBacktrace();
+                    ImGui::EndChild();                    
                 }
                 
                 ImGui::EndTabItem();

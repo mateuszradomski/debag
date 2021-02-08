@@ -50,5 +50,6 @@ static void _ImGuiShowBreakAtFunctionModalWindow();
 static void GuiSetStatusText(char *Str);
 static void GuiClearStatusText();
 static void GuiCreateBreakpointTexture();
+static void GuiShowBacktrace();
 
 #endif //GUI_H
