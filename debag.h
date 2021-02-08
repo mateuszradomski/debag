@@ -116,7 +116,6 @@ union x64_registers
         size_t RDI;
         size_t RSI;
         
-        size_t RIP;
         size_t RBP;
         size_t RSP;
         
@@ -139,6 +138,8 @@ union x64_registers
         size_t Es;
         size_t Fs;
         size_t Gs;
+        
+        size_t RIP;
     };
     size_t Array[27];
 };
@@ -233,7 +234,7 @@ static inst_type GetInstructionType(cs_insn *Instruction);
 static u32 CapstoneRegisterToABINumber(x86_reg Register);
 static size_t GetProgramCounter();
 static inline size_t GetProgramCounterOffsetLoadAddress();
-static size_t GetReturnAddress();
+static size_t GetReturnAddress(size_t Address);
 static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
 static char *GetRegisterNameByIndex(u32 Index);
 static u64 HexStringToInt(char *String);

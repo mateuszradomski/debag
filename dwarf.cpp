@@ -1391,7 +1391,6 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            // TODO(mateusz): Globals
             if(DI->FuctionsCount)
             {
                 di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
@@ -2273,10 +2272,11 @@ DWARFRead()
     free(CountTable);
 }
 
-static size_t
-DWARFGetCFA(size_t PC)
+static bool
+DwarfEvalFrameExpr(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
 {
-    PC -= Debuger.DebugeeLoadAddress;
+    bool Success = false;
+    Address -= Debuger.DebugeeLoadAddress;
     di_frame_info *Frame = &DI->FrameInfo;
     for(u32 J = 0; J < Frame->FDECount; J++)
     {
@@ -2286,26 +2286,102 @@ DWARFGetCFA(size_t PC)
         DWARF_CALL(dwarf_get_fde_range(Frame->FDEs[J], &FDELowPC, &FDEFunctionLength,
                                        0x0, 0x0, 0x0, 0x0, 0x0, Error));
         
-        if(AddressBetween(PC, FDELowPC, FDELowPC + FDEFunctionLength - 1))
+        if(AddressBetween(Address, FDELowPC, FDELowPC + FDEFunctionLength - 1))
         {
-            Dwarf_Regtable3 Tab3 = {};
+            if(RegsTableSize)
+            {
+                Result->rt3_reg_table_size = RegsTableSize;
+                Result->rt3_rules = (Dwarf_Regtable_Entry3_s *)malloc(sizeof(Result->rt3_rules[0]) * RegsTableSize);
+            }
+            
             Dwarf_Addr ActualPC = 0;
-            DWARF_CALL(dwarf_get_fde_info_for_all_regs3(Frame->FDEs[J], PC, &Tab3, &ActualPC, Error));
-            
-            Dwarf_Small OffsetRel = Tab3.rt3_cfa_rule.dw_offset_relevant;
-            Dwarf_Signed OffsetOut = Tab3.rt3_cfa_rule.dw_offset_or_block_len;
-            Dwarf_Half RegnumOut = Tab3.rt3_cfa_rule.dw_regnum;
-            
-            assert(OffsetRel == 1);
-            size_t RegVal = GetRegisterByABINumber(Debuger.Regs, RegnumOut);
-            
-            LOG_DWARF("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
-            return RegVal + OffsetOut;
+            DWARF_CALL(dwarf_get_fde_info_for_all_regs3(Frame->FDEs[J], Address, Result, &ActualPC, Error));
+
+            Success = true;
+            break;
         }
     }
+
+    return Success;
+}
+
+static size_t
+DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers)
+{
+    Dwarf_Small OffsetRel = Table->rt3_cfa_rule.dw_offset_relevant;
+    Dwarf_Signed OffsetOut = Table->rt3_cfa_rule.dw_offset_or_block_len;
+    Dwarf_Half RegnumOut = Table->rt3_cfa_rule.dw_regnum;
+
+    assert(OffsetRel == 1);
+    LOG_DWARF("CFA by reg num = %d\n", RegnumOut);
+    size_t RegVal = GetRegisterByABINumber(Registers, RegnumOut);
+            
+    LOG_DWARF("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
+
+    size_t CFA = RegVal + OffsetOut;
+
+    return CFA;
+}
     
-    assert(false);
-    return PC;
+static size_t
+DwarfGetCFA(size_t Address)
+{
+    size_t Result = 0x0;
+
+    Dwarf_Regtable3 Table = {};
+    assert(DwarfEvalFrameExpr(Address, 0, &Table));
+    Result = DwarfCalculateCFA(&Table, Debuger.Regs);
+
+    return Result;
+}
+
+static bool
+DwarfAddressInFrame(size_t Address)
+{
+    bool Result = false;
+
+    Dwarf_Regtable3 Table = {};
+    Result = DwarfEvalFrameExpr(Address, 0, &Table);
+
+    return Result;
+}
+
+static x64_registers
+DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
+{
+    Dwarf_Regtable3 Table = {};
+    assert(DwarfEvalFrameExpr(Address, 16, &Table));
+    assert(Table.rt3_rules);
+
+    size_t CFA = DwarfCalculateCFA(&Table, WithRegisters);
+    
+    x64_registers Result = {};
+    for(u32 I = 0; I < 16; I++)
+    {
+        auto Rule = &Table.rt3_rules[I];
+        
+        if(Rule->dw_value_type == DW_EXPR_OFFSET)
+        {
+            if(Rule->dw_offset_relevant)
+            {
+                size_t Address = CFA + (ssize_t)Rule->dw_offset_or_block_len;
+                
+                Result.Array[I] = PeekDebugeeMemory(Address, Debuger.DebugeePID);
+            }
+            else
+            {
+                Result.Array[I] = GetRegisterByABINumber(WithRegisters, I);
+            }
+        }
+        else
+        {
+            assert(false && "non dwarf2 rule\n");
+        }
+    }
+
+    free(Table.rt3_rules);
+
+    return Result;
 }
 
 static di_variable *

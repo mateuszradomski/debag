@@ -364,7 +364,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             }
             else
             {
-                assert(false && "A jmp instruction that is not imm and not a reg.");
+                assert(false && "A call instruction that is not imm and not a reg.");
             }
             
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(CallAddress) != 0x0;
@@ -391,14 +391,26 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
 
         if((Type & INST_TYPE_RELATIVE_BRANCH) && (Type & INST_TYPE_JUMP))
         {
+            
             // NOTE(mateusz): Should always be one, otherwise not a valid opcode
             assert(Instruction->detail->x86.op_count == 1);
-            // TODO(mateusz): This is here just for me to remeber to implement jumps
-            // that are not specified by fixed memory locations but rather register
-            // values i.e. jump tables
-            assert(Instruction->detail->x86.operands[0].imm > 0x100);
             
             size_t JumpAddress = Instruction->detail->x86.operands[0].imm;
+            auto Operand = &Instruction->detail->x86.operands[0];
+            if(Operand->type == X86_OP_IMM)
+            {
+                JumpAddress = Operand->imm;
+            }
+            else if(Operand->type == X86_OP_REG)
+            {
+                u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
+                JumpAddress = GetRegisterByABINumber(Debuger.Regs, ABINumber);
+            }
+            else
+            {
+                assert(false && "A jmp instruction that is not imm and not a reg.");
+            }
+            
             LOG_FLOW("OperandAddress = %lX, Range.Start = %lX, Range.End = %lX\n", JumpAddress, Range.Start, Range.End);
             
             bool AddressWithoutBreakpoint = !BreakpointFind(JumpAddress, Breakpoints, (*BreakpointsCount));
@@ -465,7 +477,7 @@ StepOutOfFunction(i32 DebugeePID)
     size_t PC = GetProgramCounter();
     if(AddressInFunction(Func, PC))
     {
-        size_t ReturnAddress = GetReturnAddress();
+        size_t ReturnAddress = GetReturnAddress(GetProgramCounter());
         bool OwnBreakpoint = false;
         breakpoint BP = {};
 

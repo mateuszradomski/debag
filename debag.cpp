@@ -11,11 +11,14 @@
 #include <sys/prctl.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <err.h>
 
 #include <GLFW/glfw3.h>
 #include <capstone/capstone.h>
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
+#include <libelf.h>
+#include <gelf.h>
 
 #include <libs/imgui/imgui.h>
 #include <libs/imgui/imgui_impl_glfw.h>
@@ -37,6 +40,7 @@
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
  * - Distinguish between PIE and non-PIE
+ * - compiling with -fomit-frame-pointer destroyes stepping
  * - Sort Registers maybe?
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program
@@ -217,6 +221,11 @@ StringsMatch(char *Str0, char *Str1)
         }
         Str0++;
         Str1++;
+    }
+
+    if(!(!Str0[0] && !Str1[0]))
+    {
+        Result = false;
     }
     
     return Result;
@@ -808,7 +817,7 @@ GetRegisterNameByIndex(u32 Index)
 {
     char *Names[] = {
         "RAX", "RBX", "RCX", "RDX", "RDI", "RSI",
-        "RIP", "RBP", "RSP",
+        "RBP", "RSP",
         "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
         "OrigRax", "Cs", "Eflags", "Ss", "FsBase", "GsBase", "Ds", "Es", "Fs", "Gs",
     };
@@ -823,9 +832,22 @@ GetProgramCounter()
 }
 
 static inline size_t
-GetReturnAddress()
+GetReturnAddress(size_t Address, size_t FrameBaseAddress)
 {
-    return PeekDebugeeMemory(Debuger.Regs.RBP + 8, Debuger.DebugeePID);
+    size_t CFA = DwarfGetCFA(Address);
+    CFA -= Debuger.Regs.RBP;
+    CFA += FrameBaseAddress;
+    size_t MachineWord = PeekDebugeeMemory(CFA - 8, Debuger.DebugeePID);
+
+    return MachineWord;    
+}
+
+static inline size_t
+GetReturnAddress(size_t Address)
+{
+    size_t MachineWord = GetReturnAddress(Address, Debuger.Regs.RBP);
+
+    return MachineWord;
 }
 
 static size_t
@@ -1185,7 +1207,38 @@ DebugerMain()
     
     assert(cs_open(CS_ARCH_X86, CS_MODE_64, &DisAsmHandle) == CS_ERR_OK);
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
-    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON); 
+    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
+
+    #if 0
+    assert(elf_version(EV_CURRENT) != EV_NONE);
+    int BinFD = open(Debuger.DebugeeProgramPath, O_RDONLY);
+    assert(BinFD != -1);
+    Elf *ElfHandle = elf_begin(BinFD, ELF_C_READ, 0x0);
+    assert(ElfHandle);
+    assert(elf_kind(ElfHandle) == ELF_K_ELF);
+    size_t Shstrndx = 0;
+    assert(elf_getshdrstrndx(ElfHandle, &Shstrndx) == 0x0);
+
+    Elf_Scn *ElfScn = 0x0;
+    GElf_Shdr shdr = {};
+    while((ElfScn = elf_nextscn(ElfHandle, ElfScn)))
+    {
+        char *name = 0x0;
+        assert(gelf_getshdr(ElfScn, &shdr) == &shdr);
+        assert(name = elf_strptr(ElfHandle, Shstrndx, shdr.sh_name));
+        printf("%s \n", name);
+        if(StringsMatch(name, ".eh_frame"))
+        {
+            Elf_Data *FrameData = 0x0;
+            assert(FrameData = elf_getdata(ElfScn, FrameData));
+            assert(FrameData);
+            printf("FrameData->d_size = %ld\n", FrameData->d_size);
+            printf("FrameData->d_type = %d\n", FrameData->d_type);
+        }
+    }
+
+    elf_end(ElfHandle);
+    #endif
     
     bool CenteredDissassembly = false;
     bool CenteredSourceCode = false;
@@ -1416,6 +1469,31 @@ DebugerMain()
             if(Ctrlp)
             {
                 GuiShowOpenFile();
+            }
+
+            if(KeyboardButtons[GLFW_KEY_J].Pressed)
+            {
+                size_t StartAddress = GetProgramCounter();
+                size_t BaseAddress = DwarfGetCFA(StartAddress) - 0x10;
+                x64_registers FrameRegisters = Debuger.Regs;
+                
+                for(int i = 0; i < 10; i++)
+                {
+                    // This is where I am starting
+                    di_function *Func = FindFunctionConfiningAddress(StartAddress);
+                    if(!Func) { break; }
+
+                    printf("Func->Name = %s\n", Func->Name);
+
+                    // The next function has this return address
+                    size_t ReturnAddress = PeekDebugeeMemory(BaseAddress + 8, Debuger.DebugeePID);
+                    if(!DwarfAddressInFrame(ReturnAddress)) { break; }
+                    StartAddress = ReturnAddress;
+                    // And this base address                    
+                    FrameRegisters = DwarfGetFrameRegisters(ReturnAddress, FrameRegisters);
+                    
+                    BaseAddress = FrameRegisters.RBP;
+                }
             }
         }
 

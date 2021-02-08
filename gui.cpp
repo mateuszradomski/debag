@@ -472,7 +472,7 @@ GuiShowVariables()
     di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
     if(Func && Func->FrameBaseIsCFA)
     {
-        size_t FBReg = DWARFGetCFA(GetProgramCounter());
+        size_t FBReg = DwarfGetCFA(GetProgramCounter());
                     
         if(Func->ParamCount > 0)
         {
