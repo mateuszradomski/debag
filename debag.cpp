@@ -40,7 +40,6 @@
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
  * - Distinguish between PIE and non-PIE
- * - Force step the 'push rbp', 'mov rbp rsp' preamble, that fixes a lot of issues
  * - compiling with -fomit-frame-pointer destroyes stepping
  * - Sort Registers maybe?
  * - When the program seg faults show a backtrace
@@ -529,6 +528,27 @@ StringToArgv(char *Str, char **ArgvOut, u32 *Argc)
         
         ArgvOut[(*Argc)++] = Token;
     }
+}
+
+static void
+HexDump(void *Ptr, size_t Count)
+{
+    for(u32 I = 0; I < Count; I++)
+    {
+        printf("%02x", ((u8 *)Ptr)[I]);
+
+        if((I + 1) % 4 == 0)
+        {
+            printf(" ");
+        }
+
+        if((I + 1) % 16 == 0)
+        {
+            printf("\n");
+        }
+    }
+    
+    printf("\n");
 }
 
 static arena
@@ -1159,6 +1179,7 @@ DebugerMain()
     DI = &_DI;
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
+    TempBreakpoints = (breakpoint *)calloc(MAX_TEMP_BREAKPOINT_COUNT, sizeof(breakpoint));
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(Gui->WindowWidth, Gui->WindowHeight, "debag", NULL, NULL);

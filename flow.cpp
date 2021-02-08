@@ -105,6 +105,10 @@ BreakpointFind(size_t Address)
     breakpoint *Result = 0x0;
     
     Result = BreakpointFind(Address, Breakpoints, BreakpointCount);
+    if(!Result)
+    {
+        Result = BreakpointFind(Address, TempBreakpoints, TempBreakpointsCount);
+    }
     
     return Result;
 }
@@ -293,7 +297,7 @@ StepLine(i32 DebugeePID)
 static void
 ContinueProgram(i32 DebugeePID)
 {
-    if(BreakpointCount > 0)
+    if(BreakpointCount > 0 || TempBreakpointsCount > 0)
     {
         size_t OldPC = GetProgramCounter();
         StepInstruction(DebugeePID);
@@ -309,6 +313,27 @@ ContinueProgram(i32 DebugeePID)
     
     ptrace(PTRACE_CONT, DebugeePID, 0x0, 0x0);
     WaitForSignal(DebugeePID);
+
+    size_t PC= GetProgramCounter();
+    di_function *Func = FindFunctionConfiningAddress(PC);
+    
+    if(PC == Func->FuncLexScope.LowPC)
+    {
+        assert(BreakpointCount > 0 || TempBreakpointsCount > 0);
+        breakpoint *BP = BreakpointFind(GetProgramCounter());
+        
+        u8 PushRBP[] = { 0x55 };
+        u8 MovRBPRSP[] = { 0x48, 0x89, 0xe5 };
+
+        u8 *MemoryAtPC = (u8 *)&BP->SavedOpCodes;
+
+        if(memcmp(MemoryAtPC, PushRBP, sizeof(PushRBP)) == 0 &&
+           memcmp(MemoryAtPC + sizeof(PushRBP), MovRBPRSP, sizeof(MovRBPRSP)) == 0)
+        {
+            // Now we will step one line to go over all of the init stuff
+            ToNextLine(Debuger.DebugeePID, false);
+        }
+    }
 }
 
 static void
@@ -446,11 +471,7 @@ static void
 ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 {
     address_range Range = AddressRangeCurrentAndNextLine(GetProgramCounter());
-    
     LOG_FLOW("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", GetProgramCounter(), Range.Start, Range.End);
-    
-    breakpoint TempBreakpoints[32] = {};
-    u32 TempBreakpointsCount = 0;
     
     BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, DebugeePID, TempBreakpoints, &TempBreakpointsCount);
     
@@ -462,6 +483,9 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
         LOG_FLOW("Breakpoint[%d] at %lX\n", I, TempBreakpoints[I].Address);
         BreakpointDisable(&TempBreakpoints[I]);
     }
+
+    memset(TempBreakpoints, 0, sizeof(TempBreakpoints[0]) * TempBreakpointsCount);
+    TempBreakpointsCount = 0;
     
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;
 }

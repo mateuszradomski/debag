@@ -188,6 +188,10 @@ struct arena
 breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;
 
+#define MAX_TEMP_BREAKPOINT_COUNT 32
+breakpoint *TempBreakpoints = 0x0;
+u32 TempBreakpointsCount = 0;
+
 arena DisasmArena;
 disasm_inst *DisasmInst = 0x0;
 u32 DisasmInstCount = 0;
@@ -246,6 +250,7 @@ static x64_registers ParseUserRegsStruct(user_regs_struct URS);
 static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
 static void PeekDebugeeMemoryArray(size_t StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
 static x64_registers PeekRegisters(i32 DebugeePID);
+static void ToNextLine(i32 DebugeePID, bool StepIntoFunctions);
 static void SetRegisters(x64_registers Regs, i32 DebugeePID);
 static void StringConcat(char *Dest, char *Src);
 static void StringCopy(char *Dest, char *Src);
@@ -261,6 +266,7 @@ static bool StringStartsWith(char *Str, char *Start);
 static u32 StringSplit(char *Str, char Delimiter);
 static char *StringSplitNext(char *Str);
 static u32 StringSplitCountStarting(char *Lines, u32 LinesCount, char *Start);
+static void HexDump(void *Ptr, size_t Count);
 static void UpdateInfo();
 static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
 
