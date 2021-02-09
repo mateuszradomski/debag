@@ -762,6 +762,58 @@ FindEntryPointAddress()
     return Result;
 }
 
+static bool
+DebugeeIsPIE()
+{
+    bool Result = false;
+
+    Elf *ElfHandle = 0x0;
+    int BinaryFD = open(Debuger.DebugeeProgramPath, O_RDONLY);
+    assert(BinaryFD > 0);
+
+    assert(elf_version(EV_CURRENT) != EV_NONE);
+    assert((ElfHandle = elf_begin(BinaryFD, ELF_C_READ, 0x0)));
+
+    Elf64_Ehdr *ElfHeader = elf64_getehdr(ElfHandle);
+
+    // Based on
+    // https://stackoverflow.com/questions/34519521/why-does-gcc-create-a-shared-object-instead-of-an-executable-binary-according-to/55704865#55704865
+    if(ElfHeader->e_type == ET_EXEC)
+    {
+        // non PIE
+    }
+    else if(ElfHeader->e_type == ET_DYN)
+    {
+        Elf_Scn *ElfScn = 0x0;
+        Elf64_Dyn *DynamicSection = 0x0;
+        while((ElfScn = elf_nextscn(ElfHandle, ElfScn)))
+        {
+            Elf64_Shdr *SectionHeader = elf64_getshdr(ElfScn);
+            if(SectionHeader->sh_type == SHT_DYNAMIC)
+            {
+                Elf_Data *Data = elf_getdata(ElfScn, 0x0);
+                DynamicSection = (Elf64_Dyn *)Data->d_buf;
+            }
+        }
+
+        u32 I = 0;
+        while(DynamicSection[I].d_tag != DT_NULL)
+        {
+            if(DynamicSection[I].d_tag == DT_FLAGS_1 && DynamicSection[I].d_un.d_val & DF_1_PIE)
+            {
+                // It's a PIE
+                Result = true;
+                break;
+            }
+            I++;
+        }
+    }
+
+    elf_end(ElfHandle);
+    
+    return Result;
+}
+
 static size_t
 GetDebugeeLoadAddress(i32 DebugeePID)
 {

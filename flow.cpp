@@ -35,7 +35,7 @@ WaitForSignal(i32 DebugeePID)
     if(WIFEXITED(WaitStatus))
     {
         GuiSetStatusText("Program finished it's execution");
-        Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
+        Debuger.Flags.Running = !Debuger.Flags.Running;
         DeallocDebugInfo();
     }
     
@@ -265,7 +265,7 @@ StepInstruction(i32 DebugeePID)
     
     Debuger.Regs = PeekRegisters(DebugeePID);
 
-    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
+    Debuger.Flags.Steped = true;
 }
 
 static void
@@ -273,7 +273,7 @@ NextInstruction(i32 DebugeePID)
 {
     (void)DebugeePID;
     LOG_FLOW("Unimplemented method!");
-    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
+    Debuger.Flags.Steped = true;
 }
 
 static void
@@ -309,8 +309,8 @@ ContinueProgram(i32 DebugeePID)
         }
     }
     
-    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
-    
+    Debuger.Flags.Steped = true;
+
     Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
     breakpoint *BP = 0x0;
     if((BP = BreakpointFind(GetProgramCounter())) && BreakpointEnabled(BP))
@@ -495,7 +495,7 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
     memset(TempBreakpoints, 0, sizeof(TempBreakpoints[0]) * TempBreakpointsCount);
     TempBreakpointsCount = 0;
     
-    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
+    Debuger.Flags.Steped = true;
 }
 
 static void
@@ -527,5 +527,5 @@ StepOutOfFunction(i32 DebugeePID)
         }
     }
     
-    Debuger.Flags |= DEBUGEE_FLAG_STEPED;
+    Debuger.Flags.Steped = true;
 }

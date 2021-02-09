@@ -18,7 +18,6 @@
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 #include <libelf.h>
-#include <gelf.h>
 
 #include <libs/imgui/imgui.h>
 #include <libs/imgui/imgui_impl_glfw.h>
@@ -1091,7 +1090,7 @@ DebugeeStart()
     else
     {
         Debuger.DebugeePID = ProcessID;
-        Debuger.Flags |= DEBUGEE_FLAG_RUNNING;
+        Debuger.Flags.Running = true;
         WaitForSignal(Debuger.DebugeePID);
         assert(chdir(BaseDir) == 0);
     }
@@ -1101,7 +1100,7 @@ static void
 DebugeeKill()
 {
     ptrace(PTRACE_KILL, Debuger.DebugeePID, 0x0, 0x0);
-    Debuger.Flags &= ~DEBUGEE_FLAG_RUNNING;
+    Debuger.Flags.Running = !Debuger.Flags.Running;
 }
 
 static void
@@ -1112,12 +1111,14 @@ DebugeeContinueOrStart()
         GuiClearStatusText();
         
         //Continue or start program
-        if(!(Debuger.Flags & DEBUGEE_FLAG_RUNNING))
+        if(!Debuger.Flags.Running)
         {
             DebugeeStart();
             
             Debuger.DebugeeLoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
             LOG_MAIN("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
+            Debuger.Flags.PIE = DebugeeIsPIE();
+            assert(Debuger.Flags.PIE);
             
             DWARFRead();
         
@@ -1162,7 +1163,7 @@ DeallocDebugInfo()
 static void
 DebugeeRestart()
 {
-    if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+    if(Debuger.Flags.Running)
     {
         DebugeeKill();
         DeallocDebugInfo();
@@ -1229,37 +1230,6 @@ DebugerMain()
     assert(cs_open(CS_ARCH_X86, CS_MODE_64, &DisAsmHandle) == CS_ERR_OK);
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
-
-    #if 0
-    assert(elf_version(EV_CURRENT) != EV_NONE);
-    int BinFD = open(Debuger.DebugeeProgramPath, O_RDONLY);
-    assert(BinFD != -1);
-    Elf *ElfHandle = elf_begin(BinFD, ELF_C_READ, 0x0);
-    assert(ElfHandle);
-    assert(elf_kind(ElfHandle) == ELF_K_ELF);
-    size_t Shstrndx = 0;
-    assert(elf_getshdrstrndx(ElfHandle, &Shstrndx) == 0x0);
-
-    Elf_Scn *ElfScn = 0x0;
-    GElf_Shdr shdr = {};
-    while((ElfScn = elf_nextscn(ElfHandle, ElfScn)))
-    {
-        char *name = 0x0;
-        assert(gelf_getshdr(ElfScn, &shdr) == &shdr);
-        assert(name = elf_strptr(ElfHandle, Shstrndx, shdr.sh_name));
-        printf("%s \n", name);
-        if(StringsMatch(name, ".eh_frame"))
-        {
-            Elf_Data *FrameData = 0x0;
-            assert(FrameData = elf_getdata(ElfScn, FrameData));
-            assert(FrameData);
-            printf("FrameData->d_size = %ld\n", FrameData->d_size);
-            printf("FrameData->d_type = %d\n", FrameData->d_type);
-        }
-    }
-
-    elf_end(ElfHandle);
-    #endif
     
     bool CenteredDissassembly = false;
     bool CenteredSourceCode = false;
@@ -1270,11 +1240,11 @@ DebugerMain()
         //else { Debuger.InputChange = false; }
         
         // NOTE(mateusz): This has to happen before the calls to next lines
-        if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+        if(Debuger.Flags.Steped)
         {
             if(CenteredDissassembly && CenteredSourceCode)
             {
-                Debuger.Flags ^= DEBUGEE_FLAG_STEPED;
+                Debuger.Flags.Steped = !Debuger.Flags.Steped;
                 CenteredDissassembly = false;
                 CenteredSourceCode = false;
             }
@@ -1291,7 +1261,7 @@ DebugerMain()
         {
             auto MenuBarSize = ImGui::GetWindowSize();
             MenuBarHeight = MenuBarSize.y;
-            bool IsRunning = Debuger.Flags & DEBUGEE_FLAG_RUNNING;
+            bool IsRunning = Debuger.Flags.Running;
             
             if(ImGui::BeginMenu("File"))
             {
@@ -1428,7 +1398,7 @@ DebugerMain()
             }
         }
 
-        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+        if(Debuger.Flags.Running)
         {
             bool F9 = KeyboardButtons[GLFW_KEY_F9].Pressed || KeyboardButtons[GLFW_KEY_F9].Repeat;
             
@@ -1439,7 +1409,7 @@ DebugerMain()
             }
         }
         
-        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+        if(Debuger.Flags.Running)
         {
             bool F10 = KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat;
             bool F11 = KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat;
@@ -1513,7 +1483,7 @@ DebugerMain()
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+        if(Debuger.Flags.Running)
         {
             ImGuiListClipper Clipper = {};
             Clipper.Begin(DisasmInstCount);
@@ -1530,7 +1500,7 @@ DebugerMain()
                 }
             }
 
-            if(Debuger.Flags & DEBUGEE_FLAG_STEPED && PCItemIndex != -1)
+            if(Debuger.Flags.Steped && PCItemIndex != -1)
             {
                 f32 Max = ImGui::GetScrollMaxY();
                 f32 Curr = ((f32)PCItemIndex / (f32)DisasmInstCount);
@@ -1554,7 +1524,7 @@ DebugerMain()
                                            "0x%" PRIx64 ":\t%s%s%s\n",
                                            Inst->Address, Inst->Mnemonic, Spaces, Inst->Operation);
                     
-                        if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                        if(Debuger.Flags.Steped)
                         {
                             ImGui::SetScrollHereY(0.5f);
                             CenteredDissassembly = true;
@@ -1578,7 +1548,7 @@ DebugerMain()
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
-        if(Debuger.Flags & DEBUGEE_FLAG_RUNNING &&
+        if(Debuger.Flags.Running &&
            ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
             di_src_line *Line = LineTableFindByAddress(GetProgramCounter());
@@ -1586,7 +1556,7 @@ DebugerMain()
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
-                if(Line && SrcFileIndex == Line->SrcFileIndex && Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                if(Line && SrcFileIndex == Line->SrcFileIndex && Debuger.Flags.Steped)
                 {
                     TIFlags = ImGuiTabItemFlags_SetSelected;
                 }
@@ -1604,7 +1574,7 @@ DebugerMain()
                     ImGuiListClipper Clipper = {};
                     Clipper.Begin(Src->ContentLineCount);
 
-                    if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                    if(Debuger.Flags.Steped)
                     {
                         f32 Max = ImGui::GetScrollMaxY();
                         f32 Curr = ((f32)Line->LineNum / (f32)Src->ContentLineCount);
@@ -1674,7 +1644,7 @@ DebugerMain()
                             {
                                 DrawingLine = Line;
                                 ImGui::TextColored(CurrentLineColor, "%d%s%s", LineNum, Spaces, Src->Content[I]);
-                                if(Debuger.Flags & DEBUGEE_FLAG_STEPED)
+                                if(Debuger.Flags.Steped)
                                 {
                                     ImGui::SetScrollHereY(0.5f);
                                     CenteredSourceCode = true;
@@ -1728,7 +1698,7 @@ DebugerMain()
         {
             if(ImGui::BeginTabItem("Locals"))
             {
-                if(Debuger.Flags && DEBUGEE_FLAG_RUNNING)
+                if(Debuger.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
                     GuiShowVariables();
@@ -1739,7 +1709,7 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("Backtrace"))
             {
-                if(Debuger.Flags && DEBUGEE_FLAG_RUNNING)
+                if(Debuger.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
                     GuiShowBacktrace();
@@ -1750,7 +1720,7 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("x64 Registers"))
             {
-                if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+                if(Debuger.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
                     ImGuiShowRegisters(Debuger.Regs);
@@ -1761,7 +1731,7 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("Breakpoints"))
             {
-                if(Debuger.Flags & DEBUGEE_FLAG_RUNNING)
+                if(Debuger.Flags.Running)
                 {
                     ImGui::BeginChild("bps");
                     GuiShowBreakpoints();

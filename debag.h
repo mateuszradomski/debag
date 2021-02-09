@@ -144,14 +144,12 @@ union x64_registers
     size_t Array[27];
 };
 
-enum
+struct debugee_flags
 {
-    DEBUGEE_FLAG_NULL = 0,
-    DEBUGEE_FLAG_RUNNING = (1 << 0),
-    DEBUGEE_FLAG_STEPED = (1 << 1),
+    u8 Running  : 1;
+    u8 Steped   : 1;
+    u8 PIE      : 1;
 };
-
-typedef i32 debugee_flag;
 
 struct logging_switches
 {
@@ -164,7 +162,7 @@ struct logging_switches
 
 struct dbg
 {
-    debugee_flag Flags;
+    debugee_flags Flags;
     i32 DebugeePID;
     bool InputChange;
     char ProgramArgs[128];
