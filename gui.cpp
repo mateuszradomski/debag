@@ -416,7 +416,7 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
     }
     else if(Var->LocationAtom == DW_OP_addr)
     {
-        size_t VarAddress = Var->Offset + Debuger.DebugeeLoadAddress;
+        size_t VarAddress = Debuger.Flags.PIE ? Var->Offset + Debuger.DebugeeLoadAddress : Var->Offset;
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else if(Var->LocationAtom >= DW_OP_breg0 && Var->LocationAtom <= DW_OP_breg15)

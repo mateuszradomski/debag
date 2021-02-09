@@ -503,7 +503,7 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
                 *LineIdxOut = File->SrcLineCount;
             }
 
-            Line.Address = Addr + Debuger.DebugeeLoadAddress;
+            Line.Address = Debuger.Flags.PIE ? Addr + Debuger.DebugeeLoadAddress : Addr;
             Line.LineNum = LineNO;
 
             Dwarf_Signed LineOffset = 0;
@@ -670,7 +670,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 
                     // NOTE(mateusz): LineAddresses are as offsets, we need them in the address
                     // space of the exectuable.
-                    LineAddr += Debuger.DebugeeLoadAddress;
+                    LineAddr = Debuger.Flags.PIE ? LineAddr + Debuger.DebugeeLoadAddress : LineAddr;
                     
                     if(Address == LineAddr)
                     {
@@ -1085,11 +1085,14 @@ ranges have been read then don't read the low-high
 
             // NOTE(mateusz): We read offsets, now add to them the load address so they represent the
             // the actual address inside the running excutable.
-            for(u32 I = 0; I < CompUnit->RangesCount; I++)
+            if(Debuger.Flags.PIE)
             {
-                assert(Debuger.DebugeeLoadAddress != 0x0);
-                CompUnit->RangesLowPCs[I] += Debuger.DebugeeLoadAddress;
-                CompUnit->RangesHighPCs[I] += Debuger.DebugeeLoadAddress;
+                for(u32 I = 0; I < CompUnit->RangesCount; I++)
+                {
+                    assert(Debuger.DebugeeLoadAddress != 0x0);
+                    CompUnit->RangesLowPCs[I] += Debuger.DebugeeLoadAddress;
+                    CompUnit->RangesHighPCs[I] += Debuger.DebugeeLoadAddress;
+                }
             }
         }break;
         case DW_TAG_subprogram:
@@ -1209,9 +1212,12 @@ ranges have been read then don't read the low-high
                     }break;
                 }
             }
-            
-            Func->FuncLexScope.LowPC += Debuger.DebugeeLoadAddress;
-            Func->FuncLexScope.HighPC += Debuger.DebugeeLoadAddress;
+
+            if(Debuger.Flags.PIE)
+            {
+                Func->FuncLexScope.LowPC += Debuger.DebugeeLoadAddress;
+                Func->FuncLexScope.HighPC += Debuger.DebugeeLoadAddress;
+            }
         }break;
         case DW_TAG_lexical_block:
         {
@@ -1320,9 +1326,12 @@ ranges have been read then don't read the low-high
                     }break;
                 }
             }
-            
-            LexScope->LowPC += Debuger.DebugeeLoadAddress;
-            LexScope->HighPC += Debuger.DebugeeLoadAddress;
+
+            if(Debuger.Flags.PIE)
+            {
+                LexScope->LowPC += Debuger.DebugeeLoadAddress;
+                LexScope->HighPC += Debuger.DebugeeLoadAddress;
+            }
         }break;
         case DW_TAG_variable:
         {
@@ -2328,7 +2337,7 @@ static bool
 DwarfEvalFrameExpr(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
 {
     bool Success = false;
-    Address -= Debuger.DebugeeLoadAddress;
+    Address = Debuger.Flags.PIE ? Address - Debuger.DebugeeLoadAddress : Address;
     di_frame_info *Frame = &DI->FrameInfo;
     for(u32 J = 0; J < Frame->FDECount; J++)
     {

@@ -38,7 +38,6 @@
  * - When breaking at an function or address we need to have DebugInfo loaded about that file
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
- * - Distinguish between PIE and non-PIE
  * - Sort Registers maybe?
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program
@@ -1118,7 +1117,6 @@ DebugeeContinueOrStart()
             Debuger.DebugeeLoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
             LOG_MAIN("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
             Debuger.Flags.PIE = DebugeeIsPIE();
-            assert(Debuger.Flags.PIE);
             
             DWARFRead();
         
