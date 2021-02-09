@@ -40,7 +40,6 @@
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
  * - Distinguish between PIE and non-PIE
- * - compiling with -fomit-frame-pointer destroyes stepping
  * - Sort Registers maybe?
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program

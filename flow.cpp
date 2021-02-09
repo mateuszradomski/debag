@@ -311,13 +311,21 @@ ContinueProgram(i32 DebugeePID)
     
     Debuger.Flags |= DEBUGEE_FLAG_STEPED;
     
-    ptrace(PTRACE_CONT, DebugeePID, 0x0, 0x0);
-    WaitForSignal(DebugeePID);
-
-    size_t PC= GetProgramCounter();
-    di_function *Func = FindFunctionConfiningAddress(PC);
+    Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
+    breakpoint *BP = 0x0;
+    if((BP = BreakpointFind(GetProgramCounter())) && BreakpointEnabled(BP))
+    {
+    }
+    else
+    {
+        ptrace(PTRACE_CONT, DebugeePID, 0x0, 0x0);
+        WaitForSignal(DebugeePID);
+    }
     
-    if(PC == Func->FuncLexScope.LowPC)
+    size_t PC = GetProgramCounter();
+    di_function *Func = FindFunctionConfiningAddress(PC);
+
+    if(Func && PC == Func->FuncLexScope.LowPC)
     {
         assert(BreakpointCount > 0 || TempBreakpointsCount > 0);
         breakpoint *BP = BreakpointFind(GetProgramCounter());
@@ -403,7 +411,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         
         if(Type & INST_TYPE_RET)
         {
-            size_t ReturnAddress = PeekDebugeeMemory(Debuger.Regs.RBP + 8, DebugeePID);
+            size_t ReturnAddress = GetReturnAddress(GetProgramCounter());
 
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(ReturnAddress) != 0x0;
             if(AddressInAnyCompileUnit && !BreakpointFind(ReturnAddress, Breakpoints, (*BreakpointsCount)))
