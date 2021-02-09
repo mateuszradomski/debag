@@ -2373,7 +2373,7 @@ DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers)
     Dwarf_Signed OffsetOut = Table->rt3_cfa_rule.dw_offset_or_block_len;
     Dwarf_Half RegnumOut = Table->rt3_cfa_rule.dw_regnum;
 
-    assert(OffsetRel == 1);
+    assert(OffsetRel == 1 && Table->rt3_cfa_rule.dw_offset_relevant != 0);
     LOG_DWARF("CFA by reg num = %d\n", RegnumOut);
     size_t RegVal = GetRegisterByABINumber(Registers, RegnumOut);
             
@@ -2411,19 +2411,21 @@ static x64_registers
 DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
 {
     Dwarf_Regtable3 Table = {};
-    assert(DwarfEvalFrameExpr(Address, 16, &Table));
+    assert(DwarfEvalFrameExpr(Address, 66, &Table));
     assert(Table.rt3_rules);
 
     size_t CFA = DwarfCalculateCFA(&Table, WithRegisters);
     
     x64_registers Result = {};
-    for(u32 I = 0; I < 16; I++)
+    for(u32 I = 0; I < 66; I++)
     {
+        if(I == 16) { continue; } // Return Register for ABI
+            
         auto Rule = &Table.rt3_rules[I];
         
         if(Rule->dw_value_type == DW_EXPR_OFFSET)
         {
-            if(Rule->dw_offset_relevant)
+            if(Rule->dw_offset_relevant != 0)
             {
                 size_t Address = CFA + (ssize_t)Rule->dw_offset_or_block_len;
                 
@@ -2431,7 +2433,18 @@ DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
             }
             else
             {
-                Result.Array[I] = GetRegisterByABINumber(WithRegisters, I);
+                if(Rule->dw_regnum == DW_FRAME_SAME_VAL || Rule->dw_regnum == DW_FRAME_UNDEFINED_VAL)
+                {
+                    if(Rule->dw_regnum != DW_FRAME_SAME_VAL)
+                    {
+                        printf("I = %d\n", I);
+                    }
+                    Result = WithRegisters;
+                }
+                else
+                {
+                    Result.Array[I] = GetRegisterByABINumber(WithRegisters, Rule->dw_regnum);
+                }
             }
         }
         else
@@ -2439,6 +2452,10 @@ DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
             assert(false && "non dwarf2 rule\n");
         }
     }
+
+    printf("CFA2 = %lx\n", CFA);
+    Result.RSP = CFA;
+    Result.RBP = CFA;
 
     free(Table.rt3_rules);
 

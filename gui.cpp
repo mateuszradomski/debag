@@ -763,30 +763,34 @@ GuiCreateBreakpointTexture()
 static void
 GuiShowBacktrace()
 {
-    size_t StartAddress = GetProgramCounter();
-    size_t BaseAddress = DwarfGetCFA(StartAddress) - 0x10;
-    x64_registers FrameRegisters = Debuger.Regs;
+    unw_context_t UnwindCtx = {};
+    unw_getcontext(&UnwindCtx);
+    unw_addr_space_t UnwindAddressSpace = unw_create_addr_space(&_UPT_accessors, __LITTLE_ENDIAN);
+    assert(UnwindAddressSpace);
+
+    unw_cursor_t UnwindCursor = {};
+    assert(unw_init_remote(&UnwindCursor, UnwindAddressSpace, Debuger.UnwindRemoteArg) == 0);
 
     // TODO(mateusz): Linked list or a growing array
     char *FunctionStack[32];
     u32 StackLength = 0;
 
-    while(true)
+    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    if(!Func) { return; }
+
+    FunctionStack[StackLength++] = Func->Name;
+
+    for(u32 I = 0; unw_step(&UnwindCursor) > 0; I++)
     {
-        // This is where I am starting
-        di_function *Func = FindFunctionConfiningAddress(StartAddress);
+        unw_word_t StackPointer = 0x0;
+        unw_get_reg(&UnwindCursor, UNW_REG_SP, &StackPointer);
+        size_t ReturnAddress = PeekDebugeeMemory(StackPointer - 8, Debuger.DebugeePID);
+
+        di_function *Func = FindFunctionConfiningAddress(ReturnAddress);
+
         if(!Func) { break; }
-
         FunctionStack[StackLength++] = Func->Name;
-
-        // The next function has this return address
-        size_t ReturnAddress = PeekDebugeeMemory(BaseAddress + 8, Debuger.DebugeePID);
-        if(!DwarfAddressInFrame(ReturnAddress)) { break; }
-        StartAddress = ReturnAddress;
-        
-        // And this is the restored registers for that frame and BaseAddress
-        FrameRegisters = DwarfGetFrameRegisters(ReturnAddress, FrameRegisters);
-        BaseAddress = FrameRegisters.RBP;
+        if(StackLength == 32) { break; };
     }
 
     for(u32 I = 0; I < StackLength; I++)

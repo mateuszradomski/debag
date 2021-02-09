@@ -18,6 +18,7 @@
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
 #include <libelf.h>
+#include <libunwind-ptrace.h>
 
 #include <libs/imgui/imgui.h>
 #include <libs/imgui/imgui_impl_glfw.h>
@@ -1119,7 +1120,9 @@ DebugeeContinueOrStart()
             Debuger.Flags.PIE = DebugeeIsPIE();
             
             DWARFRead();
-        
+            
+            Debuger.UnwindRemoteArg = _UPT_create(Debuger.DebugeePID);
+
             BreakAtMain();
         }
     
@@ -1228,7 +1231,7 @@ DebugerMain()
     assert(cs_open(CS_ARCH_X86, CS_MODE_64, &DisAsmHandle) == CS_ERR_OK);
     //cs_option(DisAsmHandle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT); 
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
-    
+
     bool CenteredDissassembly = false;
     bool CenteredSourceCode = false;
     

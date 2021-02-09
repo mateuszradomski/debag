@@ -170,6 +170,8 @@ struct dbg
     char DebugeeProgramPath[256];
     size_t DebugeeLoadAddress;
 
+    void *UnwindRemoteArg;
+
     logging_switches Log;
 
     x64_registers Regs;
