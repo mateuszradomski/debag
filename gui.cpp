@@ -16,18 +16,28 @@ ImGuiEndFrame()
 static void
 ImGuiShowRegisters(x64_registers Regs)
 {
-    ImGui::Columns(4, 0x0, true);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(2, 0));
+    ImGui::Text("RIP: %lX", Regs.RIP);
+    ImGui::PopStyleVar();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+    ImGui::Separator();
     
-    // NOTE(mateusz): We ignore we registers that are the last 10 in the 'x64_registers' struct
-    u32 IgnoreCount = 10;
+    ImGui::Columns(4, 0x0, true);
+
+    // NOTE(mateusz): We ignore we registers that are the last 11 in the 'x64_registers' struct
+    u32 IgnoreCount = 11;
     
     for(u32 I = 0; I < (sizeof(Regs) / sizeof(size_t)) - IgnoreCount; I++)
     {
-        ImGui::Text("%s : %lX", RegisterGetNameByABINumber(I), Regs.Array[I]);
+        ImGui::Text("%s: %lX", RegisterGetNameByUnionIndex(I), Regs.Array[I]);
         ImGui::NextColumn();
     }
-    
+
     ImGui::Columns(1);
+    ImGui::PopStyleVar();
+    
+    ImGui::Separator();
 }
 
 static void

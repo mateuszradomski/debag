@@ -116,9 +116,6 @@ union x64_registers
         size_t RDI;
         size_t RSI;
         
-        size_t RBP;
-        size_t RSP;
-        
         size_t R8;
         size_t R9;
         size_t R10;
@@ -127,6 +124,9 @@ union x64_registers
         size_t R13;
         size_t R14;
         size_t R15;
+        
+        size_t RBP;
+        size_t RSP;
         
         size_t OrigRax;
         size_t Cs;
@@ -350,7 +350,7 @@ static void DebugerMain();
  */
 static u32              CapstoneRegisterToABINumber(x86_reg Register);
 static size_t           RegisterGetByABINumber(x64_registers Registers, u32 Number);
-static char *           RegisterGetNameByABINumber(u32 Index);
+static char *           RegisterGetNameByUnionIndex(u32 Index);
 static x64_registers    RegistersFromUSR(user_regs_struct URS);
 static user_regs_struct RegistersToUSR(x64_registers Regs);
 

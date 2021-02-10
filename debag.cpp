@@ -38,7 +38,6 @@
  * - When breaking at an function or address we need to have DebugInfo loaded about that file
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
- * - Sort Registers maybe?
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program
  * - hamster_debug
@@ -831,12 +830,12 @@ RegisterGetByABINumber(x64_registers Registers, u32 Number)
 }
 
 static char *
-RegisterGetNameByABINumber(u32 Index)
+RegisterGetNameByUnionIndex(u32 Index)
 {
     char *Names[] = {
         "RAX", "RBX", "RCX", "RDX", "RDI", "RSI",
-        "RBP", "RSP",
         "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+        "RBP", "RSP",
         "OrigRax", "Cs", "Eflags", "Ss", "FsBase", "GsBase", "Ds", "Es", "Fs", "Gs",
     };
     
