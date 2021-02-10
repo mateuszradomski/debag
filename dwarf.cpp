@@ -1,7 +1,7 @@
 debug_info *DI = 0x0;
 
 static bool
-OpenDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
+DwarfOpenSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 {
     assert(*Fd == 0);
     *Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
@@ -13,7 +13,7 @@ OpenDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 }
 
 static void
-CloseDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
+DwarfCloseSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 {
     if(*Fd)
     {
@@ -24,7 +24,7 @@ CloseDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 }
 
 static di_src_line *
-LineTableFindByAddress(size_t Address)
+DwarfFindLineByAddress(size_t Address)
 {
     // Try to find it in what we have
     for(u32 I = 0; I < DI->SourceFilesCount; I++)
@@ -49,7 +49,7 @@ LineTableFindByAddress(size_t Address)
     // If we don't have it, call Dwarf parsing, and search for it
     u32 LineIdx = 0;
     u32 FileIdx = 0;
-    bool Found = LoadSourceContaingAddress(Address, &FileIdx, &LineIdx);
+    bool Found = DwarfLoadSourceFileByAddress(Address, &FileIdx, &LineIdx);
     
     if(Found)
     {
@@ -65,7 +65,7 @@ LineTableFindByAddress(size_t Address)
 }
 
 static di_src_line *
-LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
+DwarfFindLineByNumber(u32 LineNum, u32 SrcFileIndex)
 {
     di_src_file *File = &DI->SourceFiles[SrcFileIndex];
     for(u32 J = 0; J < File->SrcLineCount; J++)
@@ -81,7 +81,7 @@ LineFindByNumber(u32 LineNum, u32 SrcFileIndex)
 }
 
 static bool
-AddressInFunction(di_function *Func, size_t Address)
+DwarfAddressConfinedByFunction(di_function *Func, size_t Address)
 {
     size_t LowPC = Func->FuncLexScope.LowPC;
     size_t HighPC = Func->FuncLexScope.HighPC;
@@ -90,7 +90,7 @@ AddressInFunction(di_function *Func, size_t Address)
 }
 
 static di_function *
-FindFunctionConfiningAddress(size_t Address)
+DwarfFindFunctionByAddress(size_t Address)
 {
     di_function *Result = 0x0;
     
@@ -118,7 +118,7 @@ This function recursivley adds "decorator" types to the flags, and ultimately re
 */
 
 static di_underlaying_type
-FindUnderlayingType(size_t BTDIEOffset)
+DwarFindUnderlayingType(size_t BTDIEOffset)
 {
     di_underlaying_type Result = {};
     
@@ -126,7 +126,7 @@ FindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->Typedefs[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
+            Result = DwarFindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_TYPEDEF;
             Result.Name = DI->Typedefs[I].Name;
             
@@ -138,7 +138,7 @@ FindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->PointerTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
+            Result = DwarFindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_POINTER;
             Result.PointerCount += 1;
             return Result;
@@ -149,7 +149,7 @@ FindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->ConstTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
+            Result = DwarFindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_CONST;
             return Result;
         }
@@ -159,7 +159,7 @@ FindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->RestrictTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
+            Result = DwarFindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_RESTRICT;
             return Result;
         }
@@ -169,7 +169,7 @@ FindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->ArrayTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = FindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
+            Result = DwarFindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
             Result.ArrayUpperBound = DI->ArrayTypes[I].UpperBound;
             Result.Flags |= TYPE_IS_ARRAY;
             return Result;
@@ -216,20 +216,8 @@ FindUnderlayingType(size_t BTDIEOffset)
     return Result;
 }
 
-#if 0
-static di_base_type *
-FindBaseTypeByOffset(size_t BTDIEOffset)
-{
-    di_base_type *Type = 0x0;
-    
-    Type = FindBaseTypeByOffset(BTDIEOffset, 0x0);
-    
-    return Type;
-}
-#endif
-
 static char *
-BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
+DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
 {
     char *Result = "";
     
@@ -297,31 +285,20 @@ BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
     return Result;
 }
 
-#if 0
-static char *
-BaseTypeToFormatStr(size_t BTDIEOffset)
-{
-    type_flags TFlag = 0;
-    di_base_type *Type = FindBaseTypeByOffset(BTDIEOffset, &TFlag);
-    
-    return BaseTypeToFormatStr(Type, TFlag);
-}
-#endif
-
 static bool
-BaseTypeIsFloat(di_base_type *Type)
+DwarfBaseTypeIsFloat(di_base_type *Type)
 {
     return Type && Type->Encoding == DW_ATE_float && Type->ByteSize == 4;
 }
 
 static bool
-BaseTypeIsDoubleFloat(di_base_type *Type)
+DwarfBaseTypeIsDoubleFloat(di_base_type *Type)
 {
     return Type && Type->Encoding == DW_ATE_float && Type->ByteSize == 8;
 }
 
 static bool
-AddressInLexicalScope(di_lexical_scope *LexScope, size_t Address)
+DwarfAddressConfinedByLexicalScope(di_lexical_scope *LexScope, size_t Address)
 {
     bool Result = false;
     if(LexScope->RangesCount == 0)
@@ -344,7 +321,7 @@ AddressInLexicalScope(di_lexical_scope *LexScope, size_t Address)
 }
 
 static bool
-AddressInCompileUnit(di_compile_unit *CU, size_t Address)
+DwarfAddressConfinedByCompileUnit(di_compile_unit *CU, size_t Address)
 {
     bool Result = false;
 
@@ -361,14 +338,14 @@ AddressInCompileUnit(di_compile_unit *CU, size_t Address)
 }
 
 static di_compile_unit *
-FindCompileUnitConfiningAddress(size_t Address)
+DwarfFindCompileUnitByAddress(size_t Address)
 {
     di_compile_unit *Result = 0x0;
 
     for(u32 I = 0; I < DI->CompileUnitsCount; I++)
     {
         di_compile_unit *CU = &DI->CompileUnits[I];
-        if(AddressInCompileUnit(CU, Address))
+        if(DwarfAddressConfinedByCompileUnit(CU, Address))
         {
             Result = CU;
             break;
@@ -379,7 +356,7 @@ FindCompileUnitConfiningAddress(size_t Address)
 }
 
 static di_src_file *
-FindSourceFile(char *Path)
+DwarfFindSourceFileByPath(char *Path)
 {
     di_src_file *Result = 0x0;
     
@@ -396,7 +373,7 @@ FindSourceFile(char *Path)
 }
 
 static di_src_file *
-PushSourceFile(char *Path, u32 SrcLineCount)
+DwarfPushSourceFile(char *Path, u32 SrcLineCount)
 {
     di_src_file *Result = 0x0;
     
@@ -423,7 +400,7 @@ PushSourceFile(char *Path, u32 SrcLineCount)
 }
 
 static Dwarf_Die
-FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
+DwarfFindDIEByOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
 {
     Dwarf_Off DIEOffset = 0;
     DWARF_CALL(dwarf_die_CU_offset(DIE, &DIEOffset, 0x0));
@@ -441,7 +418,7 @@ FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
         
         if(Result == DW_DLV_OK)
         { 
-            return FindDIEWithOffset(Debug, ChildDIE, Offset);
+            return DwarfFindDIEByOffset(Debug, ChildDIE, Offset);
             Dwarf_Die SiblingDIE = ChildDIE;
             while(Result == DW_DLV_OK)
             {
@@ -449,7 +426,7 @@ FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
                 Result = dwarf_siblingof(Debug, DIE, &SiblingDIE, 0x0);
                 if(Result == DW_DLV_OK)
                 {
-                    return FindDIEWithOffset(Debug, SiblingDIE, Offset);
+                    return DwarfFindDIEByOffset(Debug, SiblingDIE, Offset);
                 }
                 else
                 {
@@ -463,7 +440,7 @@ FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset)
 }
 
 static u32
-CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx)
+DwarfCountSourceFileLines(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx)
 {
     u32 Result = 0;
 
@@ -482,7 +459,7 @@ CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx)
 }
 
 static void
-DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum = 0, u32 *LineIdxOut = 0x0)
+DwarfLoadSourceFileByIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum = 0, u32 *LineIdxOut = 0x0)
 {
     for(u32 I = 0; I < LineCount; I++)
     {
@@ -517,9 +494,9 @@ DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 
 }
 
 static void
-LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
+DwarfLoadSourceFileFromCU(di_compile_unit *CU, di_exec_src_file *File)
 {
-    assert(OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug));
+    assert(DwarfOpenSymbolsHandle(&DI->DwarfFd, &DI->Debug));
     
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -541,7 +518,7 @@ LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
         ResultI = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
         assert(ResultI != DW_DLV_ERROR && ResultI != DW_DLV_NO_ENTRY);
                 
-        SearchDie = FindDIEWithOffset(DI->Debug, CurrentDIE, CU->Offset);
+        SearchDie = DwarfFindDIEByOffset(DI->Debug, CurrentDIE, CU->Offset);
         if(SearchDie)
         {
             break;
@@ -559,27 +536,27 @@ LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File)
         Dwarf_Signed LineCount = 0;
         DWARF_CALL(dwarf_srclines_from_linecontext(LineCtx, &LineBuffer, &LineCount, Error));
         
-        u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, File->DwarfIndex);
+        u32 LinesMatching = DwarfCountSourceFileLines(LineBuffer, LineCount, File->DwarfIndex);
 
         char FileName[256] = {};
         sprintf(FileName, "%s/%s", File->Dir, File->Name);
         LOG_DWARF("Source path is [%s]\n", FileName);
 
-        di_src_file *NewFile = PushSourceFile(FileName, LinesMatching);
+        di_src_file *NewFile = DwarfPushSourceFile(FileName, LinesMatching);
         LOG_DWARF("Pushing source file %s\n", FileName);
 
-        DumpLinesMatchingIndex(LineBuffer, LineCount, NewFile, File->DwarfIndex);
+        DwarfLoadSourceFileByIndex(LineBuffer, LineCount, NewFile, File->DwarfIndex);
     }
 
-    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
 }
 
 static bool
-LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
+DwarfLoadSourceFileByAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 {
     bool Result = false;
     
-    assert(OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug));
+    assert(DwarfOpenSymbolsHandle(&DI->DwarfFd, &DI->Debug));
 
     LOG_DWARF("Loading source that contains address %lx\n", Address);
     
@@ -633,7 +610,7 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                 Result = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
                 assert(ResultI != DW_DLV_ERROR && ResultI != DW_DLV_NO_ENTRY);
                 
-                SearchDie = FindDIEWithOffset(DI->Debug, CurrentDIE, CUDIEOffset);
+                SearchDie = DwarfFindDIEByOffset(DI->Debug, CurrentDIE, CUDIEOffset);
                 if(SearchDie)
                 {
                     break;
@@ -680,12 +657,12 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
                         char *FileName = 0x0;
                         DWARF_CALL(dwarf_linesrc(LineBuffer[I], &FileName, Error));
                         LOG_DWARF("Address %lx, FileName %p [%s]\n", Address, (void *)FileName, FileName);
-                        u32 LinesMatching = CountLinesInFileIndex(LineBuffer, LineCount, FileNum);
+                        u32 LinesMatching = DwarfCountSourceFileLines(LineBuffer, LineCount, FileNum);
 
-                        di_src_file *File = PushSourceFile(FileName, LinesMatching);
+                        di_src_file *File = DwarfPushSourceFile(FileName, LinesMatching);
                         LOG_DWARF("Pushing source file %s\n", FileName);
 
-                        DumpLinesMatchingIndex(LineBuffer, LineCount, File, FileNum, LineNum, LineIdxOut);
+                        DwarfLoadSourceFileByIndex(LineBuffer, LineCount, File, FileNum, LineNum, LineIdxOut);
 
                         *FileIdxOut = DI->SourceFilesCount - 1;
 
@@ -697,17 +674,17 @@ LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
         }
     }
     
-    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     return Result;
 }
 
 static address_range
-AddressRangeCurrentAndNextLine(size_t StartAddress)
+DwarfGetAddressRangeUntilNextLine(size_t StartAddress)
 {
     address_range Result = {};
     
-    di_src_line *Current = LineTableFindByAddress(StartAddress);
+    di_src_line *Current = DwarfFindLineByAddress(StartAddress);
     if(!Current)
     {
         LOG_DWARF("Didn't find line with address = %lx\n", StartAddress);
@@ -721,7 +698,7 @@ LOG_DWARF("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Addre
     {
         if(File->SrcLineCount == I + 1)
         {
-            di_function *Func = FindFunctionConfiningAddress(Current->Address);
+            di_function *Func = DwarfFindFunctionByAddress(Current->Address);
             Result.Start = Current->Address;
             Result.End = Func->FuncLexScope.HighPC;
             break;
@@ -745,7 +722,7 @@ LOG_DWARF("Current->Address = %lx, Current->SrcFileIndex = %d\n", Current->Addre
 }
 
 static size_t
-FindEntryPointAddress()
+DwarfFindEntryPointAddress()
 {
     size_t Result = 0;
     
@@ -763,7 +740,7 @@ FindEntryPointAddress()
 }
 
 static bool
-DebugeeIsPIE()
+DwarfIsExectuablePIE()
 {
     bool Result = false;
 
@@ -815,7 +792,7 @@ DebugeeIsPIE()
 }
 
 static void
-DWARFReadThisDIE(Dwarf_Debug Debug, Dwarf_Die DIE)
+DwarfReadDIE(Dwarf_Debug Debug, Dwarf_Die DIE)
 {
     Dwarf_Error Error_ = {};
     Dwarf_Error *Error = &Error_;
@@ -2119,13 +2096,13 @@ ranges have been read then don't read the low-high
 }
 
 static void
-DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
+DwarfReadDIEMany(Dwarf_Debug Debug, Dwarf_Die DIE)
 {
     Dwarf_Error Error_ = {};
     Dwarf_Error *Error = &Error_;
     Dwarf_Die CurrentDIE = DIE;
 
-    DWARFReadThisDIE(Debug, CurrentDIE);
+    DwarfReadDIE(Debug, CurrentDIE);
     
     Dwarf_Die ChildDIE = 0;
     i32 Result = dwarf_child(CurrentDIE, &ChildDIE, Error);
@@ -2133,7 +2110,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
     if(Result == DW_DLV_OK)
     { 
         DI->DIEIndentLevel++;
-        DWARFReadDIEs(Debug, ChildDIE);
+        DwarfReadDIEMany(Debug, ChildDIE);
         Dwarf_Die SiblingDIE = ChildDIE;
         
         while(Result == DW_DLV_OK)
@@ -2142,7 +2119,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
             Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, Error);
             if(Result == DW_DLV_OK)
             {
-                DWARFReadDIEs(Debug, SiblingDIE);
+                DwarfReadDIEMany(Debug, SiblingDIE);
             }
             else
             {
@@ -2156,7 +2133,7 @@ DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE)
 }
 
 static void
-DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT])
+DwarfCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT])
 {
     Dwarf_Error Error_ = {};
     Dwarf_Error *Error = &Error_;
@@ -2173,7 +2150,7 @@ DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT
     
     if(Result == DW_DLV_OK)
     { 
-        DWARFCountTags(Debug, ChildDIE, CountTable);
+        DwarfCountTags(Debug, ChildDIE, CountTable);
         Dwarf_Die SiblingDIE = ChildDIE;
         while(Result == DW_DLV_OK)
         {
@@ -2181,7 +2158,7 @@ DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT
             Result = dwarf_siblingof(Debug, CurrentDIE, &SiblingDIE, Error);
             if(Result == DW_DLV_OK)
             {
-                DWARFCountTags(Debug, SiblingDIE, CountTable);
+                DwarfCountTags(Debug, SiblingDIE, CountTable);
             }
             else
             {
@@ -2194,7 +2171,7 @@ DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT
 }
 
 static void
-DWARFRead()
+DwarfRead()
 {
     Dwarf_Unsigned CUHeaderLength = 0;
     Dwarf_Half Version = 0;
@@ -2203,7 +2180,7 @@ DWARFRead()
     Dwarf_Unsigned NextCUHeader = 0;
     Dwarf_Error *Error = 0x0;
     
-    OpenDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfOpenSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
     DI->Arena = ArenaCreateZeros(Kilobytes(4096 * 4));
@@ -2224,7 +2201,7 @@ DWARFRead()
         Result = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
         assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
         
-        DWARFCountTags(DI->Debug, CurrentDIE, CountTable);
+        DwarfCountTags(DI->Debug, CurrentDIE, CountTable);
     }
     
     //TIMER_START(0);
@@ -2246,7 +2223,7 @@ DWARFRead()
     DI->ArrayTypes = ArrayPush(&DI->Arena, di_array_type, CountTable[DW_TAG_array_type]);
     DI->SourceFiles = ArrayPush(&DI->Arena, di_src_file, MAX_DI_SOURCE_FILES);
 
-#if 0
+
     for(u32 I = 0; I < DWARF_TAGS_COUNT; I++)
     {
         if(CountTable[I])
@@ -2256,7 +2233,7 @@ DWARFRead()
             LOG_DWARF("[%s]: %d\n", A, CountTable[I]);
         }
     }
-#endif
+
     
     //TIMER_END(0);
     
@@ -2277,13 +2254,13 @@ DWARFRead()
         Result = dwarf_siblingof(DI->Debug, 0, &CurrentDIE, Error);
         assert(Result != DW_DLV_ERROR && Result != DW_DLV_NO_ENTRY);
         
-        DWARFReadDIEs(DI->Debug, CurrentDIE);
+        DwarfReadDIEMany(DI->Debug, CurrentDIE);
     }
     
-    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     // NOTE(mateusz): This time without finish to preserve it
-    OpenDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
+    DwarfOpenSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
     
     Dwarf_Cie *CIEs;
     Dwarf_Signed CIECount;
@@ -2301,7 +2278,7 @@ DWARFRead()
 }
 
 static bool
-DwarfEvalFrameExpr(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
+DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
 {
     bool Success = false;
     Address = Debuger.Flags.PIE ? Address - Debuger.DebugeeLoadAddress : Address;
@@ -2357,7 +2334,7 @@ DwarfGetCFA(size_t Address)
     size_t Result = 0x0;
 
     Dwarf_Regtable3 Table = {};
-    assert(DwarfEvalFrameExpr(Address, 0, &Table));
+    assert(DwarfEvalFDE(Address, 0, &Table));
     Result = DwarfCalculateCFA(&Table, Debuger.Regs);
 
     return Result;
@@ -2369,68 +2346,13 @@ DwarfAddressInFrame(size_t Address)
     bool Result = false;
 
     Dwarf_Regtable3 Table = {};
-    Result = DwarfEvalFrameExpr(Address, 0, &Table);
-
-    return Result;
-}
-
-static x64_registers
-DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
-{
-    Dwarf_Regtable3 Table = {};
-    assert(DwarfEvalFrameExpr(Address, 66, &Table));
-    assert(Table.rt3_rules);
-
-    size_t CFA = DwarfCalculateCFA(&Table, WithRegisters);
-    
-    x64_registers Result = {};
-    for(u32 I = 0; I < 66; I++)
-    {
-        if(I == 16) { continue; } // Return Register for ABI
-            
-        auto Rule = &Table.rt3_rules[I];
-        
-        if(Rule->dw_value_type == DW_EXPR_OFFSET)
-        {
-            if(Rule->dw_offset_relevant != 0)
-            {
-                size_t Address = CFA + (ssize_t)Rule->dw_offset_or_block_len;
-                
-                Result.Array[I] = DebugeePeekMemory(Address);
-            }
-            else
-            {
-                if(Rule->dw_regnum == DW_FRAME_SAME_VAL || Rule->dw_regnum == DW_FRAME_UNDEFINED_VAL)
-                {
-                    if(Rule->dw_regnum != DW_FRAME_SAME_VAL)
-                    {
-                        printf("I = %d\n", I);
-                    }
-                    Result = WithRegisters;
-                }
-                else
-                {
-                    Result.Array[I] = RegisterGetByABINumber(WithRegisters, Rule->dw_regnum);
-                }
-            }
-        }
-        else
-        {
-            assert(false && "non dwarf2 rule\n");
-        }
-    }
-
-    printf("CFA2 = %lx\n", CFA);
-    Result.RSP = CFA;
-    Result.RBP = CFA;
-
-    free(Table.rt3_rules);
+    Result = DwarfEvalFDE(Address, 0, &Table);
 
     return Result;
 }
 
 static di_variable *
-FunctionFirstVariable(di_function *Func)
+DwarfGetFunctionsFirstVariable(di_function *Func)
 {
     di_variable *Result = 0x0;
 
@@ -2454,10 +2376,10 @@ FunctionFirstVariable(di_function *Func)
 }
 
 static bool
-AddressInDiffrentLine(size_t Address)
+DwarfIsAddressInDifferentSourceLine(size_t Address)
 {
-    di_src_line *Current = LineTableFindByAddress(DebugeeGetProgramCounter());
-    di_src_line *Diff = LineTableFindByAddress(Address);
+    di_src_line *Current = DwarfFindLineByAddress(DebugeeGetProgramCounter());
+    di_src_line *Diff = DwarfFindLineByAddress(Address);
     assert(Current);
     assert(Diff);
 

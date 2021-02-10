@@ -119,7 +119,7 @@ BreakpointCreateAttachSourceLine(size_t Address)
 {
     breakpoint BP = BreakpointCreate(Address);
     
-    di_src_line *Line = LineTableFindByAddress(Address);
+    di_src_line *Line = DwarfFindLineByAddress(Address);
     BP.SourceLine = Line ? Line->LineNum : 0;
 
     return BP;
@@ -147,7 +147,7 @@ static void
 BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *Count)
 {
     u32 SrcFileIndex = Src - DI->SourceFiles;
-    di_src_line *Line = LineFindByNumber(LineNum, SrcFileIndex);
+    di_src_line *Line = DwarfFindLineByNumber(LineNum, SrcFileIndex);
     
     if(Line)
     {
@@ -187,7 +187,7 @@ BreakAtFunctionName(char *Name)
 static void
 BreakAtMain()
 {
-    size_t EntryPointAddress = FindEntryPointAddress();
+    size_t EntryPointAddress = DwarfFindEntryPointAddress();
     LOG_FLOW("entrypoint address is %lx\n", EntryPointAddress);
     assert(EntryPointAddress);
 
@@ -286,7 +286,7 @@ ContinueProgram()
     }
     
     size_t PC = DebugeeGetProgramCounter();
-    di_function *Func = FindFunctionConfiningAddress(PC);
+    di_function *Func = DwarfFindFunctionByAddress(PC);
 
     if(Func && PC == Func->FuncLexScope.LowPC)
     {
@@ -362,7 +362,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
                 assert(false && "A call instruction that is not imm and not a reg.");
             }
             
-            bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(CallAddress) != 0x0;
+            bool AddressInAnyCompileUnit = DwarfFindCompileUnitByAddress(CallAddress) != 0x0;
             if(AddressInAnyCompileUnit && !BreakpointFind(CallAddress, Breakpoints, (*BreakpointsCount)))
             {
                 breakpoint BP = BreakpointCreate(CallAddress);
@@ -375,7 +375,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
         {
             size_t ReturnAddress = DebugeeGetReturnAddress(DebugeeGetProgramCounter());
 
-            bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(ReturnAddress) != 0x0;
+            bool AddressInAnyCompileUnit = DwarfFindCompileUnitByAddress(ReturnAddress) != 0x0;
             if(AddressInAnyCompileUnit && !BreakpointFind(ReturnAddress, Breakpoints, (*BreakpointsCount)))
             {
                 breakpoint BP = BreakpointCreate(ReturnAddress);
@@ -412,7 +412,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
             if(AddressWithoutBreakpoint)
             {
                 bool Between = AddressBetween(JumpAddress, Range.Start, Range.End);
-                bool DiffrentLine = AddressInDiffrentLine(JumpAddress);
+                bool DiffrentLine = DwarfIsAddressInDifferentSourceLine(JumpAddress);
                 if(!Between && DiffrentLine)
                 {
                     LOG_FLOW("Breaking rel branch: %lX\n", JumpAddress);
@@ -423,7 +423,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
                 }
                 else 
                 {
-                    address_range JumpToNextLine = AddressRangeCurrentAndNextLine(JumpAddress);
+                    address_range JumpToNextLine = DwarfGetAddressRangeUntilNextLine(JumpAddress);
                     if(JumpToNextLine.Start != Range.Start && JumpToNextLine.End != Range.End)
                     {
                         BreakAtCurcialInstrsInRange(JumpToNextLine, false, Breakpoints, BreakpointsCount);
@@ -439,7 +439,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
 static void
 DebugeeToNextLine(bool StepIntoFunctions)
 {
-    address_range Range = AddressRangeCurrentAndNextLine(DebugeeGetProgramCounter());
+    address_range Range = DwarfGetAddressRangeUntilNextLine(DebugeeGetProgramCounter());
     LOG_FLOW("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", DebugeeGetProgramCounter(), Range.Start, Range.End);
 
     BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, TempBreakpoints, &TempBreakpointsCount);
@@ -462,13 +462,13 @@ DebugeeToNextLine(bool StepIntoFunctions)
 static void
 DebugeeStepOutOfFunction()
 {
-    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
+    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
 
     DebugeeToNextLine(false);
     DebugerUpdateTransient();
 
     size_t PC = DebugeeGetProgramCounter();
-    if(AddressInFunction(Func, PC))
+    if(DwarfAddressConfinedByFunction(Func, PC))
     {
         size_t ReturnAddress = DebugeeGetReturnAddress(DebugeeGetProgramCounter());
         bool OwnBreakpoint = false;

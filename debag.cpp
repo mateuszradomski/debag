@@ -1020,7 +1020,7 @@ DebugerUpdateTransient()
 {
     Debuger.Regs = DebugeePeekRegisters();
     
-    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
+    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(Func)
     {
         assert(Func->FuncLexScope.RangesCount == 0);
@@ -1138,9 +1138,9 @@ DebugeeContinueOrStart()
             
             Debuger.DebugeeLoadAddress = DebugeeGetLoadAddress(Debuger.DebugeePID);
             LOG_MAIN("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
-            Debuger.Flags.PIE = DebugeeIsPIE();
+            Debuger.Flags.PIE = DwarfIsExectuablePIE();
             
-            DWARFRead();
+            DwarfRead();
             
             Debuger.UnwindRemoteArg = _UPT_create(Debuger.DebugeePID);
 
@@ -1170,8 +1170,8 @@ DebugeeContinueOrStart()
 static void
 DebugerDeallocTransient()
 {
-    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
-    CloseDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
+    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfCloseSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
     
 #if CLEAR_BREAKPOINTS
     memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
@@ -1215,7 +1215,7 @@ DebugeeBuildBacktrace()
 
     Debuger.Unwind.Address = DebugeeGetProgramCounter();
     
-    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
+    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(!Func) { return; }
     
     unwind_functions_bucket *Bucket = ArrayPush(&DI->Arena, unwind_functions_bucket, 1);
@@ -1230,7 +1230,7 @@ DebugeeBuildBacktrace()
         unw_get_reg(&UnwindCursor, UNW_REG_SP, &StackPointer);
         size_t ReturnAddress = DebugeePeekMemory(StackPointer - 8);
 
-        di_function *Func = FindFunctionConfiningAddress(ReturnAddress);
+        di_function *Func = DwarfFindFunctionByAddress(ReturnAddress);
         if(!Func) { break; }
 
         unwind_function UnwoundFunction = {};
@@ -1627,7 +1627,7 @@ DebugerMain()
         if(Debuger.Flags.Running &&
            ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            di_src_line *Line = LineTableFindByAddress(DebugeeGetProgramCounter());
+            di_src_line *Line = DwarfFindLineByAddress(DebugeeGetProgramCounter());
 
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
@@ -1691,7 +1691,7 @@ DebugerMain()
                             }
 
                             bool LineHasBreakpoint = false;
-                            DrawingLine = LineFindByNumber(I + 1, SrcFileIndex);
+                            DrawingLine = DwarfFindLineByNumber(I + 1, SrcFileIndex);
                             breakpoint *BP = 0x0;
                             if(DrawingLine && (BP = BreakpointFind(DrawingLine->Address)) && BreakpointEnabled(BP))
                             {
@@ -1828,8 +1828,8 @@ DebugerMain()
         glfwSwapBuffers(Window);
     }
 
-    CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
-    CloseDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
+    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfCloseSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
     ImGui::DestroyContext();
     glfwTerminate();
 }

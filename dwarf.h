@@ -308,38 +308,77 @@ struct debug_info
     bool WasUnion = false;
 };
 
-static bool AddressInCompileUnit(di_compile_unit *CU, size_t Address);
-static di_compile_unit *FindCompileUnitConfiningAddress(size_t Address);
-static address_range AddressRangeCurrentAndNextLine(size_t StartAddress);
-static bool BaseTypeIsDoubleFloat(di_base_type *Type);
-static bool BaseTypeIsFloat(di_base_type *Type);
-static char *BaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
-static void CloseDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
-static u32 CountLinesInFileIndex(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx);
-static void DWARFCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT]);
-static x64_registers DwarfGetFrameRegisters(size_t Address);
-static size_t DwarfGetCFA(size_t Address);
-static size_t DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers);
-static bool DwarfEvalFrameExpr(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result);
-static void DWARFRead();
-static void DWARFReadDIEs(Dwarf_Debug Debug, Dwarf_Die DIE);
-static void DumpLinesMatchingIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum, u32 *LineIdxOut);
-static Dwarf_Die FindDIEWithOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset);
-static size_t FindEntryPointAddress();
-static di_function *FindFunctionConfiningAddress(size_t Address);
-static di_src_file *FindSourceFile(char *Path);
-static di_underlaying_type FindUnderlayingType(size_t BTDIEOffset);
-static size_t GetDebugeeLoadAddress(i32 DebugeePID);
-static di_src_line *LineFindByNumber(u32 LineNum, u32 SrcFileIndex);
-static di_src_line *LineTableFindByAddress(size_t Address);
-static bool LoadSourceContaingAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
-static void LoadSourceCUFile(di_compile_unit *CU, di_exec_src_file *File);
-static bool OpenDwarfSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
-static di_src_file *PushSourceFile(char *Path, u32 SrcLineCount);
-static di_src_file *PushSourceFile(char *Path);
-static u32 SrcFileAssociatePath(char *Path);
-static bool FunctionHasAnyVariables(di_function *Func);
+/*
+ * Dwarf functions prototypes
+ */
+static bool     DwarfOpenSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
+static void     DwarfCloseSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
+static void     DwarfReadDIE(Dwarf_Debug Debug, Dwarf_Die DIE);
+static void     DwarfReadDIEMany(Dwarf_Debug Debug, Dwarf_Die DIE);
+static void     DwarfCountTags(Dwarf_Debug Debug, Dwarf_Die DIE, u32 CountTable[DWARF_TAGS_COUNT]);
+static void     DwarfRead();
 
-static bool AddressInDiffrentLine(size_t Address);
+/*
+ * Dwarf internal representation functions
+ */
+static Dwarf_Die DwarfFindDIEByOffset(Dwarf_Debug Debug, Dwarf_Die DIE, size_t Offset);
+
+/*
+ * Source files functions
+ */
+static di_src_file *    DwarfFindSourceFileByPath(char *Path);
+static di_src_file *    DwarfPushSourceFile(char *Path, u32 SrcLineCount);
+static u32              DwarfCountSourceFileLines(Dwarf_Line *Lines, u32 LineCount, u32 FileIdx);
+static void             DwarfLoadSourceFileByIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, u32 FileIdx, u32 LineNum, u32 *LineIdxOut);
+static void             DwarfLoadSourceFileFromCU(di_compile_unit *CU, di_exec_src_file *File);
+static bool             DwarfLoadSourceFileByAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut);
+
+/*
+ * Source lines functions
+ */
+static di_src_line *    DwarfFindLineByAddress(size_t Address);
+static di_src_line *    DwarfFindLineByNumber(u32 LineNum, u32 SrcFileIndex);
+static address_range    DwarfGetAddressRangeUntilNextLine(size_t StartAddress);
+static bool             DwarfIsAddressInDifferentSourceLine(size_t Address);
+
+/*
+ * Functions functions
+ */
+static bool             DwarfAddressConfinedByFunction(di_function *Func, size_t Address);
+static di_function *    DwarfFindFunctionByAddress(size_t Address);
+static di_variable *    DwarfGetFunctionsFirstVariable(di_function *Func);
+static size_t           DwarfFindEntryPointAddress();
+
+/*
+ * Variables types functions
+ */
+static di_underlaying_type  DwarFindUnderlayingType(size_t BTDIEOffset);
+static char *               DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
+static bool                 DwarfBaseTypeIsFloat(di_base_type *Type);
+static bool                 DwarfBaseTypeIsDoubleFloat(di_base_type *Type);
+
+/*
+ * Lexical scopes functions
+ */
+static bool DwarfAddressConfinedByLexicalScope(di_lexical_scope *LexScope, size_t Address);
+
+/*
+ * Compile units functions
+ */
+static di_compile_unit *    DwarfFindCompileUnitByAddress(size_t Address);
+static bool                 DwarfAddressConfinedByCompileUnit(di_compile_unit *CU, size_t Address);
+
+/*
+ * .debug_frame and .eh_frame functions
+ */
+static bool     DwarfAddressInFrame(size_t Address);
+static bool     DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result);
+static size_t   DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers);
+static size_t   DwarfGetCFA(size_t Address);
+
+/*
+ * Elf related functions
+ */
+static bool DwarfIsExectuablePIE();
 
 #endif //DWARF_H

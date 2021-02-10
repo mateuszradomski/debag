@@ -374,7 +374,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
 static void
 ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
-    di_underlaying_type Underlaying = FindUnderlayingType(TypeOffset);
+    di_underlaying_type Underlaying = DwarFindUnderlayingType(TypeOffset);
     
     if(Underlaying.Flags & TYPE_IS_ARRAY)
     {
@@ -456,7 +456,7 @@ GuiShowVariables()
         
     if(DI->Functions && DI->Variables)
     {
-        di_compile_unit *CU = FindCompileUnitConfiningAddress(DebugeeGetProgramCounter());
+        di_compile_unit *CU = DwarfFindCompileUnitByAddress(DebugeeGetProgramCounter());
         for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
         {
             di_variable *Var = &CU->GlobalVariables[I];
@@ -469,7 +469,7 @@ GuiShowVariables()
                 
     ImGui::Separator();
     
-    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
+    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(Func && Func->FrameBaseIsCFA)
     {
         size_t FBReg = DwarfGetCFA(DebugeeGetProgramCounter());
@@ -496,7 +496,7 @@ GuiShowVariables()
             LexScopeIndex++)
         {
             di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-            if(AddressInLexicalScope(LexScope, DebugeeGetProgramCounter()))
+            if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter()))
             {
                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                 {
@@ -677,7 +677,7 @@ _ImGuiShowOpenFileModalWindow()
             if(CanShow && ImGui::Selectable(File->Name))
             {
                 Gui->ModalFuncShow = 0x0;
-                LoadSourceCUFile(Bucket->CU, File);
+                DwarfLoadSourceFileFromCU(Bucket->CU, File);
             }
         }
     }
