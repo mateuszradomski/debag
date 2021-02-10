@@ -4,43 +4,23 @@
 #define LOG_FLOW(...) do { } while (0)
 #endif
 
-static bool
-AddressInDiffrentLine(size_t Address)
-{
-    di_src_line *Current = LineTableFindByAddress(GetProgramCounter());
-    di_src_line *Diff = LineTableFindByAddress(Address);
-    assert(Current);
-    assert(Diff);
-
-    LOG_FLOW("LineNum: Current = %u, Diff = %u / Address: Current = %lx, Diff = %lx\n", Current->LineNum, Diff->LineNum, Current->Address, Diff->Address);
-
-    bool SameLineDiffFiles = (Current->LineNum == Diff->LineNum) && (Current->SrcFileIndex != Diff->SrcFileIndex);
-    bool SameFileDiffLines = (Current->LineNum != Diff->LineNum) && (Current->Address != Diff->Address);
-    if(SameLineDiffFiles || SameFileDiffLines)
-    {
-        assert(Current != Diff);
-        return true;
-    }
-        
-    return false;
-}
-
 static void
-WaitForSignal(i32 DebugeePID)
+DebugeeWaitForSignal()
 {
     i32 WaitStatus;
     i32 Options = 0;
-    waitpid(DebugeePID, &WaitStatus, Options);
+    i32 PID = Debuger.DebugeePID;
+    waitpid(PID, &WaitStatus, Options);
     
     if(WIFEXITED(WaitStatus))
     {
         GuiSetStatusText("Program finished it's execution");
         Debuger.Flags.Running = !Debuger.Flags.Running;
-        DeallocDebugInfo();
+        DebugerDeallocTransient();
     }
     
     siginfo_t SigInfo;
-    ptrace(PTRACE_GETSIGINFO, DebugeePID, nullptr, &SigInfo);
+    ptrace(PTRACE_GETSIGINFO, PID, nullptr, &SigInfo);
     
     if(SigInfo.si_signo == SIGTRAP)
     {
@@ -49,9 +29,9 @@ WaitForSignal(i32 DebugeePID)
             case SI_KERNEL:
             case TRAP_BRKPT:
             {
-                Debuger.Regs = PeekRegisters(DebugeePID);
+                Debuger.Regs = DebugeePeekRegisters();
                 Debuger.Regs.RIP -= 1;
-                SetRegisters(Debuger.Regs, DebugeePID);
+                DebugeeSetRegisters(Debuger.Regs);
                 //auto offset_pc = offset_load_address(get_pc()); //rember to offset the pc for querying DWARF
                 //auto line_entry = get_line_entry_from_pc(offset_pc);
                 //print_source(line_entry->file->path, line_entry->line);
@@ -70,13 +50,13 @@ WaitForSignal(i32 DebugeePID)
     {
         GuiSetStatusText("Program seg faulted");
         DebugeeKill();
-        DeallocDebugInfo();
+        DebugerDeallocTransient();
     }
     else if(SigInfo.si_signo == SIGABRT)
     {
         DebugeeKill();
         GuiSetStatusText("Program aborted");
-        DeallocDebugInfo();
+        DebugerDeallocTransient();
     }
     else
     {
@@ -192,7 +172,7 @@ BreakAtFunctionName(char *Name)
     for(u32 I = 0; I < DI->FuctionsCount; I++)
     {
         di_function *Func = &DI->Functions[I];
-        if(StringsMatch(Name, Func->Name))
+        if(StringMatches(Name, Func->Name))
         {
             breakpoint BP = BreakpointCreate(Func->FuncLexScope.LowPC);
             BreakpointEnable(&BP);
@@ -234,9 +214,9 @@ BreakAtAddress(char *AddressStr)
 
     u64 Address = 0;
 
-    if(CharInString(Gui->BreakAddress, 'x'))
+    if(StringHasChar(Gui->BreakAddress, 'x'))
     {
-        Address = HexStringToInt(AddressStr);
+        Address = StringHexToInt(AddressStr);
     }
     else
     {
@@ -252,55 +232,37 @@ BreakAtAddress(char *AddressStr)
 }
 
 static void
-StepInstruction(i32 DebugeePID)
+DebugeeStepInstruction()
 {
-    breakpoint *BP = BreakpointFind(GetProgramCounter());
+    i32 PID = Debuger.DebugeePID;
+    breakpoint *BP = BreakpointFind(DebugeeGetProgramCounter());
     if(BP && BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
-    ptrace(PTRACE_SINGLESTEP, DebugeePID, 0x0, 0x0);
-    WaitForSignal(DebugeePID);
+    ptrace(PTRACE_SINGLESTEP, PID, 0x0, 0x0);
+    DebugeeWaitForSignal();
     
     if(BP && !BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointEnable(BP); }
     if(BP) { BP->State.ExectuedSavedOpCode = !BP->State.ExectuedSavedOpCode; }
     
-    Debuger.Regs = PeekRegisters(DebugeePID);
+    Debuger.Regs = DebugeePeekRegisters();
 
     Debuger.Flags.Steped = true;
 }
 
 static void
-NextInstruction(i32 DebugeePID)
+DebugeeNextInstruction()
 {
-    (void)DebugeePID;
     LOG_FLOW("Unimplemented method!");
     Debuger.Flags.Steped = true;
 }
 
 static void
-StepLine(i32 DebugeePID)
-{
-    di_src_line *LTEntry = LineTableFindByAddress(GetProgramCounter());
-    assert(LTEntry);
-    
-    while(true)
-    {
-        StepInstruction(DebugeePID);
-        
-        di_src_line *CurrentLTE = LineTableFindByAddress(GetProgramCounter());
-        if(CurrentLTE && LTEntry->LineNum != CurrentLTE->LineNum)
-        {
-            break;
-        }
-    }
-}
-
-static void
-ContinueProgram(i32 DebugeePID)
+ContinueProgram()
 {
     if(BreakpointCount > 0 || TempBreakpointsCount > 0)
     {
-        size_t OldPC = GetProgramCounter();
-        StepInstruction(DebugeePID);
+        size_t OldPC = DebugeeGetProgramCounter();
+        DebugeeStepInstruction();
         
         breakpoint *BP = BreakpointFind(OldPC);
         if(BreakpointEnabled(BP))
@@ -311,24 +273,25 @@ ContinueProgram(i32 DebugeePID)
     
     Debuger.Flags.Steped = true;
 
-    Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
+    Debuger.Regs = DebugeePeekRegisters();
     breakpoint *BP = 0x0;
-    if((BP = BreakpointFind(GetProgramCounter())) && BreakpointEnabled(BP))
+    if((BP = BreakpointFind(DebugeeGetProgramCounter())) && BreakpointEnabled(BP))
     {
     }
     else
     {
-        ptrace(PTRACE_CONT, DebugeePID, 0x0, 0x0);
-        WaitForSignal(DebugeePID);
+        i32 PID = Debuger.DebugeePID;
+        ptrace(PTRACE_CONT, PID, 0x0, 0x0);
+        DebugeeWaitForSignal();
     }
     
-    size_t PC = GetProgramCounter();
+    size_t PC = DebugeeGetProgramCounter();
     di_function *Func = FindFunctionConfiningAddress(PC);
 
     if(Func && PC == Func->FuncLexScope.LowPC)
     {
         assert(BreakpointCount > 0 || TempBreakpointsCount > 0);
-        breakpoint *BP = BreakpointFind(GetProgramCounter());
+        breakpoint *BP = BreakpointFind(DebugeeGetProgramCounter());
         
         u8 PushRBP[] = { 0x55 };
         u8 MovRBPRSP[] = { 0x48, 0x89, 0xe5 };
@@ -339,13 +302,13 @@ ContinueProgram(i32 DebugeePID)
            memcmp(MemoryAtPC + sizeof(PushRBP), MovRBPRSP, sizeof(MovRBPRSP)) == 0)
         {
             // Now we will step one line to go over all of the init stuff
-            ToNextLine(Debuger.DebugeePID, false);
+            DebugeeToNextLine(false);
         }
     }
 }
 
 static void
-BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID, breakpoint *Breakpoints, u32 *BreakpointsCount)
+BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Breakpoints, u32 *BreakpointsCount)
 {
     bool AddressWithoutBreakpoint = !BreakpointFind(Range.End, Breakpoints, (*BreakpointsCount));
     if(AddressWithoutBreakpoint)
@@ -359,8 +322,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
     for(size_t CurrentAddress = Range.Start; CurrentAddress < Range.End;)
     {
         u8 InstrInMemory[16] = {};
-        PeekDebugeeMemoryArray(CurrentAddress, Range.End,
-                               DebugeePID, InstrInMemory, sizeof(InstrInMemory));
+        DebugeePeekMemoryArray(CurrentAddress, Range.End, InstrInMemory, sizeof(InstrInMemory));
 
         {
             breakpoint *BP = 0x0; ;
@@ -375,7 +337,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         if(Count == 0) { break; }
         
         CurrentAddress += Instruction->size;
-        inst_type Type = GetInstructionType(Instruction);
+        inst_type Type = AsmInstructionGetType(Instruction);
         
         if((Type & INST_TYPE_CALL) && BreakCalls)
         {
@@ -393,7 +355,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             else if(Operand->type == X86_OP_REG)
             {
                 u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
-                CallAddress = GetRegisterByABINumber(Debuger.Regs, ABINumber);
+                CallAddress = RegisterGetByABINumber(Debuger.Regs, ABINumber);
             }
             else
             {
@@ -411,7 +373,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
         
         if(Type & INST_TYPE_RET)
         {
-            size_t ReturnAddress = GetReturnAddress(GetProgramCounter());
+            size_t ReturnAddress = DebugeeGetReturnAddress(DebugeeGetProgramCounter());
 
             bool AddressInAnyCompileUnit = FindCompileUnitConfiningAddress(ReturnAddress) != 0x0;
             if(AddressInAnyCompileUnit && !BreakpointFind(ReturnAddress, Breakpoints, (*BreakpointsCount)))
@@ -437,7 +399,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
             else if(Operand->type == X86_OP_REG)
             {
                 u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
-                JumpAddress = GetRegisterByABINumber(Debuger.Regs, ABINumber);
+                JumpAddress = RegisterGetByABINumber(Debuger.Regs, ABINumber);
             }
             else
             {
@@ -464,8 +426,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
                     address_range JumpToNextLine = AddressRangeCurrentAndNextLine(JumpAddress);
                     if(JumpToNextLine.Start != Range.Start && JumpToNextLine.End != Range.End)
                     {
-                        BreakAtCurcialInstrsInRange(JumpToNextLine, false, DebugeePID,
-                                                    Breakpoints, BreakpointsCount);
+                        BreakAtCurcialInstrsInRange(JumpToNextLine, false, Breakpoints, BreakpointsCount);
                     }
                 }
             }
@@ -476,14 +437,14 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, i32 DebugeePID
 }
 
 static void
-ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
+DebugeeToNextLine(bool StepIntoFunctions)
 {
-    address_range Range = AddressRangeCurrentAndNextLine(GetProgramCounter());
-    LOG_FLOW("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", GetProgramCounter(), Range.Start, Range.End);
+    address_range Range = AddressRangeCurrentAndNextLine(DebugeeGetProgramCounter());
+    LOG_FLOW("Regs.RIP = %lX, Range.Start = %lX, Range.End = %lX\n", DebugeeGetProgramCounter(), Range.Start, Range.End);
+
+    BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, TempBreakpoints, &TempBreakpointsCount);
     
-    BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, DebugeePID, TempBreakpoints, &TempBreakpointsCount);
-    
-    ContinueProgram(DebugeePID);
+    ContinueProgram();
     
     LOG_FLOW("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
@@ -499,17 +460,17 @@ ToNextLine(i32 DebugeePID, bool StepIntoFunctions)
 }
 
 static void
-StepOutOfFunction(i32 DebugeePID)
+DebugeeStepOutOfFunction()
 {
-    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
 
-    ToNextLine(DebugeePID, false);
-    UpdateInfo();
+    DebugeeToNextLine(false);
+    DebugerUpdateTransient();
 
-    size_t PC = GetProgramCounter();
+    size_t PC = DebugeeGetProgramCounter();
     if(AddressInFunction(Func, PC))
     {
-        size_t ReturnAddress = GetReturnAddress(GetProgramCounter());
+        size_t ReturnAddress = DebugeeGetReturnAddress(DebugeeGetProgramCounter());
         bool OwnBreakpoint = false;
         breakpoint BP = {};
 
@@ -520,7 +481,7 @@ StepOutOfFunction(i32 DebugeePID)
             OwnBreakpoint = true;
         }
     
-        ContinueProgram(DebugeePID);
+        ContinueProgram();
         if(OwnBreakpoint)
         {
             BreakpointDisable(&BP);

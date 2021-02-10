@@ -340,4 +340,6 @@ static di_src_file *PushSourceFile(char *Path);
 static u32 SrcFileAssociatePath(char *Path);
 static bool FunctionHasAnyVariables(di_function *Func);
 
+static bool AddressInDiffrentLine(size_t Address);
+
 #endif //DWARF_H

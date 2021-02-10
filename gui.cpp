@@ -23,7 +23,7 @@ ImGuiShowRegisters(x64_registers Regs)
     
     for(u32 I = 0; I < (sizeof(Regs) / sizeof(size_t)) - IgnoreCount; I++)
     {
-        ImGui::Text("%s : %lX", GetRegisterNameByIndex(I), Regs.Array[I]);
+        ImGui::Text("%s : %lX", RegisterGetNameByABINumber(I), Regs.Array[I]);
         ImGui::NextColumn();
     }
     
@@ -72,7 +72,7 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
     Temp[TIndex++] = '\"';
     if(DereferencedAddress)
     {
-        size_t MachineWord = PeekDebugeeMemory(DereferencedAddress, Debuger.DebugeePID);
+        size_t MachineWord = DebugeePeekMemory(DereferencedAddress);
         char *PChar = (char *)&MachineWord;
         
         int RemainingBytes = sizeof(MachineWord);
@@ -99,7 +99,7 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
                 RemainingBytes = sizeof(MachineWord);
                 DereferencedAddress += sizeof(MachineWord);
                 
-                MachineWord = PeekDebugeeMemory(DereferencedAddress, Debuger.DebugeePID);
+                MachineWord = DebugeePeekMemory(DereferencedAddress);
                 PChar = (char *)&MachineWord;
             }
         }
@@ -127,7 +127,7 @@ static void
 ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_base_type *BType = Underlaying.Type;
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+    size_t MachineWord = DebugeePeekMemory(VarAddress);
     
     ImGui::Text("%s", VarName);
     ImGui::NextColumn();
@@ -148,7 +148,7 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
     {
         if(BType->Encoding == DW_ATE_signed_char && Underlaying.PointerCount == 1)
         {
-            size_t DereferencedAddress = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+            size_t DereferencedAddress = DebugeePeekMemory(VarAddress);
             ImGuiShowValueAsString(DereferencedAddress);
         }
         else
@@ -240,7 +240,7 @@ static void
 ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_struct_type *Struct = Underlaying.Struct;
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+    size_t MachineWord = DebugeePeekMemory(VarAddress);
     
     char TypeName[128] = {};
     StringConcat(TypeName, Underlaying.Name);
@@ -308,7 +308,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
 {
     char TypeName[128] = {};
     strcat(TypeName, Underlaying.Name);
-    size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+    size_t MachineWord = DebugeePeekMemory(VarAddress);
     
     // TODO(mateusz): Stacked pointers dereference, like (void **)
     if(Underlaying.Flags & TYPE_IS_POINTER)
@@ -341,7 +341,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
     {
         for(u32 I = 0; I <= Underlaying.ArrayUpperBound; I++)
         {
-            //size_t MachineWord = PeekDebugeeMemory(VarAddress, Debuger.DebugeePID);
+            //size_t MachineWord = DebugeePeekMemory(VarAddress, Debuger.DebugeePID);
             
             if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
             {
@@ -421,7 +421,7 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
     }
     else if(Var->LocationAtom >= DW_OP_breg0 && Var->LocationAtom <= DW_OP_breg15)
     {
-        size_t Register = GetRegisterByABINumber(Debuger.Regs, Var->LocationAtom - DW_OP_breg0);
+        size_t Register = RegisterGetByABINumber(Debuger.Regs, Var->LocationAtom - DW_OP_breg0);
         size_t VarAddress = Var->Offset + Register;
         
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
@@ -456,7 +456,7 @@ GuiShowVariables()
         
     if(DI->Functions && DI->Variables)
     {
-        di_compile_unit *CU = FindCompileUnitConfiningAddress(GetProgramCounter());
+        di_compile_unit *CU = FindCompileUnitConfiningAddress(DebugeeGetProgramCounter());
         for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
         {
             di_variable *Var = &CU->GlobalVariables[I];
@@ -469,10 +469,10 @@ GuiShowVariables()
                 
     ImGui::Separator();
     
-    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
     if(Func && Func->FrameBaseIsCFA)
     {
-        size_t FBReg = DwarfGetCFA(GetProgramCounter());
+        size_t FBReg = DwarfGetCFA(DebugeeGetProgramCounter());
                     
         if(Func->ParamCount > 0)
         {
@@ -496,7 +496,7 @@ GuiShowVariables()
             LexScopeIndex++)
         {
             di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-            if(AddressInLexicalScope(LexScope, GetProgramCounter()))
+            if(AddressInLexicalScope(LexScope, DebugeeGetProgramCounter()))
             {
                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                 {
@@ -539,7 +539,7 @@ _ImGuiShowBreakAtFunctionModalWindow()
         if(ImGui::Button("OK", ImVec2(120, 0)))
         {
             BreakAtFunctionName(Gui->BreakFuncName);
-            UpdateInfo();
+            DebugerUpdateTransient();
             
             ImGui::CloseCurrentPopup(); 
             memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
@@ -609,7 +609,7 @@ _ImGuiShowBreakAtAddressModalWindow()
         if(ImGui::Button("OK", ImVec2(120, 0)))
         {
             BreakAtAddress(Gui->BreakAddress);
-            UpdateInfo();
+            DebugerUpdateTransient();
             
             ImGui::CloseCurrentPopup(); 
             memset(Gui->BreakAddress, 0, sizeof(Gui->BreakAddress));
@@ -763,22 +763,25 @@ GuiCreateBreakpointTexture()
 static void
 GuiShowBacktrace()
 {
-    size_t PC = GetProgramCounter();
-    
-    // We know our cache is stale
-    if(Debuger.Unwind.Address != PC)
+    if(Debuger.Flags.Running)
     {
-        DebugeeBuildBacktrace();
-    }
+        size_t PC = DebugeeGetProgramCounter();
 
-    u32 Cnt = 1;
-    for(unwind_functions_bucket *Bucket = Debuger.Unwind.FuncList.Head; Bucket != 0x0; Bucket = Bucket->Next)
-    {
-        for(u32 I = 0; I < Bucket->Count; I++)
+        // We know our cache is stale
+        if(Debuger.Unwind.Address != PC)
         {
-            unwind_function *Function = &Bucket->Functions[I];
-
-            ImGui::Text("%02d: %s()", Cnt++, Function->Name);
+            DebugeeBuildBacktrace();
         }
-    }    
+
+        u32 Cnt = 1;
+        for(unwind_functions_bucket *Bucket = Debuger.Unwind.FuncList.Head; Bucket != 0x0; Bucket = Bucket->Next)
+        {
+            for(u32 I = 0; I < Bucket->Count; I++)
+            {
+                unwind_function *Function = &Bucket->Functions[I];
+
+                ImGui::Text("%02d: %s()", Cnt++, Function->Name);
+            }
+        }
+    }
 }

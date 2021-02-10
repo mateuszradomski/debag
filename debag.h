@@ -228,6 +228,9 @@ dbg Debuger;
 button KeyboardButtons[GLFW_KEY_LAST] = {};
 keyboard_modifiers KeyMods = {};
 
+#define ARGV_MAX  255
+#define ARGV_TOKEN_MAX  255
+
 #define STMNT(S) do{ S }while(0)
 
 #define SLL_STACK_PUSH_(H,N) N->Next=H,H=N
@@ -242,59 +245,134 @@ keyboard_modifiers KeyMods = {};
 #define SLL_QUEUE_PUSH(F,L,N) STMNT( SLL_QUEUE_PUSH_((F),(L),(N)) )
 #define SLL_QUEUE_POP(F,L) STMNT( SLL_QUEUE_POP_((F),(L)) )
 
-static inline bool AddressBetween(size_t Address, size_t Lower, size_t Upper);
-static arena ArenaCreate(size_t Size);
-static arena ArenaCreateZeros(size_t Size);
-static void ArenaClear(arena *Arena);
-static void ArenaDestroy(arena *Arena);
-static size_t ArenaFreeBytes(arena *Arena);
-static void *ArenaPush(arena *Arena, size_t Size);
+/*
+ * Keyboard/mouse and window functions
+ */
+static void GLFWModsToKeyboardModifiers(int Mods);
+static void KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, int Mods);
+static void MousePositionCallback(GLFWwindow *Window, double X, double Y);
+static void MouseButtonCallback(GLFWwindow *Window, int Key, int Action, int Mods);
+static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
 static void ButtonsUpdate(button *Buttons, u32 Count);
-static bool CharInString(char *String, char C);
-static void DeallocDebugInfo();
-static void DebugeeContinueOrStart();
-static void DebugeeRestart();
+
+/*
+ * String functions
+ */
+static bool     StringHasChar(char *String, char C);
+static char *   StringFindLastChar(char *String, char C);
+static u32      StringCountChar(char *String, char C);
+static void     StringCopy(char *Dest, char *Src);
+static void     StringConcat(char *Dest, char *Src);
+static bool     StringMatches(char *Str0, char *Str1);
+static bool     StringEmpty(char *Str);
+static void     StringReplaceChar(char *Str, char Find, char Replace);
+static u64      StringHexToInt(char *String);
+static u32      StringLength(char *Str);
+static char *   StringDuplicate(arena *Arena, char *Str);
+static bool     StringStartsWith(char *Str, char *Start);
+static u32      StringSplit(char *Str, char Delimiter);
+static char *   StringSplitNext(char *Str);
+static u32      StringSplitCountStarting(char *Lines, u32 LinesCount, char *Start);
+static void     StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
+
+/*
+ * Arena functions
+ */
+static arena    ArenaCreate(size_t Size);
+static arena    ArenaCreateZeros(size_t Size);
+static void     ArenaClear(arena *Arena);
+static void     ArenaDestroy(arena *Arena);
+static void *   ArenaPush(arena *Arena, size_t Size);
+static size_t   ArenaFreeBytes(arena *Arena);
+
+/*
+ * File functions
+ */ 
+static bool     IsFile(char *Path);
+static char *   DumpFile(arena *Arena, char *Path);
+
+/*
+ * Common functions that everyone can use
+ */
+static void     HexDump(void *Ptr, size_t Count);
+static bool     AddressBetween(size_t Address, size_t Lower, size_t Upper);
+
+/*
+ * Debugee related functions
+ */
+
+/*
+ * Flow Control for Debugee
+ */
 static void DebugeeStart();
 static void DebugeeKill();
+static void DebugeeContinueOrStart();
+static void DebugeeRestart();
+static void DebugeeWaitForSignal();
+static void DebugeeToNextLine(bool StepIntoFunctions);
+static void DebugeeStepInstruction();
+static void DebugeeNextInstruction();
+static void DebugeeContinueProgram();
+static void DebugeeStepOutOfFunction();
+
+/*
+ * I/O with Debugee
+ */
+static x64_registers    DebugeePeekRegisters();
+static void             DebugeeSetRegisters(x64_registers Regs);
+static size_t           DebugeeGetProgramCounter();
+static size_t           DebugeeGetReturnAddress(size_t Address);
+static size_t           DebugeePeekMemory(size_t Address);
+static void             DebugeePeekMemoryArray(size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead);
+static size_t           DebugeeGetLoadAddress(i32 DebugeePID);
+
+/*
+ * Caching Debugee information
+ */
+static void             DebugeeDisassembleAroundAddress(address_range AddrRange);
+static void             DebugeeBuildBacktrace();
+
+/*
+ * Debuger related functions
+ */
+
+static void DebugerUpdateTransient();
+static void DebugerDeallocTransient();
 static void DebugerMain();
-static void DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID);
-static char *DumpFile(arena *Arena, char *Path);
-static void GLFWModsToKeyboardModifiers(int Mods);
-static inst_type GetInstructionType(cs_insn *Instruction);
-static u32 CapstoneRegisterToABINumber(x86_reg Register);
-static size_t GetProgramCounter();
-static inline size_t GetProgramCounterOffsetLoadAddress();
-static size_t GetReturnAddress(size_t Address);
-static size_t GetRegisterByABINumber(x64_registers Registers, u32 Number);
-static char *GetRegisterNameByIndex(u32 Index);
-static u64 HexStringToInt(char *String);
-static void KeyboardButtonCallback(GLFWwindow *Window, int Key, int Scancode, int Action, int Mods);
-static void MouseButtonCallback(GLFWwindow *Window, int Key, int Action, int Mods);
-static void MousePositionCallback(GLFWwindow *Window, double X, double Y);
-static user_regs_struct ParseToUserRegsStruct(x64_registers Regs);
-static x64_registers ParseUserRegsStruct(user_regs_struct URS);
-static size_t PeekDebugeeMemory(size_t Address, i32 DebugeePID);
-static void PeekDebugeeMemoryArray(size_t StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead);
-static x64_registers PeekRegisters(i32 DebugeePID);
-static void ToNextLine(i32 DebugeePID, bool StepIntoFunctions);
-static void SetRegisters(x64_registers Regs, i32 DebugeePID);
-static void StringConcat(char *Dest, char *Src);
-static void StringCopy(char *Dest, char *Src);
-static u32 StringCountChar(char *String, char C);
-static char *StringDuplicate(arena *Arena, char *Str);
-static char *StringFindLastChar(char *String, char C);
-static u32 StringLength(char *Str);
-static void StringReplaceChar(char *Str, char Find, char Replace);
-static void StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
-static bool StringsMatch(char *Str0, char *Str1);
-static bool StringEmpty(char *Str);
-static bool StringStartsWith(char *Str, char *Start);
-static u32 StringSplit(char *Str, char Delimiter);
-static char *StringSplitNext(char *Str);
-static u32 StringSplitCountStarting(char *Lines, u32 LinesCount, char *Start);
-static void HexDump(void *Ptr, size_t Count);
-static void UpdateInfo();
-static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
-static void DebugeeBuildBacktrace();
+
+/*
+ * Register related functions
+ */
+static u32              CapstoneRegisterToABINumber(x86_reg Register);
+static size_t           RegisterGetByABINumber(x64_registers Registers, u32 Number);
+static char *           RegisterGetNameByABINumber(u32 Index);
+static x64_registers    RegistersFromUSR(user_regs_struct URS);
+static user_regs_struct RegistersToUSR(x64_registers Regs);
+
+/*
+ * Disassembly related functions
+ */
+static inst_type        AsmInstructionGetType(cs_insn *Instruction);
+
+/*
+ * Breakpoints related functions
+ */
+static breakpoint * BreakpointFind(size_t Address, breakpoint *BPs, u32 Count);
+static breakpoint * BreakpointFind(size_t Address);
+static bool         BreakpointEnabled(breakpoint *BP);
+static breakpoint   BreakpointCreate(size_t Address);
+static breakpoint   BreakpointCreateAttachSourceLine(size_t Address);
+static void         BreakpointEnable(breakpoint *BP);
+static void         BreakpointDisable(breakpoint *BP);
+
+//static void BreakpointPushAtSourceLine(di_src_file *Src, u32 LineNum, breakpoint *BPs, u32 *Count);
+
+/*
+ * Setting breakpoints at places
+ */
+static bool         BreakAtFunctionName(char *Name);
+static void         BreakAtMain();
+static bool         BreakAtAddress(char *AddressStr);
+static void         BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Breakpoints, u32 *BreakpointsCount);
 
 #endif //DEBAG_H

@@ -119,7 +119,7 @@ ButtonsUpdate(button *Buttons, u32 Count)
 }
 
 static bool
-CharInString(char *String, char C)
+StringHasChar(char *String, char C)
 {
     while(String && String[0])
     {
@@ -200,7 +200,7 @@ StringConcat(char *Dest, char *Src)
 }
 
 static bool
-StringsMatch(char *Str0, char *Str1)
+StringMatches(char *Str0, char *Str1)
 {
     bool Result = true;
     
@@ -257,7 +257,7 @@ StringReplaceChar(char *Str, char Find, char Replace)
 }
 
 static u64
-HexStringToInt(char *String)
+StringHexToInt(char *String)
 {
     u64 Result = 0;
     
@@ -697,7 +697,7 @@ CapstoneRegisterToABINumber(x86_reg Register)
 }
 
 static x64_registers
-ParseUserRegsStruct(user_regs_struct URS)
+RegistersFromUSR(user_regs_struct URS)
 {
     x64_registers Result = {};
     
@@ -733,7 +733,7 @@ ParseUserRegsStruct(user_regs_struct URS)
 }
 
 static user_regs_struct
-ParseToUserRegsStruct(x64_registers Regs)
+RegistersToUSR(x64_registers Regs)
 {
     user_regs_struct Result = {};
     
@@ -769,26 +769,26 @@ ParseToUserRegsStruct(x64_registers Regs)
 }
 
 static x64_registers
-PeekRegisters(i32 DebugeePID)
+DebugeePeekRegisters()
 {
     x64_registers Result = {};
     
     user_regs_struct USR = {};
-    ptrace(PTRACE_GETREGS, DebugeePID, 0x0, &USR);
+    ptrace(PTRACE_GETREGS, Debuger.DebugeePID, 0x0, &USR);
     
-    Result = ParseUserRegsStruct(USR);
+    Result = RegistersFromUSR(USR);
     return Result;
 }
 
 static void
-SetRegisters(x64_registers Regs, i32 DebugeePID)
+DebugeeSetRegisters(x64_registers Regs)
 {
-    user_regs_struct USR = ParseToUserRegsStruct(Regs);
-    ptrace(PTRACE_SETREGS, DebugeePID, 0x0, &USR);
+    user_regs_struct USR = RegistersToUSR(Regs);
+    ptrace(PTRACE_SETREGS, Debuger.DebugeePID, 0x0, &USR);
 }
 
 static size_t
-GetRegisterByABINumber(x64_registers Registers, u32 Number)
+RegisterGetByABINumber(x64_registers Registers, u32 Number)
 {
     switch(Number)
     {
@@ -832,7 +832,7 @@ GetRegisterByABINumber(x64_registers Registers, u32 Number)
 }
 
 static char *
-GetRegisterNameByIndex(u32 Index)
+RegisterGetNameByABINumber(u32 Index)
 {
     char *Names[] = {
         "RAX", "RBX", "RCX", "RDX", "RDI", "RSI",
@@ -845,50 +845,40 @@ GetRegisterNameByIndex(u32 Index)
 }
 
 static inline size_t
-GetProgramCounter()
+DebugeeGetProgramCounter()
 {
     return Debuger.Regs.RIP;
 }
 
 static inline size_t
-GetReturnAddress(size_t Address, size_t FrameBaseAddress)
+DebugeeGetReturnAddress(size_t Address)
 {
     size_t CFA = DwarfGetCFA(Address);
-    CFA -= Debuger.Regs.RBP;
-    CFA += FrameBaseAddress;
-    size_t MachineWord = PeekDebugeeMemory(CFA - 8, Debuger.DebugeePID);
-
-    return MachineWord;    
-}
-
-static inline size_t
-GetReturnAddress(size_t Address)
-{
-    size_t MachineWord = GetReturnAddress(Address, Debuger.Regs.RBP);
+    size_t MachineWord = DebugeePeekMemory(CFA - 8);
 
     return MachineWord;
 }
 
 static size_t
-PeekDebugeeMemory(size_t Address, i32 DebugeePID)
+DebugeePeekMemory(size_t Address)
 {
     size_t MachineWord = 0;
 
-    MachineWord = ptrace(PTRACE_PEEKDATA, DebugeePID, Address, 0x0);
+    MachineWord = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, Address, 0x0);
     
     return MachineWord;
 }
 
 // Out array has be a multiple of 8 sized 
 static void
-PeekDebugeeMemoryArray(size_t StartAddress, u32 EndAddress, i32 DebugeePID, u8 *OutArray, u32 BytesToRead)
+DebugeePeekMemoryArray(size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead)
 {
     size_t *MemoryPtr = (size_t *)OutArray;
     
     size_t TempAddress = StartAddress;
     for(u32 I = 0; I < BytesToRead / sizeof(size_t); I++)
     {
-        *MemoryPtr = PeekDebugeeMemory(TempAddress, DebugeePID);
+        *MemoryPtr = DebugeePeekMemory(TempAddress);
         MemoryPtr += 1;
         TempAddress += 8;
         if(TempAddress >= EndAddress)
@@ -899,7 +889,7 @@ PeekDebugeeMemoryArray(size_t StartAddress, u32 EndAddress, i32 DebugeePID, u8 *
 }
 
 static inst_type
-GetInstructionType(cs_insn *Instruction)
+AsmInstructionGetType(cs_insn *Instruction)
 {
     inst_type Result = 0;
     
@@ -935,7 +925,7 @@ GetInstructionType(cs_insn *Instruction)
 }
 
 static void
-DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
+DisassembleAroundAddress(address_range AddrRange)
 {
     LOG_MAIN("AddrRange = %lx - %lx\n", AddrRange.Start, AddrRange.End);
     u32 InstCount = 0;
@@ -946,8 +936,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
     while(InstructionAddress < AddrRange.End)
     {
         u8 InstrInMemory[16] = {};
-        PeekDebugeeMemoryArray(InstructionAddress, AddrRange.End,
-                               DebugeePID, InstrInMemory, sizeof(InstrInMemory));
+        DebugeePeekMemoryArray(InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
         
         {
             breakpoint *BP = 0x0; ;
@@ -978,8 +967,7 @@ DisassembleAroundAddress(address_range AddrRange, i32 DebugeePID)
     for(u32 I = 0; I < InstCount; I++)
     {
         u8 InstrInMemory[16] = {};
-        PeekDebugeeMemoryArray(InstructionAddress, AddrRange.End,
-                               DebugeePID, InstrInMemory, sizeof(InstrInMemory));
+        DebugeePeekMemoryArray(InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
         
         {
             breakpoint *BP = 0x0; ;
@@ -1028,11 +1016,11 @@ DumpFile(arena *Arena, char *Path)
 }
 
 static void
-UpdateInfo()
+DebugerUpdateTransient()
 {
-    Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
+    Debuger.Regs = DebugeePeekRegisters();
     
-    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
     if(Func)
     {
         assert(Func->FuncLexScope.RangesCount == 0);
@@ -1041,7 +1029,7 @@ UpdateInfo()
         LexScopeRange.End = Func->FuncLexScope.HighPC;
         LOG_MAIN("LexScope of %s is %lx-%lx\n", Func->Name, LexScopeRange.Start, LexScopeRange.End);
         
-        DisassembleAroundAddress(LexScopeRange, Debuger.DebugeePID);
+        DisassembleAroundAddress(LexScopeRange);
     }
 }
 
@@ -1091,7 +1079,7 @@ DebugeeStart()
     {
         Debuger.DebugeePID = ProcessID;
         Debuger.Flags.Running = true;
-        WaitForSignal(Debuger.DebugeePID);
+        DebugeeWaitForSignal();
         assert(chdir(BaseDir) == 0);
     }
 }
@@ -1101,6 +1089,39 @@ DebugeeKill()
 {
     ptrace(PTRACE_KILL, Debuger.DebugeePID, 0x0, 0x0);
     Debuger.Flags.Running = !Debuger.Flags.Running;
+}
+
+static size_t
+DebugeeGetLoadAddress(i32 DebugeePID)
+{
+    char Path[64] = {};
+    sprintf(Path, "/proc/%d/maps", DebugeePID);
+    LOG_DWARF("Load Path is %s\n", Path);
+    
+    char AddrStr[16] = {};
+    FILE *FileHandle = fopen(Path, "r");
+    assert(FileHandle);
+    fread(AddrStr, sizeof(AddrStr), 1, FileHandle);
+    
+    u32 Length = sizeof(AddrStr);
+    for(u32 I = 0; I < sizeof(AddrStr); I++)
+    {
+        if(AddrStr[I] == '-')
+        {
+            Length = I;
+            break;
+        }
+    }
+    
+    size_t Result = 0x0;
+    
+    for(u32 I = 0; I < Length; I++)
+    {
+        size_t HexToDec = (AddrStr[I] - '0') > 10 ? (AddrStr[I] - 'a') + 10 : (AddrStr[I] - '0');
+        Result += HexToDec << (4 * (Length - I - 1));
+    }
+    
+    return Result;
 }
 
 static void
@@ -1115,7 +1136,7 @@ DebugeeContinueOrStart()
         {
             DebugeeStart();
             
-            Debuger.DebugeeLoadAddress = GetDebugeeLoadAddress(Debuger.DebugeePID);
+            Debuger.DebugeeLoadAddress = DebugeeGetLoadAddress(Debuger.DebugeePID);
             LOG_MAIN("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
             Debuger.Flags.PIE = DebugeeIsPIE();
             
@@ -1126,8 +1147,8 @@ DebugeeContinueOrStart()
             BreakAtMain();
         }
     
-        ContinueProgram(Debuger.DebugeePID);
-        UpdateInfo();
+        ContinueProgram();
+        DebugerUpdateTransient();
     }
     else
     {
@@ -1147,7 +1168,7 @@ DebugeeContinueOrStart()
 }
 
 static void
-DeallocDebugInfo()
+DebugerDeallocTransient()
 {
     CloseDwarfSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     CloseDwarfSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
@@ -1156,6 +1177,8 @@ DeallocDebugInfo()
     memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
     BreakpointCount = 0;
 #endif
+
+    _UPT_destroy(Debuger.UnwindRemoteArg);
     
     ArenaDestroy(&DI->Arena);
     memset(DI, 0, sizeof(debug_info));
@@ -1167,7 +1190,7 @@ DebugeeRestart()
     if(Debuger.Flags.Running)
     {
         DebugeeKill();
-        DeallocDebugInfo();
+        DebugerDeallocTransient();
 
         DebugeeContinueOrStart();
     }
@@ -1190,9 +1213,9 @@ DebugeeBuildBacktrace()
     unw_cursor_t UnwindCursor = {};
     assert(unw_init_remote(&UnwindCursor, UnwindAddressSpace, Debuger.UnwindRemoteArg) == 0);
 
-    Debuger.Unwind.Address = GetProgramCounter();
+    Debuger.Unwind.Address = DebugeeGetProgramCounter();
     
-    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    di_function *Func = FindFunctionConfiningAddress(DebugeeGetProgramCounter());
     if(!Func) { return; }
     
     unwind_functions_bucket *Bucket = ArrayPush(&DI->Arena, unwind_functions_bucket, 1);
@@ -1205,7 +1228,7 @@ DebugeeBuildBacktrace()
     {
         unw_word_t StackPointer = 0x0;
         unw_get_reg(&UnwindCursor, UNW_REG_SP, &StackPointer);
-        size_t ReturnAddress = PeekDebugeeMemory(StackPointer - 8, Debuger.DebugeePID);
+        size_t ReturnAddress = DebugeePeekMemory(StackPointer - 8);
 
         di_function *Func = FindFunctionConfiningAddress(ReturnAddress);
         if(!Func) { break; }
@@ -1269,7 +1292,7 @@ DebugerMain()
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
-    Debuger.Regs = PeekRegisters(Debuger.DebugeePID);
+    Debuger.Regs = DebugeePeekRegisters();
     
     ImGuiInputTextFlags ITFlags = 0;
     ITFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
@@ -1353,28 +1376,28 @@ DebugerMain()
                 }
                 if(ImGui::MenuItem("Step out", "F9", false, IsRunning))
                 {
-                    StepOutOfFunction(Debuger.DebugeePID);
-                    UpdateInfo();
+                    DebugeeStepOutOfFunction();
+                    DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step next", "F10", false, IsRunning))
                 {
-                    ToNextLine(Debuger.DebugeePID, false);
-                    UpdateInfo();
+                    DebugeeToNextLine(false);
+                    DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step in", "F11", false, IsRunning))
                 {
-                    ToNextLine(Debuger.DebugeePID, true);
-                    UpdateInfo();
+                    DebugeeToNextLine(true);
+                    DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
                 {
-                    NextInstruction(Debuger.DebugeePID);
-                    UpdateInfo();
+                    DebugeeNextInstruction();
+                    DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
                 {
-                    StepInstruction(Debuger.DebugeePID);
-                    UpdateInfo();
+                    DebugeeStepInstruction();
+                    DebugerUpdateTransient();
                 }
                 
                 ImGui::Separator();
@@ -1457,8 +1480,8 @@ DebugerMain()
             
             if(F9)
             {
-                StepOutOfFunction(Debuger.DebugeePID);
-                UpdateInfo();
+                DebugeeStepOutOfFunction();
+                DebugerUpdateTransient();
             }
         }
         
@@ -1471,26 +1494,26 @@ DebugerMain()
             {
                 if(F10)
                 {
-                    NextInstruction(Debuger.DebugeePID);
-                    UpdateInfo();
+                    DebugeeNextInstruction();
+                    DebugerUpdateTransient();
                 }
                 if(F11)
                 {
-                    StepInstruction(Debuger.DebugeePID);
-                    UpdateInfo();
+                    DebugeeStepInstruction();
+                    DebugerUpdateTransient();
                 }
             }
             else
             {
                 if(F10)
                 {
-                    ToNextLine(Debuger.DebugeePID, false);
-                    UpdateInfo();
+                    DebugeeToNextLine(false);
+                    DebugerUpdateTransient();
                 }
                 if(F11)
                 {
-                    ToNextLine(Debuger.DebugeePID, true);
-                    UpdateInfo();
+                    DebugeeToNextLine(true);
+                    DebugerUpdateTransient();
                 }
             }
             
@@ -1540,7 +1563,7 @@ DebugerMain()
         {
             ImGuiListClipper Clipper = {};
             Clipper.Begin(DisasmInstCount);
-            size_t PC = GetProgramCounter();
+            size_t PC = DebugeeGetProgramCounter();
 
             // @Speed: Binary search will like this one!
             i32 PCItemIndex = -1;
@@ -1604,7 +1627,7 @@ DebugerMain()
         if(Debuger.Flags.Running &&
            ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            di_src_line *Line = LineTableFindByAddress(GetProgramCounter());
+            di_src_line *Line = LineTableFindByAddress(DebugeeGetProgramCounter());
 
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {

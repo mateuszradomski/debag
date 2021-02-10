@@ -385,7 +385,7 @@ FindSourceFile(char *Path)
     
     for(u32 I = 0; I < DI->SourceFilesCount; I++)
     {
-        if(StringsMatch(Path, DI->SourceFiles[I].Path))
+        if(StringMatches(Path, DI->SourceFiles[I].Path))
         {
             Result = &DI->SourceFiles[I];
             break;
@@ -751,7 +751,7 @@ FindEntryPointAddress()
     
     for(u32 I = 0; I < DI->FuctionsCount; I++)
     {
-        if(StringsMatch(DI->Functions[I].Name, "main"))
+        if(StringMatches(DI->Functions[I].Name, "main"))
         {
             LOG_DWARF("entrypoint: %s\n", DI->Functions[I].Name);
             Result = DI->Functions[I].FuncLexScope.LowPC;
@@ -810,39 +810,6 @@ DebugeeIsPIE()
     }
 
     elf_end(ElfHandle);
-    
-    return Result;
-}
-
-static size_t
-GetDebugeeLoadAddress(i32 DebugeePID)
-{
-    char Path[64] = {};
-    sprintf(Path, "/proc/%d/maps", DebugeePID);
-    LOG_DWARF("Load Path is %s\n", Path);
-    
-    char AddrStr[16] = {};
-    FILE *FileHandle = fopen(Path, "r");
-    assert(FileHandle);
-    fread(AddrStr, sizeof(AddrStr), 1, FileHandle);
-    
-    u32 Length = sizeof(AddrStr);
-    for(u32 I = 0; I < sizeof(AddrStr); I++)
-    {
-        if(AddrStr[I] == '-')
-        {
-            Length = I;
-            break;
-        }
-    }
-    
-    size_t Result = 0x0;
-    
-    for(u32 I = 0; I < Length; I++)
-    {
-        size_t HexToDec = (AddrStr[I] - '0') > 10 ? (AddrStr[I] - 'a') + 10 : (AddrStr[I] - '0');
-        Result += HexToDec << (4 * (Length - I - 1));
-    }
     
     return Result;
 }
@@ -1038,7 +1005,7 @@ ranges have been read then don't read the low-high
 
                 // NOTE(mateusz): We want to skip this "file" that appears as "<built-in>".
                 char *BuiltInStr = "<built-in>";
-                if(!StringsMatch((char *)FName, BuiltInStr))
+                if(!StringMatches((char *)FName, BuiltInStr))
                 {
                     const char *DName = 0x0;
                     i32 DirRes = dwarf_srclines_include_dir_data(LineCtx, DirIdx, &DName, Error);
@@ -2375,7 +2342,7 @@ DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers)
 
     assert(OffsetRel == 1 && Table->rt3_cfa_rule.dw_offset_relevant != 0);
     LOG_DWARF("CFA by reg num = %d\n", RegnumOut);
-    size_t RegVal = GetRegisterByABINumber(Registers, RegnumOut);
+    size_t RegVal = RegisterGetByABINumber(Registers, RegnumOut);
             
     LOG_DWARF("RegVal = %lX, OffsetOut = %llX, RegVal + OffsetOut = %lX\n", RegVal, OffsetOut, (size_t)((ssize_t)RegVal + (ssize_t)OffsetOut));
 
@@ -2429,7 +2396,7 @@ DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
             {
                 size_t Address = CFA + (ssize_t)Rule->dw_offset_or_block_len;
                 
-                Result.Array[I] = PeekDebugeeMemory(Address, Debuger.DebugeePID);
+                Result.Array[I] = DebugeePeekMemory(Address);
             }
             else
             {
@@ -2443,7 +2410,7 @@ DwarfGetFrameRegisters(size_t Address, x64_registers WithRegisters)
                 }
                 else
                 {
-                    Result.Array[I] = GetRegisterByABINumber(WithRegisters, Rule->dw_regnum);
+                    Result.Array[I] = RegisterGetByABINumber(WithRegisters, Rule->dw_regnum);
                 }
             }
         }
@@ -2484,4 +2451,25 @@ FunctionFirstVariable(di_function *Func)
     }
 
     return Result;
+}
+
+static bool
+AddressInDiffrentLine(size_t Address)
+{
+    di_src_line *Current = LineTableFindByAddress(DebugeeGetProgramCounter());
+    di_src_line *Diff = LineTableFindByAddress(Address);
+    assert(Current);
+    assert(Diff);
+
+    LOG_DWARF("LineNum: Current = %u, Diff = %u / Address: Current = %lx, Diff = %lx\n", Current->LineNum, Diff->LineNum, Current->Address, Diff->Address);
+
+    bool SameLineDiffFiles = (Current->LineNum == Diff->LineNum) && (Current->SrcFileIndex != Diff->SrcFileIndex);
+    bool SameFileDiffLines = (Current->LineNum != Diff->LineNum) && (Current->Address != Diff->Address);
+    if(SameLineDiffFiles || SameFileDiffLines)
+    {
+        assert(Current != Diff);
+        return true;
+    }
+        
+    return false;
 }
