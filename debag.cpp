@@ -1199,11 +1199,19 @@ DebugeeRestart()
 static void
 DebugeeBuildBacktrace()
 {
-    // TODO(mateusz): I need to reset this space and I am aware that
-    // this kind of move is probably creating a memory leak and should
-    // be address within the arenas, where you can return the used
-    // memory and it will be reused.
-    Debuger.Unwind.FuncList.Head = 0x0;
+    if(Debuger.Unwind.FuncList.Head)
+    {
+        unwind_functions_bucket *Bucket = Debuger.Unwind.FuncList.Head;
+
+        while(Bucket)
+        {
+            unwind_functions_bucket *ToDelete = Bucket;
+            Bucket = Bucket->Next;
+
+            free(ToDelete);
+        }
+        Debuger.Unwind.FuncList.Head = 0x0;
+    }
     
     unw_context_t UnwindCtx = {};
     unw_getcontext(&UnwindCtx);
@@ -1217,8 +1225,8 @@ DebugeeBuildBacktrace()
     
     di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(!Func) { return; }
-    
-    unwind_functions_bucket *Bucket = ArrayPush(&DI->Arena, unwind_functions_bucket, 1);
+
+    unwind_functions_bucket *Bucket = (unwind_functions_bucket *)calloc(1, sizeof(unwind_functions_bucket));
     
     unwind_function UnwoundFunction = {};
     UnwoundFunction.Name = Func->Name;
@@ -1239,7 +1247,7 @@ DebugeeBuildBacktrace()
         if(Bucket->Count >= ARRAY_LENGTH(Bucket->Functions))
         {
             SLL_QUEUE_PUSH(Debuger.Unwind.FuncList.Head, Debuger.Unwind.FuncList.Tail, Bucket);
-            Bucket = ArrayPush(&DI->Arena, unwind_functions_bucket, 1);
+            Bucket = (unwind_functions_bucket *)calloc(1, sizeof(unwind_functions_bucket));
         }
         
         Bucket->Functions[Bucket->Count++] = UnwoundFunction;
