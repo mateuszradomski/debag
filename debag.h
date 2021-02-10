@@ -176,6 +176,16 @@ struct debugee_flags
     u8 PIE      : 1;
 };
 
+struct debugee
+{
+    debugee_flags Flags;
+    i32 PID;
+    char ProgramPath[256];
+    size_t LoadAddress;
+
+    x64_registers Regs;
+};
+
 struct logging_switches
 {
     bool DwarfLogs;
@@ -187,20 +197,14 @@ struct logging_switches
 
 struct dbg
 {
-    debugee_flags Flags;
-    i32 DebugeePID;
     bool InputChange;
     char ProgramArgs[128];
     char PathToRunIn[256];
-    char DebugeeProgramPath[256];
-    size_t DebugeeLoadAddress;
 
     void *UnwindRemoteArg;
     unwind_info Unwind;
 
     logging_switches Log;
-
-    x64_registers Regs;
 };
 
 struct arena
@@ -224,6 +228,7 @@ u32 DisasmInstCount = 0;
 
 csh DisAsmHandle;
 dbg Debuger;
+debugee Debugee;
 
 button KeyboardButtons[GLFW_KEY_LAST] = {};
 keyboard_modifiers KeyMods = {};

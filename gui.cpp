@@ -341,7 +341,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
     {
         for(u32 I = 0; I <= Underlaying.ArrayUpperBound; I++)
         {
-            //size_t MachineWord = DebugeePeekMemory(VarAddress, Debuger.DebugeePID);
+            //size_t MachineWord = DebugeePeekMemory(VarAddress, Debugee.PID);
             
             if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
             {
@@ -416,12 +416,12 @@ ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
     }
     else if(Var->LocationAtom == DW_OP_addr)
     {
-        size_t VarAddress = Debuger.Flags.PIE ? Var->Offset + Debuger.DebugeeLoadAddress : Var->Offset;
+        size_t VarAddress = Debugee.Flags.PIE ? Var->Offset + Debugee.LoadAddress : Var->Offset;
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else if(Var->LocationAtom >= DW_OP_breg0 && Var->LocationAtom <= DW_OP_breg15)
     {
-        size_t Register = RegisterGetByABINumber(Debuger.Regs, Var->LocationAtom - DW_OP_breg0);
+        size_t Register = RegisterGetByABINumber(Debugee.Regs, Var->LocationAtom - DW_OP_breg0);
         size_t VarAddress = Var->Offset + Register;
         
         ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
@@ -763,7 +763,7 @@ GuiCreateBreakpointTexture()
 static void
 GuiShowBacktrace()
 {
-    if(Debuger.Flags.Running)
+    if(Debugee.Flags.Running)
     {
         size_t PC = DebugeeGetProgramCounter();
 

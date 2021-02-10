@@ -774,7 +774,7 @@ DebugeePeekRegisters()
     x64_registers Result = {};
     
     user_regs_struct USR = {};
-    ptrace(PTRACE_GETREGS, Debuger.DebugeePID, 0x0, &USR);
+    ptrace(PTRACE_GETREGS, Debugee.PID, 0x0, &USR);
     
     Result = RegistersFromUSR(USR);
     return Result;
@@ -784,7 +784,7 @@ static void
 DebugeeSetRegisters(x64_registers Regs)
 {
     user_regs_struct USR = RegistersToUSR(Regs);
-    ptrace(PTRACE_SETREGS, Debuger.DebugeePID, 0x0, &USR);
+    ptrace(PTRACE_SETREGS, Debugee.PID, 0x0, &USR);
 }
 
 static size_t
@@ -847,7 +847,7 @@ RegisterGetNameByABINumber(u32 Index)
 static inline size_t
 DebugeeGetProgramCounter()
 {
-    return Debuger.Regs.RIP;
+    return Debugee.Regs.RIP;
 }
 
 static inline size_t
@@ -864,7 +864,7 @@ DebugeePeekMemory(size_t Address)
 {
     size_t MachineWord = 0;
 
-    MachineWord = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, Address, 0x0);
+    MachineWord = ptrace(PTRACE_PEEKDATA, Debugee.PID, Address, 0x0);
     
     return MachineWord;
 }
@@ -1018,7 +1018,7 @@ DumpFile(arena *Arena, char *Path)
 static void
 DebugerUpdateTransient()
 {
-    Debuger.Regs = DebugeePeekRegisters();
+    Debugee.Regs = DebugeePeekRegisters();
     
     di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(Func)
@@ -1046,7 +1046,7 @@ DebugeeStart()
     {
         char *ProgramArgs[16] = {};
         u32 ArgsLen = 0;
-        ProgramArgs[0] = Debuger.DebugeeProgramPath;
+        ProgramArgs[0] = Debugee.ProgramPath;
         StringToArgv(Debuger.ProgramArgs, &ProgramArgs[1], &ArgsLen);
         
         if(Debuger.PathToRunIn && strlen(Debuger.PathToRunIn) != 0)
@@ -1063,17 +1063,17 @@ DebugeeStart()
         prctl(PR_SET_PDEATHSIG, SIGHUP);
 
         char *AbsolutePath = 0x0;
-        if(Debuger.DebugeeProgramPath[0] == '/' || Debuger.DebugeeProgramPath[0] == '~')
+        if(Debugee.ProgramPath[0] == '/' || Debugee.ProgramPath[0] == '~')
         {
-            AbsolutePath = Debuger.DebugeeProgramPath;
+            AbsolutePath = Debugee.ProgramPath;
         }
         else
         {
-            u32 Len1 = StringLength(Debuger.DebugeeProgramPath);
+            u32 Len1 = StringLength(Debugee.ProgramPath);
             u32 Len2 = StringLength(BaseDir);
             AbsolutePath = (char *)malloc(Len1 + Len2 + 16);
 
-            sprintf(AbsolutePath, "%s/%s", BaseDir, Debuger.DebugeeProgramPath);
+            sprintf(AbsolutePath, "%s/%s", BaseDir, Debugee.ProgramPath);
         }
 
         execv(AbsolutePath, ProgramArgs);
@@ -1081,8 +1081,8 @@ DebugeeStart()
     }
     else
     {
-        Debuger.DebugeePID = ProcessID;
-        Debuger.Flags.Running = true;
+        Debugee.PID = ProcessID;
+        Debugee.Flags.Running = true;
         DebugeeWaitForSignal();
         assert(chdir(BaseDir) == 0);
     }
@@ -1091,8 +1091,8 @@ DebugeeStart()
 static void
 DebugeeKill()
 {
-    ptrace(PTRACE_KILL, Debuger.DebugeePID, 0x0, 0x0);
-    Debuger.Flags.Running = !Debuger.Flags.Running;
+    ptrace(PTRACE_KILL, Debugee.PID, 0x0, 0x0);
+    Debugee.Flags.Running = !Debugee.Flags.Running;
 }
 
 static size_t
@@ -1131,22 +1131,22 @@ DebugeeGetLoadAddress(i32 DebugeePID)
 static void
 DebugeeContinueOrStart()
 {
-    if(IsFile(Debuger.DebugeeProgramPath))
+    if(IsFile(Debugee.ProgramPath))
     {
         GuiClearStatusText();
         
         //Continue or start program
-        if(!Debuger.Flags.Running)
+        if(!Debugee.Flags.Running)
         {
             DebugeeStart();
             
-            Debuger.DebugeeLoadAddress = DebugeeGetLoadAddress(Debuger.DebugeePID);
-            LOG_MAIN("LoadAddress = %lx\n", Debuger.DebugeeLoadAddress);
-            Debuger.Flags.PIE = DwarfIsExectuablePIE();
+            Debugee.LoadAddress = DebugeeGetLoadAddress(Debugee.PID);
+            LOG_MAIN("LoadAddress = %lx\n", Debugee.LoadAddress);
+            Debugee.Flags.PIE = DwarfIsExectuablePIE();
             
             DwarfRead();
             
-            Debuger.UnwindRemoteArg = _UPT_create(Debuger.DebugeePID);
+            Debuger.UnwindRemoteArg = _UPT_create(Debugee.PID);
 
             BreakAtMain();
         }
@@ -1156,7 +1156,7 @@ DebugeeContinueOrStart()
     }
     else
     {
-        if(StringEmpty(Debuger.DebugeeProgramPath))
+        if(StringEmpty(Debugee.ProgramPath))
         {
             GuiSetStatusText("No program path given");
         }
@@ -1164,7 +1164,7 @@ DebugeeContinueOrStart()
         {
             char Buff[384] = {};
 
-            sprintf(Buff, "File at [%s] does not exist", Debuger.DebugeeProgramPath);
+            sprintf(Buff, "File at [%s] does not exist", Debugee.ProgramPath);
 
             GuiSetStatusText(Buff);
         }
@@ -1191,7 +1191,7 @@ DebugerDeallocTransient()
 static void
 DebugeeRestart()
 {
-    if(Debuger.Flags.Running)
+    if(Debugee.Flags.Running)
     {
         DebugeeKill();
         DebugerDeallocTransient();
@@ -1304,7 +1304,7 @@ DebugerMain()
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     
-    Debuger.Regs = DebugeePeekRegisters();
+    Debugee.Regs = DebugeePeekRegisters();
     
     ImGuiInputTextFlags ITFlags = 0;
     ITFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
@@ -1328,11 +1328,11 @@ DebugerMain()
         //else { Debuger.InputChange = false; }
         
         // NOTE(mateusz): This has to happen before the calls to next lines
-        if(Debuger.Flags.Steped)
+        if(Debugee.Flags.Steped)
         {
             if(CenteredDissassembly && CenteredSourceCode)
             {
-                Debuger.Flags.Steped = !Debuger.Flags.Steped;
+                Debugee.Flags.Steped = !Debugee.Flags.Steped;
                 CenteredDissassembly = false;
                 CenteredSourceCode = false;
             }
@@ -1349,13 +1349,13 @@ DebugerMain()
         {
             auto MenuBarSize = ImGui::GetWindowSize();
             MenuBarHeight = MenuBarSize.y;
-            bool IsRunning = Debuger.Flags.Running;
+            bool IsRunning = Debugee.Flags.Running;
             
             if(ImGui::BeginMenu("File"))
             {
                 f32 OneThird = 0.3333333f;
                 ImGui::PushItemWidth(Gui->WindowWidth * OneThird);
-                ImGui::InputText("Program path", Debuger.DebugeeProgramPath, sizeof(Debuger.DebugeeProgramPath));
+                ImGui::InputText("Program path", Debugee.ProgramPath, sizeof(Debugee.ProgramPath));
                 ImGui::InputText("Program args", Debuger.ProgramArgs, sizeof(Debuger.ProgramArgs));
                 ImGui::InputText("Working directory", Debuger.PathToRunIn, sizeof(Debuger.PathToRunIn));
                 ImGui::PopItemWidth();
@@ -1486,7 +1486,7 @@ DebugerMain()
             }
         }
 
-        if(Debuger.Flags.Running)
+        if(Debugee.Flags.Running)
         {
             bool F9 = KeyboardButtons[GLFW_KEY_F9].Pressed || KeyboardButtons[GLFW_KEY_F9].Repeat;
             
@@ -1497,7 +1497,7 @@ DebugerMain()
             }
         }
         
-        if(Debuger.Flags.Running)
+        if(Debugee.Flags.Running)
         {
             bool F10 = KeyboardButtons[GLFW_KEY_F10].Pressed || KeyboardButtons[GLFW_KEY_F10].Repeat;
             bool F11 = KeyboardButtons[GLFW_KEY_F11].Pressed || KeyboardButtons[GLFW_KEY_F11].Repeat;
@@ -1571,7 +1571,7 @@ DebugerMain()
         ImGui::SetWindowSize(ImVec2(Gui->WindowWidth / 2, (Gui->WindowHeight / 3) * 2 - MenuBarHeight));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
-        if(Debuger.Flags.Running)
+        if(Debugee.Flags.Running)
         {
             ImGuiListClipper Clipper = {};
             Clipper.Begin(DisasmInstCount);
@@ -1588,7 +1588,7 @@ DebugerMain()
                 }
             }
 
-            if(Debuger.Flags.Steped && PCItemIndex != -1)
+            if(Debugee.Flags.Steped && PCItemIndex != -1)
             {
                 f32 Max = ImGui::GetScrollMaxY();
                 f32 Curr = ((f32)PCItemIndex / (f32)DisasmInstCount);
@@ -1612,7 +1612,7 @@ DebugerMain()
                                            "0x%" PRIx64 ":\t%s%s%s\n",
                                            Inst->Address, Inst->Mnemonic, Spaces, Inst->Operation);
                     
-                        if(Debuger.Flags.Steped)
+                        if(Debugee.Flags.Steped)
                         {
                             ImGui::SetScrollHereY(0.5f);
                             CenteredDissassembly = true;
@@ -1636,7 +1636,7 @@ DebugerMain()
         
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
         
-        if(Debuger.Flags.Running &&
+        if(Debugee.Flags.Running &&
            ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
             di_src_line *Line = DwarfFindLineByAddress(DebugeeGetProgramCounter());
@@ -1644,7 +1644,7 @@ DebugerMain()
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {
                 ImGuiTabItemFlags TIFlags = ImGuiTabItemFlags_None;
-                if(Line && SrcFileIndex == Line->SrcFileIndex && Debuger.Flags.Steped)
+                if(Line && SrcFileIndex == Line->SrcFileIndex && Debugee.Flags.Steped)
                 {
                     TIFlags = ImGuiTabItemFlags_SetSelected;
                 }
@@ -1662,7 +1662,7 @@ DebugerMain()
                     ImGuiListClipper Clipper = {};
                     Clipper.Begin(Src->ContentLineCount);
 
-                    if(Debuger.Flags.Steped)
+                    if(Debugee.Flags.Steped)
                     {
                         f32 Max = ImGui::GetScrollMaxY();
                         f32 Curr = ((f32)Line->LineNum / (f32)Src->ContentLineCount);
@@ -1732,7 +1732,7 @@ DebugerMain()
                             {
                                 DrawingLine = Line;
                                 ImGui::TextColored(CurrentLineColor, "%d%s%s", LineNum, Spaces, Src->Content[I]);
-                                if(Debuger.Flags.Steped)
+                                if(Debugee.Flags.Steped)
                                 {
                                     ImGui::SetScrollHereY(0.5f);
                                     CenteredSourceCode = true;
@@ -1786,7 +1786,7 @@ DebugerMain()
         {
             if(ImGui::BeginTabItem("Locals"))
             {
-                if(Debuger.Flags.Running)
+                if(Debugee.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
                     GuiShowVariables();
@@ -1797,7 +1797,7 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("Backtrace"))
             {
-                if(Debuger.Flags.Running)
+                if(Debugee.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
                     GuiShowBacktrace();
@@ -1808,10 +1808,10 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("x64 Registers"))
             {
-                if(Debuger.Flags.Running)
+                if(Debugee.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
-                    ImGuiShowRegisters(Debuger.Regs);
+                    ImGuiShowRegisters(Debugee.Regs);
                     ImGui::EndChild();
                 }
                 
@@ -1819,7 +1819,7 @@ DebugerMain()
             }
             if(ImGui::BeginTabItem("Breakpoints"))
             {
-                if(Debuger.Flags.Running)
+                if(Debugee.Flags.Running)
                 {
                     ImGui::BeginChild("bps");
                     GuiShowBreakpoints();
@@ -1851,7 +1851,7 @@ main(i32 ArgCount, char **Args)
 {
     if(ArgCount == 2)
     {
-        StringCopy(Debuger.DebugeeProgramPath, Args[1]);
+        StringCopy(Debugee.ProgramPath, Args[1]);
     }
     
     DebugerMain();

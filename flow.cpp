@@ -9,13 +9,13 @@ DebugeeWaitForSignal()
 {
     i32 WaitStatus;
     i32 Options = 0;
-    i32 PID = Debuger.DebugeePID;
+    i32 PID = Debugee.PID;
     waitpid(PID, &WaitStatus, Options);
     
     if(WIFEXITED(WaitStatus))
     {
         GuiSetStatusText("Program finished it's execution");
-        Debuger.Flags.Running = !Debuger.Flags.Running;
+        Debugee.Flags.Running = !Debugee.Flags.Running;
         DebugerDeallocTransient();
     }
     
@@ -29,9 +29,9 @@ DebugeeWaitForSignal()
             case SI_KERNEL:
             case TRAP_BRKPT:
             {
-                Debuger.Regs = DebugeePeekRegisters();
-                Debuger.Regs.RIP -= 1;
-                DebugeeSetRegisters(Debuger.Regs);
+                Debugee.Regs = DebugeePeekRegisters();
+                Debugee.Regs.RIP -= 1;
+                DebugeeSetRegisters(Debugee.Regs);
                 //auto offset_pc = offset_load_address(get_pc()); //rember to offset the pc for querying DWARF
                 //auto line_entry = get_line_entry_from_pc(offset_pc);
                 //print_source(line_entry->file->path, line_entry->line);
@@ -129,18 +129,18 @@ static void
 BreakpointEnable(breakpoint *BP)
 {
     BP->State.Enabled = true;
-    BP->SavedOpCodes = ptrace(PTRACE_PEEKDATA, Debuger.DebugeePID, BP->Address, 0x0);
+    BP->SavedOpCodes = ptrace(PTRACE_PEEKDATA, Debugee.PID, BP->Address, 0x0);
     
     u64 TrapInterupt = 0xcc; // int 3
     u64 OpCodesInt3 = (BP->SavedOpCodes & ~0xff) | TrapInterupt;
-    ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, OpCodesInt3);
+    ptrace(PTRACE_POKEDATA, Debugee.PID, BP->Address, OpCodesInt3);
 }
 
 static void
 BreakpointDisable(breakpoint *BP)
 {
     BP->State.Enabled = false;
-    ptrace(PTRACE_POKEDATA, Debuger.DebugeePID, BP->Address, BP->SavedOpCodes);
+    ptrace(PTRACE_POKEDATA, Debugee.PID, BP->Address, BP->SavedOpCodes);
 }
 
 static void
@@ -234,7 +234,7 @@ BreakAtAddress(char *AddressStr)
 static void
 DebugeeStepInstruction()
 {
-    i32 PID = Debuger.DebugeePID;
+    i32 PID = Debugee.PID;
     breakpoint *BP = BreakpointFind(DebugeeGetProgramCounter());
     if(BP && BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
@@ -244,16 +244,16 @@ DebugeeStepInstruction()
     if(BP && !BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointEnable(BP); }
     if(BP) { BP->State.ExectuedSavedOpCode = !BP->State.ExectuedSavedOpCode; }
     
-    Debuger.Regs = DebugeePeekRegisters();
+    Debugee.Regs = DebugeePeekRegisters();
 
-    Debuger.Flags.Steped = true;
+    Debugee.Flags.Steped = true;
 }
 
 static void
 DebugeeNextInstruction()
 {
     LOG_FLOW("Unimplemented method!");
-    Debuger.Flags.Steped = true;
+    Debugee.Flags.Steped = true;
 }
 
 static void
@@ -271,16 +271,16 @@ ContinueProgram()
         }
     }
     
-    Debuger.Flags.Steped = true;
+    Debugee.Flags.Steped = true;
 
-    Debuger.Regs = DebugeePeekRegisters();
+    Debugee.Regs = DebugeePeekRegisters();
     breakpoint *BP = 0x0;
     if((BP = BreakpointFind(DebugeeGetProgramCounter())) && BreakpointEnabled(BP))
     {
     }
     else
     {
-        i32 PID = Debuger.DebugeePID;
+        i32 PID = Debugee.PID;
         ptrace(PTRACE_CONT, PID, 0x0, 0x0);
         DebugeeWaitForSignal();
     }
@@ -355,7 +355,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
             else if(Operand->type == X86_OP_REG)
             {
                 u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
-                CallAddress = RegisterGetByABINumber(Debuger.Regs, ABINumber);
+                CallAddress = RegisterGetByABINumber(Debugee.Regs, ABINumber);
             }
             else
             {
@@ -399,7 +399,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
             else if(Operand->type == X86_OP_REG)
             {
                 u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
-                JumpAddress = RegisterGetByABINumber(Debuger.Regs, ABINumber);
+                JumpAddress = RegisterGetByABINumber(Debugee.Regs, ABINumber);
             }
             else
             {
@@ -456,7 +456,7 @@ DebugeeToNextLine(bool StepIntoFunctions)
     memset(TempBreakpoints, 0, sizeof(TempBreakpoints[0]) * TempBreakpointsCount);
     TempBreakpointsCount = 0;
     
-    Debuger.Flags.Steped = true;
+    Debugee.Flags.Steped = true;
 }
 
 static void
@@ -488,5 +488,5 @@ DebugeeStepOutOfFunction()
         }
     }
     
-    Debuger.Flags.Steped = true;
+    Debugee.Flags.Steped = true;
 }

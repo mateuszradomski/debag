@@ -4,7 +4,7 @@ static bool
 DwarfOpenSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 {
     assert(*Fd == 0);
-    *Fd = open(Debuger.DebugeeProgramPath, O_RDONLY);
+    *Fd = open(Debugee.ProgramPath, O_RDONLY);
     assert(*Fd != -1);
     
     bool Result = dwarf_init(*Fd, DW_DLC_READ, 0, 0, Debug, 0x0) == DW_DLV_OK;
@@ -480,7 +480,7 @@ DwarfLoadSourceFileByIndex(Dwarf_Line *Lines, u32 LineCount, di_src_file *File, 
                 *LineIdxOut = File->SrcLineCount;
             }
 
-            Line.Address = Debuger.Flags.PIE ? Addr + Debuger.DebugeeLoadAddress : Addr;
+            Line.Address = Debugee.Flags.PIE ? Addr + Debugee.LoadAddress : Addr;
             Line.LineNum = LineNO;
 
             Dwarf_Signed LineOffset = 0;
@@ -647,7 +647,7 @@ DwarfLoadSourceFileByAddress(size_t Address, u32 *FileIdxOut, u32 *LineIdxOut)
 
                     // NOTE(mateusz): LineAddresses are as offsets, we need them in the address
                     // space of the exectuable.
-                    LineAddr = Debuger.Flags.PIE ? LineAddr + Debuger.DebugeeLoadAddress : LineAddr;
+                    LineAddr = Debugee.Flags.PIE ? LineAddr + Debugee.LoadAddress : LineAddr;
                     
                     if(Address == LineAddr)
                     {
@@ -745,7 +745,7 @@ DwarfIsExectuablePIE()
     bool Result = false;
 
     Elf *ElfHandle = 0x0;
-    int BinaryFD = open(Debuger.DebugeeProgramPath, O_RDONLY);
+    int BinaryFD = open(Debugee.ProgramPath, O_RDONLY);
     assert(BinaryFD > 0);
 
     assert(elf_version(EV_CURRENT) != EV_NONE);
@@ -1030,13 +1030,13 @@ ranges have been read then don't read the low-high
 
             // NOTE(mateusz): We read offsets, now add to them the load address so they represent the
             // the actual address inside the running excutable.
-            if(Debuger.Flags.PIE)
+            if(Debugee.Flags.PIE)
             {
                 for(u32 I = 0; I < CompUnit->RangesCount; I++)
                 {
-                    assert(Debuger.DebugeeLoadAddress != 0x0);
-                    CompUnit->RangesLowPCs[I] += Debuger.DebugeeLoadAddress;
-                    CompUnit->RangesHighPCs[I] += Debuger.DebugeeLoadAddress;
+                    assert(Debugee.LoadAddress != 0x0);
+                    CompUnit->RangesLowPCs[I] += Debugee.LoadAddress;
+                    CompUnit->RangesHighPCs[I] += Debugee.LoadAddress;
                 }
             }
         }break;
@@ -1158,10 +1158,10 @@ ranges have been read then don't read the low-high
                 }
             }
 
-            if(Debuger.Flags.PIE)
+            if(Debugee.Flags.PIE)
             {
-                Func->FuncLexScope.LowPC += Debuger.DebugeeLoadAddress;
-                Func->FuncLexScope.HighPC += Debuger.DebugeeLoadAddress;
+                Func->FuncLexScope.LowPC += Debugee.LoadAddress;
+                Func->FuncLexScope.HighPC += Debugee.LoadAddress;
             }
         }break;
         case DW_TAG_lexical_block:
@@ -1272,10 +1272,10 @@ ranges have been read then don't read the low-high
                 }
             }
 
-            if(Debuger.Flags.PIE)
+            if(Debugee.Flags.PIE)
             {
-                LexScope->LowPC += Debuger.DebugeeLoadAddress;
-                LexScope->HighPC += Debuger.DebugeeLoadAddress;
+                LexScope->LowPC += Debugee.LoadAddress;
+                LexScope->HighPC += Debugee.LoadAddress;
             }
         }break;
         case DW_TAG_variable:
@@ -2282,7 +2282,7 @@ static bool
 DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
 {
     bool Success = false;
-    Address = Debuger.Flags.PIE ? Address - Debuger.DebugeeLoadAddress : Address;
+    Address = Debugee.Flags.PIE ? Address - Debugee.LoadAddress : Address;
     di_frame_info *Frame = &DI->FrameInfo;
     for(u32 J = 0; J < Frame->FDECount; J++)
     {
@@ -2336,7 +2336,7 @@ DwarfGetCFA(size_t Address)
 
     Dwarf_Regtable3 Table = {};
     assert(DwarfEvalFDE(Address, 0, &Table));
-    Result = DwarfCalculateCFA(&Table, Debuger.Regs);
+    Result = DwarfCalculateCFA(&Table, Debugee.Regs);
 
     return Result;
 }
