@@ -35,7 +35,6 @@
 
 /*
  * A big big TODO list:
- * - StepInstruction has an option to not step into calls that are out of CU bounds.
  * - When breaking at an function or address we need to have DebugInfo loaded about that file
  * load it dynamicaly when the user asks for a breakpoint at that address before the program
  * is running.
@@ -1151,7 +1150,7 @@ DebugeeContinueOrStart()
             BreakAtMain();
         }
     
-        ContinueProgram();
+        DebugeeContinueProgram();
         DebugerUpdateTransient();
     }
     else
@@ -1403,12 +1402,12 @@ DebugerMain()
                 }
                 if(ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
                 {
-                    DebugeeNextInstruction();
+                    DebugeeToNextInstruction(false);
                     DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
                 {
-                    DebugeeStepInstruction();
+                    DebugeeToNextInstruction(true);
                     DebugerUpdateTransient();
                 }
                 
@@ -1506,12 +1505,12 @@ DebugerMain()
             {
                 if(F10)
                 {
-                    DebugeeNextInstruction();
+                    DebugeeToNextInstruction(false);
                     DebugerUpdateTransient();
                 }
                 if(F11)
                 {
-                    DebugeeStepInstruction();
+                    DebugeeToNextInstruction(true);
                     DebugerUpdateTransient();
                 }
             }

@@ -250,14 +250,107 @@ DebugeeStepInstruction()
 }
 
 static void
-DebugeeNextInstruction()
+DebugeeToNextInstruction(bool StepIntoFunctions)
 {
-    LOG_FLOW("Unimplemented method!");
+    size_t PC = DebugeeGetProgramCounter();
+
+    size_t InstrInMemory[2] = {};
+    
+    breakpoint *BP = BreakpointFind(PC);
+    if(BP)
+    {
+        InstrInMemory[0] = BP->SavedOpCodes;
+    }
+    else
+    {
+        InstrInMemory[0] = DebugeePeekMemory(PC);
+    }
+    
+    InstrInMemory[1] = DebugeePeekMemory(PC + 8);
+    
+    cs_insn *Instruction = 0x0;
+    u32 Count = cs_disasm(DisAsmHandle, (u8 *)InstrInMemory, sizeof(InstrInMemory), PC, 1, &Instruction);
+    assert(Count);
+
+    inst_type Type = AsmInstructionGetType(Instruction);
+
+    if(Type & INST_TYPE_CALL)
+    {
+        if(StepIntoFunctions)
+        {
+            assert(Instruction->detail->x86.op_count == 1);
+            
+            size_t JumpAddress = 0x0;
+            auto Operand = &Instruction->detail->x86.operands[0];
+            if(Operand->type == X86_OP_IMM)
+            {
+                JumpAddress = Operand->imm;
+            }
+            else if(Operand->type == X86_OP_REG)
+            {
+                u32 ABINumber = CapstoneRegisterToABINumber(Operand->reg);
+                JumpAddress = RegisterGetByABINumber(Debugee.Regs, ABINumber);
+            }
+            else
+            {
+                assert(false && "A jmp instruction that is not imm and not a reg.");
+            }
+
+            bool AddressInAnyCompileUnit = DwarfFindCompileUnitByAddress(JumpAddress) != 0x0;
+            if(AddressInAnyCompileUnit)
+            {
+                DebugeeStepInstruction();
+            }
+            else
+            {
+                size_t NextInstrAddress = PC + Instruction->size;
+
+                breakpoint BP = BreakpointCreate(NextInstrAddress);
+                BreakpointEnable(&BP);
+
+                DebugeeContinueProgram();
+
+                BreakpointDisable(&BP);
+            }
+        }
+        else
+        {
+            size_t NextInstrAddress = PC + Instruction->size;
+        
+            breakpoint BP = BreakpointCreate(NextInstrAddress);
+            BreakpointEnable(&BP);
+
+            DebugeeContinueProgram();
+
+            BreakpointDisable(&BP);
+        }
+    }
+    else if(Type & INST_TYPE_RET)
+    {
+        size_t ReturnAddress = DebugeeGetReturnAddress(PC);
+
+        bool AddressInAnyCompileUnit = DwarfFindCompileUnitByAddress(ReturnAddress) != 0x0;
+        if(AddressInAnyCompileUnit)
+        {
+            DebugeeStepInstruction();
+        }
+        else
+        {
+            DebugeeContinueProgram();
+        }
+    }
+    else
+    {
+        DebugeeStepInstruction();
+    }
+
+    cs_free(Instruction, 1);
+    
     Debugee.Flags.Steped = true;
 }
 
 static void
-ContinueProgram()
+DebugeeContinueProgram()
 {
     if(BreakpointCount > 0 || TempBreakpointsCount > 0)
     {
@@ -444,7 +537,7 @@ DebugeeToNextLine(bool StepIntoFunctions)
 
     BreakAtCurcialInstrsInRange(Range, StepIntoFunctions, TempBreakpoints, &TempBreakpointsCount);
     
-    ContinueProgram();
+    DebugeeContinueProgram();
     
     LOG_FLOW("TempBreakpointsCount = %d\n", TempBreakpointsCount);
     for(u32 I = 0; I < TempBreakpointsCount; I++)
@@ -481,7 +574,7 @@ DebugeeStepOutOfFunction()
             OwnBreakpoint = true;
         }
     
-        ContinueProgram();
+        DebugeeContinueProgram();
         if(OwnBreakpoint)
         {
             BreakpointDisable(&BP);

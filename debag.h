@@ -316,7 +316,7 @@ static void DebugeeRestart();
 static void DebugeeWaitForSignal();
 static void DebugeeToNextLine(bool StepIntoFunctions);
 static void DebugeeStepInstruction();
-static void DebugeeNextInstruction();
+static void DebugeeToNextInstruction(bool StepIntoFunctions);
 static void DebugeeContinueProgram();
 static void DebugeeStepOutOfFunction();
 
