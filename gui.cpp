@@ -763,38 +763,22 @@ GuiCreateBreakpointTexture()
 static void
 GuiShowBacktrace()
 {
-    unw_context_t UnwindCtx = {};
-    unw_getcontext(&UnwindCtx);
-    unw_addr_space_t UnwindAddressSpace = unw_create_addr_space(&_UPT_accessors, __LITTLE_ENDIAN);
-    assert(UnwindAddressSpace);
-
-    unw_cursor_t UnwindCursor = {};
-    assert(unw_init_remote(&UnwindCursor, UnwindAddressSpace, Debuger.UnwindRemoteArg) == 0);
-
-    // TODO(mateusz): Linked list or a growing array
-    char *FunctionStack[32];
-    u32 StackLength = 0;
-
-    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
-    if(!Func) { return; }
-
-    FunctionStack[StackLength++] = Func->Name;
-
-    for(u32 I = 0; unw_step(&UnwindCursor) > 0; I++)
+    size_t PC = GetProgramCounter();
+    
+    // We know our cache is stale
+    if(Debuger.Unwind.Address != PC)
     {
-        unw_word_t StackPointer = 0x0;
-        unw_get_reg(&UnwindCursor, UNW_REG_SP, &StackPointer);
-        size_t ReturnAddress = PeekDebugeeMemory(StackPointer - 8, Debuger.DebugeePID);
-
-        di_function *Func = FindFunctionConfiningAddress(ReturnAddress);
-
-        if(!Func) { break; }
-        FunctionStack[StackLength++] = Func->Name;
-        if(StackLength == 32) { break; };
+        DebugeeBuildBacktrace();
     }
 
-    for(u32 I = 0; I < StackLength; I++)
+    u32 Cnt = 1;
+    for(unwind_functions_bucket *Bucket = Debuger.Unwind.FuncList.Head; Bucket != 0x0; Bucket = Bucket->Next)
     {
-        ImGui::Text("%02d: %s()", StackLength - I, FunctionStack[I]);
-    }
+        for(u32 I = 0; I < Bucket->Count; I++)
+        {
+            unwind_function *Function = &Bucket->Functions[I];
+
+            ImGui::Text("%02d: %s()", Cnt++, Function->Name);
+        }
+    }    
 }

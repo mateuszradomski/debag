@@ -144,6 +144,31 @@ union x64_registers
     size_t Array[27];
 };
 
+struct unwind_function
+{
+    char *Name;
+};
+
+struct unwind_functions_bucket
+{
+    unwind_functions_bucket *Next;
+    unwind_function Functions[8];
+    u32 Count;
+};
+
+struct unwind_functions_list
+{
+    unwind_functions_bucket *Head;
+    unwind_functions_bucket *Tail;
+    u32 Count;
+};
+
+struct unwind_info
+{
+    size_t Address;
+    unwind_functions_list FuncList;
+};
+
 struct debugee_flags
 {
     u8 Running  : 1;
@@ -171,6 +196,7 @@ struct dbg
     size_t DebugeeLoadAddress;
 
     void *UnwindRemoteArg;
+    unwind_info Unwind;
 
     logging_switches Log;
 
@@ -269,5 +295,6 @@ static u32 StringSplitCountStarting(char *Lines, u32 LinesCount, char *Start);
 static void HexDump(void *Ptr, size_t Count);
 static void UpdateInfo();
 static void WindowSizeCallback(GLFWwindow *Window, i32 Width, i32 Height);
+static void DebugeeBuildBacktrace();
 
 #endif //DEBAG_H

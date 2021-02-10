@@ -1174,6 +1174,58 @@ DebugeeRestart()
 }
 
 static void
+DebugeeBuildBacktrace()
+{
+    // TODO(mateusz): I need to reset this space and I am aware that
+    // this kind of move is probably creating a memory leak and should
+    // be address within the arenas, where you can return the used
+    // memory and it will be reused.
+    Debuger.Unwind.FuncList.Head = 0x0;
+    
+    unw_context_t UnwindCtx = {};
+    unw_getcontext(&UnwindCtx);
+    unw_addr_space_t UnwindAddressSpace = unw_create_addr_space(&_UPT_accessors, __LITTLE_ENDIAN);
+    assert(UnwindAddressSpace);
+    
+    unw_cursor_t UnwindCursor = {};
+    assert(unw_init_remote(&UnwindCursor, UnwindAddressSpace, Debuger.UnwindRemoteArg) == 0);
+
+    Debuger.Unwind.Address = GetProgramCounter();
+    
+    di_function *Func = FindFunctionConfiningAddress(GetProgramCounter());
+    if(!Func) { return; }
+    
+    unwind_functions_bucket *Bucket = ArrayPush(&DI->Arena, unwind_functions_bucket, 1);
+    
+    unwind_function UnwoundFunction = {};
+    UnwoundFunction.Name = Func->Name;
+    Bucket->Functions[Bucket->Count++] = UnwoundFunction;
+    
+    while(unw_step(&UnwindCursor) > 0)
+    {
+        unw_word_t StackPointer = 0x0;
+        unw_get_reg(&UnwindCursor, UNW_REG_SP, &StackPointer);
+        size_t ReturnAddress = PeekDebugeeMemory(StackPointer - 8, Debuger.DebugeePID);
+
+        di_function *Func = FindFunctionConfiningAddress(ReturnAddress);
+        if(!Func) { break; }
+
+        unwind_function UnwoundFunction = {};
+        UnwoundFunction.Name = Func->Name;
+
+        if(Bucket->Count >= ARRAY_LENGTH(Bucket->Functions))
+        {
+            SLL_QUEUE_PUSH(Debuger.Unwind.FuncList.Head, Debuger.Unwind.FuncList.Tail, Bucket);
+            Bucket = ArrayPush(&DI->Arena, unwind_functions_bucket, 1);
+        }
+        
+        Bucket->Functions[Bucket->Count++] = UnwoundFunction;
+    } 
+
+    SLL_QUEUE_PUSH(Debuger.Unwind.FuncList.Head, Debuger.Unwind.FuncList.Tail, Bucket);
+}
+
+static void
 DebugerMain()
 {
     debug_info _DI = {};
