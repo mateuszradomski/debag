@@ -999,12 +999,13 @@ ranges have been read then don't read the low-high
                         }
                         else
                         {
-                            // TODO(mateusz): Figure out a temporary memory stack for sprintfing
-                            // strings into :+))
-                            // TODO(mateusz): This need polishing.
-                            char DirWithComp[256] = {};
+                            u32 Len1 = StringLength((char *)CompileDir);
+                            u32 Len2 = StringLength((char *)DName);
+                            char *DirWithComp = (char *)malloc(Len1 + Len2 + 16);
+
                             sprintf(DirWithComp, "%s/%s", CompileDir, DName);
-                            File.Dir = StringDuplicate(&DI->Arena, (char *)DirWithComp);
+                            File.Dir = StringDuplicate(&DI->Arena, DirWithComp);
+                            free(DirWithComp);
                         }
                     }
                     else

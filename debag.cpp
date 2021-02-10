@@ -1062,18 +1062,22 @@ DebugeeStart()
         ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
         prctl(PR_SET_PDEATHSIG, SIGHUP);
 
-        // TODO(mateusz): Better path handling
-        char AbsolutePath[512] = {};
+        char *AbsolutePath = 0x0;
         if(Debuger.DebugeeProgramPath[0] == '/' || Debuger.DebugeeProgramPath[0] == '~')
         {
-            sprintf(AbsolutePath, "%s", Debuger.DebugeeProgramPath);
+            AbsolutePath = Debuger.DebugeeProgramPath;
         }
         else
         {
+            u32 Len1 = StringLength(Debuger.DebugeeProgramPath);
+            u32 Len2 = StringLength(BaseDir);
+            AbsolutePath = (char *)malloc(Len1 + Len2 + 16);
+
             sprintf(AbsolutePath, "%s/%s", BaseDir, Debuger.DebugeeProgramPath);
         }
 
         execv(AbsolutePath, ProgramArgs);
+        free(AbsolutePath);
     }
     else
     {
