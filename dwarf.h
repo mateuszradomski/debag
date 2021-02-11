@@ -259,7 +259,7 @@ struct debug_info
     u32 LexScopesCount;
     
     di_function *Functions;
-    u32 FuctionsCount;
+    u32 FunctionsCount;
     
     di_compile_unit *CompileUnits;
     u32 CompileUnitsCount;

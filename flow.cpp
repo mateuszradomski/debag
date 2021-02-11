@@ -169,7 +169,7 @@ BreakAtFunctionName(char *Name)
 {
     bool Result = false;
 
-    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
         di_function *Func = &DI->Functions[I];
         if(StringMatches(Name, Func->Name))

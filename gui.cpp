@@ -797,10 +797,10 @@ GuiBuildFunctionRepresentation()
 {
     assert(Gui->FuncRepresentation == 0x0);
 
-    Gui->FuncRepresentation = (function_representation *)malloc(sizeof(Gui->FuncRepresentation[0]) * DI->FuctionsCount);
+    Gui->FuncRepresentation = (function_representation *)malloc(sizeof(Gui->FuncRepresentation[0]) * DI->FunctionsCount);
     Gui->FuncRepresentationCount = 0;
     
-    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
         di_function *Func = &DI->Functions[I];
         if(Func->Name)

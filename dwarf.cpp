@@ -94,7 +94,7 @@ DwarfFindFunctionByAddress(size_t Address)
 {
     di_function *Result = 0x0;
     
-    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
         di_function *Func = &DI->Functions[I];
         if(AddressBetween(Address, Func->FuncLexScope.LowPC, Func->FuncLexScope.HighPC))
@@ -771,7 +771,7 @@ DwarfFindEntryPointAddress()
 {
     size_t Result = 0;
     
-    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
         if(StringMatches(DI->Functions[I].Name, "main"))
         {
@@ -1092,7 +1092,7 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            di_function *Func = &DI->Functions[DI->FuctionsCount++];
+            di_function *Func = &DI->Functions[DI->FunctionsCount++];
             assert(Func->LexScopesCount == 0);
             di_lexical_scope *LexScope = &Func->FuncLexScope;
 
@@ -1219,10 +1219,10 @@ ranges have been read then don't read the low-high
             if(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error) != DW_DLV_OK)
                 break;
             
-            assert(DI->FuctionsCount);
+            assert(DI->FunctionsCount);
             
             di_lexical_scope *LexScope = &DI->LexScopes[DI->LexScopesCount++];
-            di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
+            di_function *Func = &DI->Functions[DI->FunctionsCount - 1];
             if(!Func->LexScopes)
             {
                 Func->LexScopes = LexScope;
@@ -1345,7 +1345,7 @@ ranges have been read then don't read the low-high
 
             if(CompUnit->Functions)
             {
-                di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
+                di_function *Func = &DI->Functions[DI->FunctionsCount - 1];
                 bool HasLexScopes = Func->LexScopesCount != 0;
                 di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
                 if(!LexScope->Variables)
@@ -1442,9 +1442,9 @@ ranges have been read then don't read the low-high
             Dwarf_Attribute *AttrList = {};
             DWARF_CALL(dwarf_attrlist(DIE, &AttrList, &AttrCount, Error));
             
-            if(DI->FuctionsCount)
+            if(DI->FunctionsCount)
             {
-                di_function *Func = &DI->Functions[DI->FuctionsCount - 1];
+                di_function *Func = &DI->Functions[DI->FunctionsCount - 1];
                 if(Func->ParamCount == 0)
                 {
                     Func->Params = &DI->Params[DI->ParamsCount];
