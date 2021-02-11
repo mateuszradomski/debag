@@ -399,16 +399,19 @@ DebugeeContinueProgram()
         assert(BreakpointCount > 0 || TempBreakpointsCount > 0);
         breakpoint *BP = BreakpointFind(DebugeeGetProgramCounter());
         
-        u8 PushRBP[] = { 0x55 };
-        u8 MovRBPRSP[] = { 0x48, 0x89, 0xe5 };
-
-        u8 *MemoryAtPC = (u8 *)&BP->SavedOpCodes;
-
-        if(memcmp(MemoryAtPC, PushRBP, sizeof(PushRBP)) == 0 &&
-           memcmp(MemoryAtPC + sizeof(PushRBP), MovRBPRSP, sizeof(MovRBPRSP)) == 0)
+        if(BP)
         {
-            // Now we will step one line to go over all of the init stuff
-            DebugeeToNextLine(false);
+            u8 PushRBP[] = { 0x55 };
+            u8 MovRBPRSP[] = { 0x48, 0x89, 0xe5 };
+
+            u8 *MemoryAtPC = (u8 *)&BP->SavedOpCodes;
+
+            if(memcmp(MemoryAtPC, PushRBP, sizeof(PushRBP)) == 0 &&
+               memcmp(MemoryAtPC + sizeof(PushRBP), MovRBPRSP, sizeof(MovRBPRSP)) == 0)
+            {
+                // Now we will step one line to go over all of the init stuff
+                DebugeeToNextLine(false);
+            }
         }
     }
 }
