@@ -16,7 +16,9 @@ struct gui_data
     char BreakFuncName[128];
     char BreakAddress[32];
     void (* ModalFuncShow)();
-    ImTextureID BreakpointTexture;
+    ImTextureID BreakpointTextureActive;
+    ImTextureID BreakpointTextureBlank;
+
     char *SpacesArray[10];
     function_representation *FuncRepresentation;
     u32 FuncRepresentationCount;

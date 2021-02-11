@@ -1730,15 +1730,15 @@ DebugerMain()
                             ImGui::PushID(I);
 
                             auto Font = ImGui::GetFont();
+                            //ImVec4()ImGui::GetStyle().Colors[ImGuiCol_ChildBg];
+                            auto Texture = LineHasBreakpoint ? Gui->BreakpointTextureActive : Gui->BreakpointTextureBlank;
                             ImVec2 ButtonSize = ImVec2(Font->FontSize, Font->FontSize);
                             ImVec2 UV0 = ImVec2(0.0f, 0.0f);
                             ImVec2 UV1 = ImVec2(1.0f, 1.0f);
-                            ImVec4 BGColor = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-                            ImVec4 NoTint = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-                            ImVec4 BlackoutTint = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-                            ImVec4 TintColor = LineHasBreakpoint ? NoTint : BlackoutTint;
+                            ImVec4 BGColor = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+                            ImVec4 TintColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-                            bool Button = ImGui::ImageButton(Gui->BreakpointTexture, ButtonSize,
+                            bool Button = ImGui::ImageButton(Texture, ButtonSize,
                                                              UV0, UV1, 0, BGColor, TintColor);
                             ImGui::SameLine();
 
