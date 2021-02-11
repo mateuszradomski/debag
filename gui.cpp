@@ -542,6 +542,11 @@ _ImGuiShowBreakAtFunctionModalWindow()
         Gui->ModalFuncShow = 0x0;
         return;
     }
+
+    if(!Gui->FuncRepresentation)
+    {
+        GuiBuildFunctionRepresentation();
+    }
     
     ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
     ImGui::Begin("Function to set a breakpoint at", 0x0, WinFlags);
@@ -562,30 +567,19 @@ _ImGuiShowBreakAtFunctionModalWindow()
     
     ImGui::BeginChild("func_list");
     
-    for(u32 I = 0; I < DI->FuctionsCount; I++)
-    {
-        di_function *Func = &DI->Functions[I];
-        if(Func->Name)
-        {
-            bool NoInput = StringEmpty(Gui->BreakFuncName);
-            if(NoInput || (!NoInput && StringStartsWith(Func->Name, Gui->BreakFuncName)))
-            {
-                char *Label = DwarfGetFunctionStringRepresentation(Func);
-                
-                if(ImGui::Selectable(Label))
-                {
-                    free(Label);
-                    Gui->ModalFuncShow = 0x0;
-                    memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
-                    BreakAtAddress(Func->FuncLexScope.LowPC);
-                    DebugerUpdateTransient();
 
-                    goto END;
-                    
-                    return;
-                }
-                free(Label);
-            }
+    for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
+    {
+        function_representation *Repr = &Gui->FuncRepresentation[I];
+        if(ImGui::Selectable(Repr->Label))
+        {
+            Gui->ModalFuncShow = 0x0;
+            memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+            BreakAtAddress(Repr->ActualFunction->FuncLexScope.LowPC);
+            DebugerUpdateTransient();
+
+            goto END;
+            return;
         }
     }
 
@@ -796,6 +790,31 @@ GuiCreateBreakpointTexture()
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, ImageBuffer);
 
     Gui->BreakpointTexture = (void *)(uintptr_t)BPTexture;
+}
+
+static void
+GuiBuildFunctionRepresentation()
+{
+    assert(Gui->FuncRepresentation == 0x0);
+
+    Gui->FuncRepresentation = (function_representation *)malloc(sizeof(Gui->FuncRepresentation[0]) * DI->FuctionsCount);
+    Gui->FuncRepresentationCount = 0;
+    
+    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    {
+        di_function *Func = &DI->Functions[I];
+        if(Func->Name)
+        {
+            bool NoInput = StringEmpty(Gui->BreakFuncName);
+            if(NoInput || (!NoInput && StringStartsWith(Func->Name, Gui->BreakFuncName)))
+            {
+                function_representation Repr = {};
+                Repr.Label = DwarfGetFunctionStringRepresentation(Func);
+                Repr.ActualFunction = Func;
+                Gui->FuncRepresentation[Gui->FuncRepresentationCount++] = Repr;
+            }
+        }
+    }
 }
 
 static void

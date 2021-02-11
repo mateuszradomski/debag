@@ -3,6 +3,12 @@
 #ifndef GUI_H
 #define GUI_H
 
+struct function_representation
+{
+    char *Label;
+    di_function *ActualFunction;
+};
+
 struct gui_data
 {
     arena Arena;
@@ -12,6 +18,8 @@ struct gui_data
     void (* ModalFuncShow)();
     ImTextureID BreakpointTexture;
     char *SpacesArray[10];
+    function_representation *FuncRepresentation;
+    u32 FuncRepresentationCount;
     
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
@@ -50,6 +58,7 @@ static void _ImGuiShowBreakAtFunctionModalWindow();
 static void GuiSetStatusText(char *Str);
 static void GuiClearStatusText();
 static void GuiCreateBreakpointTexture();
+static void GuiBuildFunctionRepresentation();
 static void GuiShowBacktrace();
 
 #endif //GUI_H
