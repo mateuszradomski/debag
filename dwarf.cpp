@@ -118,7 +118,7 @@ This function recursivley adds "decorator" types to the flags, and ultimately re
 */
 
 static di_underlaying_type
-DwarFindUnderlayingType(size_t BTDIEOffset)
+DwarfFindUnderlayingType(size_t BTDIEOffset)
 {
     di_underlaying_type Result = {};
     
@@ -126,7 +126,7 @@ DwarFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->Typedefs[I].DIEOffset == BTDIEOffset)
         {
-            Result = DwarFindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
+            Result = DwarfFindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_TYPEDEF;
             Result.Name = DI->Typedefs[I].Name;
             
@@ -138,7 +138,7 @@ DwarFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->PointerTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = DwarFindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
+            Result = DwarfFindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_POINTER;
             Result.PointerCount += 1;
             return Result;
@@ -149,7 +149,7 @@ DwarFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->ConstTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = DwarFindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
+            Result = DwarfFindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_CONST;
             return Result;
         }
@@ -159,7 +159,7 @@ DwarFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->RestrictTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = DwarFindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
+            Result = DwarfFindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
             Result.Flags |= TYPE_IS_RESTRICT;
             return Result;
         }
@@ -169,7 +169,7 @@ DwarFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->ArrayTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result = DwarFindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
+            Result = DwarfFindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
             Result.ArrayUpperBound = DI->ArrayTypes[I].UpperBound;
             Result.Flags |= TYPE_IS_ARRAY;
             return Result;
@@ -215,6 +215,51 @@ DwarFindUnderlayingType(size_t BTDIEOffset)
     
     return Result;
 }
+
+static char *
+DwarfGetTypeStringRepresentation(di_underlaying_type Type)
+{
+    char *Result = 0x0;
+
+    char *TypeName = 0x0;
+    if(Type.Name)
+    {
+        TypeName = Type.Name;
+    }
+    else
+    {
+        // void type
+        if(!(Type.Flags & TYPE_IS_BASE))
+        {
+            TypeName = "void";
+        }
+    }
+    u32 NameLen = StringLength(TypeName);
+
+    if(Type.Flags & TYPE_IS_ARRAY)
+    {
+        Result = (char *)calloc(1, NameLen + 4);
+        sprintf(Result, "%s []", TypeName);
+    }
+    else if(Type.Flags & TYPE_IS_POINTER)
+    {
+        Result = (char *)calloc(1, NameLen + Type.PointerCount + 2);
+        sprintf(Result, "%s *", TypeName);
+        
+        for(u32 I = 0; I < Type.PointerCount - 1; I++)
+        {
+            StringConcat(Result, "*");
+        }
+    }
+    else
+    {
+        Result = (char *)calloc(1, NameLen + 1);
+        StringCopy(Result, TypeName);
+    }
+
+    return Result;
+}
+
 
 static char *
 DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
@@ -1620,7 +1665,7 @@ ranges have been read then don't read the low-high
                     }break;
                     default:
                     {
-                        assert(!"Not expected TAG!");
+                        //assert(!"Not expected TAG!");
                     }break;
                 }
             }
@@ -1656,7 +1701,7 @@ ranges have been read then don't read the low-high
                         }break;
                         default:
                         {
-                            assert(!"Not expected TAG!");
+                            //assert(!"Not expected TAG!");
                         }break;
                     }
                 }
@@ -2373,6 +2418,49 @@ DwarfGetFunctionsFirstVariable(di_function *Func)
         }
     }
 
+    return Result;
+}
+
+static char *
+DwarfGetFunctionStringRepresentation(di_function *Func)
+{
+    char *Result = 0x0;
+
+    di_underlaying_type FuncReturnType = DwarfFindUnderlayingType(Func->TypeOffset);
+    
+    char *TypeName = DwarfGetTypeStringRepresentation(FuncReturnType);
+
+    u32 TypeLen = StringLength(TypeName);
+    u32 NameLen = StringLength(Func->Name);
+    u32 ParamsLen = 0;
+
+    char **ParamsTypes = (char **)malloc(Func->ParamCount * sizeof(ParamsTypes[0]));
+    for(u32 I = 0; I < Func->ParamCount; I++)
+    {
+        di_underlaying_type ParamType = DwarfFindUnderlayingType(Func->Params[I].TypeOffset);
+        ParamsTypes[I] = DwarfGetTypeStringRepresentation(ParamType);
+        
+        ParamsLen += StringLength(ParamsTypes[I]);
+    }
+
+    Result = (char *)malloc(TypeLen + NameLen + ParamsLen + Func->ParamCount * 3 + 32 + 4096);
+    char *WriteHead = Result;
+    
+    WriteHead += sprintf(WriteHead, "%s %s(", TypeName, Func->Name);
+    for(u32 I = 0; I < Func->ParamCount; I++)
+    {
+        const char *FmtStr = I == Func->ParamCount - 1 ? "%s)" : "%s, ";
+        WriteHead += sprintf(WriteHead, FmtStr, ParamsTypes[I]);
+    }
+
+    free(TypeName);
+    for(u32 I = 0; I < Func->ParamCount; I++)
+    {
+        free(ParamsTypes[I]);
+    }
+
+    free(ParamsTypes);
+    
     return Result;
 }
 

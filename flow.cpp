@@ -208,6 +208,19 @@ BreakAtMain()
 }
 
 static bool
+BreakAtAddress(size_t Address)
+{
+    bool Result = false;
+    
+    breakpoint BP = BreakpointCreate(Address);
+    BreakpointEnable(&BP);
+    Breakpoints[BreakpointCount++] = BP;
+    Result = true;
+
+    return Result;
+}
+
+static bool
 BreakAtAddress(char *AddressStr)
 {
     bool Result = false;

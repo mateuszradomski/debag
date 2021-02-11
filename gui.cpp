@@ -384,7 +384,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
 static void
 ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
-    di_underlaying_type Underlaying = DwarFindUnderlayingType(TypeOffset);
+    di_underlaying_type Underlaying = DwarfFindUnderlayingType(TypeOffset);
     
     if(Underlaying.Flags & TYPE_IS_ARRAY)
     {
@@ -528,44 +528,72 @@ GuiShowVariables()
 static void
 _ImGuiShowBreakAtFunctionModalWindow()
 {
-    char *FuncBreakLabel = "Function to break at"; 
-    
-    if(ImGui::BeginPopupModal(FuncBreakLabel))
-    {
-        if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
-        {
-            ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
-            memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
-            Gui->ModalFuncShow = 0x0;
-            return;
-        }
 
-        ImGui::Text("Enter the function name you wish to set a brekpoint");
-        ImGui::Separator();
-        
-        ImGui::InputText("Name", Gui->BreakFuncName, sizeof(Gui->BreakFuncName));
-        
-        if(ImGui::Button("OK", ImVec2(120, 0)))
-        {
-            BreakAtFunctionName(Gui->BreakFuncName);
-            DebugerUpdateTransient();
-            
-            ImGui::CloseCurrentPopup(); 
-            memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
-            Gui->ModalFuncShow = 0x0;
-        }
-        ImGui::SetItemDefaultFocus();
-        
-        ImGui::SameLine();
-        if(ImGui::Button("Cancel", ImVec2(120, 0)))
-        {
-            ImGui::CloseCurrentPopup();
-            memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
-            Gui->ModalFuncShow = 0x0;
-        }
-        ImGui::EndPopup();
+    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
+    {
+        memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+        Gui->ModalFuncShow = 0x0;
+        return;
     }
+    if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    {
+        BreakAtFunctionName(Gui->BreakFuncName);
+        memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+        Gui->ModalFuncShow = 0x0;
+        return;
+    }
+    
+    ImGuiWindowFlags WinFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+    ImGui::Begin("Function to set a breakpoint at", 0x0, WinFlags);
+
+    f32 FourFifths = 4.0f / 5.0f;
+    ImVec2 WinSize(FourFifths * Gui->WindowWidth, FourFifths * Gui->WindowHeight);
+    ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+    Center.x -= WinSize.x * 0.5f;
+    Center.y -= WinSize.y * 0.5f;
+
+    ImGui::SetWindowSize(WinSize);
+    ImGui::SetWindowPos(Center);
+    
+    ImGui::Text("Enter the function name you wish to set a brekpoint");
+    ImGui::Separator();
+        
+    ImGui::InputText("Name", Gui->BreakFuncName, sizeof(Gui->BreakFuncName));
+    
+    ImGui::BeginChild("func_list");
+    
+    for(u32 I = 0; I < DI->FuctionsCount; I++)
+    {
+        di_function *Func = &DI->Functions[I];
+        if(Func->Name)
+        {
+            bool NoInput = StringEmpty(Gui->BreakFuncName);
+            if(NoInput || (!NoInput && StringStartsWith(Func->Name, Gui->BreakFuncName)))
+            {
+                char *Label = DwarfGetFunctionStringRepresentation(Func);
+                
+                if(ImGui::Selectable(Label))
+                {
+                    free(Label);
+                    Gui->ModalFuncShow = 0x0;
+                    memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+                    BreakAtAddress(Func->FuncLexScope.LowPC);
+                    DebugerUpdateTransient();
+
+                    goto END;
+                    
+                    return;
+                }
+                free(Label);
+            }
+        }
+    }
+
+END:;
+        
+    ImGui::EndChild();
+
+    ImGui::End();
 }
 
 static void

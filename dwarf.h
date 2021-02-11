@@ -348,11 +348,13 @@ static bool             DwarfAddressConfinedByFunction(di_function *Func, size_t
 static di_function *    DwarfFindFunctionByAddress(size_t Address);
 static di_variable *    DwarfGetFunctionsFirstVariable(di_function *Func);
 static size_t           DwarfFindEntryPointAddress();
+static char *           DwarfGetFunctionStringRepresentation(di_function *Func);
 
 /*
  * Variables types functions
  */
-static di_underlaying_type  DwarFindUnderlayingType(size_t BTDIEOffset);
+static di_underlaying_type  DwarfFindUnderlayingType(size_t BTDIEOffset);
+static char *               DwarfGetTypeStringRepresentation(di_underlaying_type Type);
 static char *               DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
 static bool                 DwarfBaseTypeIsFloat(di_base_type *Type);
 static bool                 DwarfBaseTypeIsDoubleFloat(di_base_type *Type);

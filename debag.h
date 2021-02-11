@@ -378,6 +378,7 @@ static void         BreakpointDisable(breakpoint *BP);
 static bool         BreakAtFunctionName(char *Name);
 static void         BreakAtMain();
 static bool         BreakAtAddress(char *AddressStr);
+static bool         BreakAtAddress(size_t Address);
 static void         BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Breakpoints, u32 *BreakpointsCount);
 
 #endif //DEBAG_H
