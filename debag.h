@@ -144,10 +144,9 @@ union x64_registers
     size_t Array[27];
 };
 
-struct unwind_function
-{
-    char *Name;
-};
+struct function_representation;
+
+typedef function_representation* unwind_function;
 
 struct unwind_functions_bucket
 {

@@ -571,15 +571,19 @@ _ImGuiShowBreakAtFunctionModalWindow()
     for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
     {
         function_representation *Repr = &Gui->FuncRepresentation[I];
-        if(ImGui::Selectable(Repr->Label))
+        bool NoInput = StringEmpty(Gui->BreakFuncName);
+        if(NoInput || (!NoInput && StringStartsWith(Repr->ActualFunction->Name, Gui->BreakFuncName)))
         {
-            Gui->ModalFuncShow = 0x0;
-            memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
-            BreakAtAddress(Repr->ActualFunction->FuncLexScope.LowPC);
-            DebugerUpdateTransient();
+            if(ImGui::Selectable(Repr->Label))
+            {
+                Gui->ModalFuncShow = 0x0;
+                memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+                BreakAtAddress(Repr->ActualFunction->FuncLexScope.LowPC);
+                DebugerUpdateTransient();
 
-            goto END;
-            return;
+                goto END;
+                return;
+            }
         }
     }
 
@@ -803,17 +807,10 @@ GuiBuildFunctionRepresentation()
     for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
         di_function *Func = &DI->Functions[I];
-        if(Func->Name)
-        {
-            bool NoInput = StringEmpty(Gui->BreakFuncName);
-            if(NoInput || (!NoInput && StringStartsWith(Func->Name, Gui->BreakFuncName)))
-            {
-                function_representation Repr = {};
-                Repr.Label = DwarfGetFunctionStringRepresentation(Func);
-                Repr.ActualFunction = Func;
-                Gui->FuncRepresentation[Gui->FuncRepresentationCount++] = Repr;
-            }
-        }
+        function_representation Repr = {};
+        Repr.Label = DwarfGetFunctionStringRepresentation(Func);
+        Repr.ActualFunction = Func;
+        Gui->FuncRepresentation[Gui->FuncRepresentationCount++] = Repr;
     }
 }
 
@@ -835,9 +832,9 @@ GuiShowBacktrace()
         {
             for(u32 I = 0; I < Bucket->Count; I++)
             {
-                unwind_function *Function = &Bucket->Functions[I];
+                unwind_function Function = Bucket->Functions[I];
 
-                ImGui::Text("%02d: %s()", Cnt++, Function->Name);
+                ImGui::Text("%02d: %s", Cnt++, Function->Label);
             }
         }
     }

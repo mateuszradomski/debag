@@ -2429,9 +2429,10 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
     di_underlaying_type FuncReturnType = DwarfFindUnderlayingType(Func->TypeOffset);
     
     char *TypeName = DwarfGetTypeStringRepresentation(FuncReturnType);
+    char *FuncName = (char *)(Func->Name ? Func->Name : "EMPTY_FUNC_NAME");
 
     u32 TypeLen = StringLength(TypeName);
-    u32 NameLen = StringLength(Func->Name);
+    u32 NameLen = StringLength(FuncName);
     u32 ParamsLen = 0;
 
     char **ParamsTypes = (char **)malloc(Func->ParamCount * sizeof(ParamsTypes[0]));
@@ -2445,12 +2446,13 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
 
     Result = (char *)malloc(TypeLen + NameLen + ParamsLen + Func->ParamCount * 3 + 32 + 4096);
     char *WriteHead = Result;
-    
-    WriteHead += sprintf(WriteHead, "%s %s(", TypeName, Func->Name);
+
+    const char *MainFmtStr = Func->ParamCount ? "%s %s(" : "%s %s()";
+    WriteHead += sprintf(WriteHead, MainFmtStr, TypeName, FuncName);
     for(u32 I = 0; I < Func->ParamCount; I++)
     {
-        const char *FmtStr = I == Func->ParamCount - 1 ? "%s)" : "%s, ";
-        WriteHead += sprintf(WriteHead, FmtStr, ParamsTypes[I]);
+        const char *ParamFmtStr = I == Func->ParamCount - 1 ? "%s)" : "%s, ";
+        WriteHead += sprintf(WriteHead, ParamFmtStr, ParamsTypes[I]);
     }
 
     free(TypeName);

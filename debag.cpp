@@ -1229,9 +1229,21 @@ DebugeeBuildBacktrace()
     if(!Func) { return; }
 
     unwind_functions_bucket *Bucket = (unwind_functions_bucket *)calloc(1, sizeof(unwind_functions_bucket));
+
+    if(!Gui->FuncRepresentation)
+    {
+        GuiBuildFunctionRepresentation();
+    }
     
-    unwind_function UnwoundFunction = {};
-    UnwoundFunction.Name = Func->Name;
+    unwind_function UnwoundFunction = 0x0;
+    for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
+    {
+        if(Gui->FuncRepresentation[I].ActualFunction == Func)
+        {
+            UnwoundFunction = &Gui->FuncRepresentation[I];
+        }
+    }
+    assert(UnwoundFunction);
     Bucket->Functions[Bucket->Count++] = UnwoundFunction;
     
     while(unw_step(&UnwindCursor) > 0)
@@ -1243,8 +1255,15 @@ DebugeeBuildBacktrace()
         di_function *Func = DwarfFindFunctionByAddress(ReturnAddress);
         if(!Func) { break; }
 
-        unwind_function UnwoundFunction = {};
-        UnwoundFunction.Name = Func->Name;
+        unwind_function UnwoundFunction = 0x0;
+        for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
+        {
+            if(Gui->FuncRepresentation[I].ActualFunction == Func)
+            {
+                UnwoundFunction = &Gui->FuncRepresentation[I];
+            }
+        }
+        assert(UnwoundFunction);
 
         if(Bucket->Count >= ARRAY_LENGTH(Bucket->Functions))
         {
