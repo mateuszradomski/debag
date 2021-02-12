@@ -112,20 +112,18 @@ struct di_function
     u32 LexScopesCount;
 };
 
-enum
+struct type_flags
 {
-    TYPE_NONE = 0,
-    TYPE_IS_BASE = (1 << 0),
-    TYPE_IS_TYPEDEF = (1 << 1),
-    TYPE_IS_POINTER = (1 << 2),
-    TYPE_IS_CONST = (1 << 3),
-    TYPE_IS_RESTRICT = (1 << 4),
-    TYPE_IS_STRUCT = (1 << 5),
-    TYPE_IS_UNION = (1 << 6),
-    TYPE_IS_ARRAY = (1 << 7),
+    u8 IsNone       : 1;
+    u8 IsBase       : 1;
+    u8 IsTypedef    : 1;
+    u8 IsPointer    : 1;
+    u8 IsConst      : 1;
+    u8 IsRestrict   : 1;
+    u8 IsStruct     : 1;
+    u8 IsUnion      : 1;
+    u8 IsArray      : 1;
 };
-
-typedef i32 type_flags;
 
 struct di_base_type
 {
@@ -358,6 +356,7 @@ static char *               DwarfGetTypeStringRepresentation(di_underlaying_type
 static char *               DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
 static bool                 DwarfBaseTypeIsFloat(di_base_type *Type);
 static bool                 DwarfBaseTypeIsDoubleFloat(di_base_type *Type);
+static size_t               DwarfGetVariableMemoryAddress(di_variable *Var);
 
 /*
  * Lexical scopes functions

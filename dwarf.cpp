@@ -127,7 +127,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
         if(DI->Typedefs[I].DIEOffset == BTDIEOffset)
         {
             Result = DwarfFindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
-            Result.Flags |= TYPE_IS_TYPEDEF;
+            Result.Flags.IsTypedef = 1;
             Result.Name = DI->Typedefs[I].Name;
             
             return Result;
@@ -139,7 +139,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
         if(DI->PointerTypes[I].DIEOffset == BTDIEOffset)
         {
             Result = DwarfFindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
-            Result.Flags |= TYPE_IS_POINTER;
+            Result.Flags.IsPointer = 1;
             Result.PointerCount += 1;
             return Result;
         }
@@ -150,7 +150,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
         if(DI->ConstTypes[I].DIEOffset == BTDIEOffset)
         {
             Result = DwarfFindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
-            Result.Flags |= TYPE_IS_CONST;
+            Result.Flags.IsConst = 1;
             return Result;
         }
     }
@@ -160,7 +160,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
         if(DI->RestrictTypes[I].DIEOffset == BTDIEOffset)
         {
             Result = DwarfFindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
-            Result.Flags |= TYPE_IS_RESTRICT;
+            Result.Flags.IsRestrict = 1;
             return Result;
         }
     }
@@ -171,7 +171,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
         {
             Result = DwarfFindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
             Result.ArrayUpperBound = DI->ArrayTypes[I].UpperBound;
-            Result.Flags |= TYPE_IS_ARRAY;
+            Result.Flags.IsArray = 1;
             return Result;
         }
     }
@@ -181,7 +181,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->StructTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result.Flags |= TYPE_IS_STRUCT;
+            Result.Flags.IsStruct = 1;
             Result.Struct = &DI->StructTypes[I];
             Result.Name = DI->StructTypes[I].Name;
             
@@ -193,7 +193,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->UnionTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result.Flags |= TYPE_IS_STRUCT;
+            Result.Flags.IsUnion = 1;
             Result.Union = &DI->UnionTypes[I];
             Result.Name = DI->UnionTypes[I].Name;
             
@@ -205,7 +205,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
     {
         if(DI->BaseTypes[I].DIEOffset == BTDIEOffset)
         {
-            Result.Flags |= TYPE_IS_BASE;
+            Result.Flags.IsBase = 1;
             Result.Type = &DI->BaseTypes[I];
             Result.Name = DI->BaseTypes[I].Name;
             
@@ -214,6 +214,28 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
     }
     
     return Result;
+}
+
+static size_t
+DwarfGetVariableMemoryAddress(di_variable *Var)
+{
+    size_t Address = 0x0;
+    if(Var->LocationAtom == DW_OP_fbreg)
+    {
+        size_t CFA = DwarfGetCFA(DebugeeGetProgramCounter());
+        Address = CFA + Var->Offset;
+    }
+    else if(Var->LocationAtom == DW_OP_addr)
+    {
+        Address = Debugee.Flags.PIE ? Var->Offset + Debugee.LoadAddress : Var->Offset;
+    }
+    else if(Var->LocationAtom >= DW_OP_breg0 && Var->LocationAtom <= DW_OP_breg15)
+    {
+        size_t Register = RegisterGetByABINumber(Debugee.Regs, Var->LocationAtom - DW_OP_breg0);
+        Address = Var->Offset + Register;
+    }
+
+    return Address;
 }
 
 static char *
@@ -229,19 +251,19 @@ DwarfGetTypeStringRepresentation(di_underlaying_type Type)
     else
     {
         // void type
-        if(!(Type.Flags & TYPE_IS_BASE))
+        if(!Type.Flags.IsBase)
         {
             TypeName = "void";
         }
     }
     u32 NameLen = StringLength(TypeName);
 
-    if(Type.Flags & TYPE_IS_ARRAY)
+    if(Type.Flags.IsArray)
     {
-        Result = (char *)calloc(1, NameLen + 4);
-        sprintf(Result, "%s []", TypeName);
+        Result = (char *)calloc(1, NameLen + 32);
+        sprintf(Result, "%s [%ld]", TypeName, Type.ArrayUpperBound + 1);
     }
-    else if(Type.Flags & TYPE_IS_POINTER)
+    else if(Type.Flags.IsPointer)
     {
         Result = (char *)calloc(1, NameLen + Type.PointerCount + 2);
         sprintf(Result, "%s *", TypeName);
@@ -266,7 +288,7 @@ DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag)
 {
     char *Result = "";
     
-    if(Type && (TFlag & TYPE_IS_POINTER))
+    if(Type && (TFlag.IsPointer))
     {
         Result = "%p";
     }

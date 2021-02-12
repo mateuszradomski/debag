@@ -134,119 +134,6 @@ GuiShowValueAsString(size_t DereferencedAddress)
 }
 
 static void
-GuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
-{
-    di_base_type *BType = Underlaying.Type;
-    size_t MachineWord = DebugeePeekMemory(VarAddress);
-    
-    ImGui::Text("%s", VarName);
-    ImGui::NextColumn();
-    
-    union types_ptrs
-    {
-        void *Void;
-        float *Float;
-        double *Double;
-        char *Char;
-        short *Short;
-        int *Int;
-        long long *Long;
-    } TypesPtrs;
-    TypesPtrs.Void = &MachineWord;
-    
-    if(Underlaying.Flags & TYPE_IS_POINTER)
-    {
-        if(BType->Encoding == DW_ATE_signed_char && Underlaying.PointerCount == 1)
-        {
-            size_t DereferencedAddress = DebugeePeekMemory(VarAddress);
-            GuiShowValueAsString(DereferencedAddress);
-        }
-        else
-        {
-            ImGui::Text("%p", TypesPtrs.Void);
-        }
-    }
-    else
-    {
-        switch(BType->ByteSize)
-        {
-            case 1:
-            {
-                if(BType->Encoding == DW_ATE_signed_char)
-                {
-                    ImGui::Text("%c (%x)", *TypesPtrs.Char, (*TypesPtrs.Char));
-                }
-                else
-                {
-                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Char);
-                }
-            }break;
-            case 2:
-            {
-                if(BType->Encoding == DW_ATE_signed)
-                {
-                    ImGui::Text("%d", *TypesPtrs.Short);
-                }
-                else
-                {
-                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Short);
-                }
-            }break;
-            case 4:
-            {
-                if(BType->Encoding == DW_ATE_unsigned)
-                {
-                    ImGui::Text("%u", (unsigned int)*TypesPtrs.Int);
-                }
-                else if(BType->Encoding == DW_ATE_float)
-                {
-                    ImGui::Text("%f", *TypesPtrs.Float);
-                }
-                else
-                {
-                    ImGui::Text("%d", *TypesPtrs.Int);
-                }
-            }break;
-            case 8:
-            {
-                if(BType->Encoding == DW_ATE_unsigned)
-                {
-                    ImGui::Text("%llu", (unsigned long long)*TypesPtrs.Long);
-                }
-                else if(BType->Encoding == DW_ATE_float)
-                {
-                    ImGui::Text("%f", *TypesPtrs.Double);
-                }
-                else
-                {
-                    ImGui::Text("%lld", *TypesPtrs.Long);
-                }
-            }break;
-            default:
-            {
-                LOG_GUI("Unsupported byte size = %d", BType->ByteSize);
-            }break;
-        }
-    }
-    
-    char TypeName[128] = {};
-    strcat(TypeName, Underlaying.Name);
-    
-    if(Underlaying.Flags & TYPE_IS_POINTER)
-    {
-        StringConcat(TypeName, " ");
-        for(u32 I = 0; I < Underlaying.PointerCount; I++)
-        {
-            StringConcat(TypeName, "*");
-        }
-    }
-    
-    ImGui::NextColumn();
-    ImGui::Text("%s", TypeName);
-    ImGui::NextColumn();
-}
-
-static void
 GuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_struct_type *Struct = Underlaying.Struct;
@@ -256,7 +143,7 @@ GuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
     StringConcat(TypeName, Underlaying.Name);
 
     // TODO(mateusz): Stacked pointers dereference, like (void **)
-    if(Underlaying.Flags & TYPE_IS_POINTER)
+    if(Underlaying.Flags.IsPointer)
     {
         if(Underlaying.PointerCount == 1)
         {
@@ -321,7 +208,7 @@ GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarNa
     size_t MachineWord = DebugeePeekMemory(VarAddress);
     
     // TODO(mateusz): Stacked pointers dereference, like (void **)
-    if(Underlaying.Flags & TYPE_IS_POINTER)
+    if(Underlaying.Flags.IsPointer)
     {
         VarAddress = MachineWord;
         
@@ -353,7 +240,7 @@ GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarNa
         {
             //size_t MachineWord = DebugeePeekMemory(VarAddress, Debugee.PID);
             
-            if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
+            if(Underlaying.Flags.IsStruct || Underlaying.Flags.IsUnion)
             {
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
@@ -362,12 +249,12 @@ GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarNa
                 
                 VarAddress += Underlaying.Struct->ByteSize;
             }
-            else if(Underlaying.Flags & TYPE_IS_BASE)
+            else if(Underlaying.Flags.IsBase)
             {
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
                 
-                GuiShowBaseType(Underlaying, VarAddress, VarNameWI);
+                //GuiShowBaseType(Underlaying, VarAddress, VarNameWI);
                 
                 VarAddress += Underlaying.Type->ByteSize;
             }
@@ -386,11 +273,11 @@ GuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
     di_underlaying_type Underlaying = DwarfFindUnderlayingType(TypeOffset);
     
-    if(Underlaying.Flags & TYPE_IS_ARRAY)
+    if(Underlaying.Flags.IsArray)
     {
         GuiShowArrayType(Underlaying, VarAddress, VarName);
     }
-    else if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
+    else if(Underlaying.Flags.IsStruct || Underlaying.Flags.IsUnion)
     {
         // NOTE(mateusz): We are treating unions and struct as the same thing, but with ByteLocation = 0
         assert(sizeof(di_union_type) == sizeof(di_struct_type));
@@ -398,9 +285,9 @@ GuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
         
         GuiShowStructType(Underlaying, VarAddress, VarName);
     }
-    else if(Underlaying.Flags & TYPE_IS_BASE)
+    else if(Underlaying.Flags.IsBase)
     {
-        GuiShowBaseType(Underlaying, VarAddress, VarName);
+        //GuiShowBaseType(Underlaying, VarAddress, VarName);
     }
     else
     {
@@ -455,52 +342,122 @@ GuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
 }
 
 static void
-GuiShowVariables()
+GuiShowVariable(variable_representation *Variable)
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));                
-    ImGui::Columns(3, "tree", true);
-    ImGui::Text("Name"); ImGui::NextColumn();
-    ImGui::Text("Value"); ImGui::NextColumn();
-    ImGui::Text("Type"); ImGui::NextColumn();
-    ImGui::Separator();
-        
-    if(DI->Functions && DI->Variables)
+    if(Variable->Type.IsBase && !Variable->Type.IsArray)
     {
-        di_compile_unit *CU = DwarfFindCompileUnitByAddress(DebugeeGetProgramCounter());
-        for(u32 I = 0; I < CU->GlobalVariablesCount; I++)
+        ImGui::Text(Variable->Name); ImGui::NextColumn();
+        ImGui::Text(Variable->ValueString); ImGui::NextColumn();
+        ImGui::Text(Variable->TypeString); ImGui::NextColumn();
+    }
+    else if((Variable->Type.IsStruct || Variable->Type.IsUnion) && !Variable->Type.IsArray)
+    {
+        // NOTE(mateusz): We are treating unions and struct as the same thing, but with ByteLocation = 0
+        assert(sizeof(di_union_type) == sizeof(di_struct_type));
+        assert(sizeof(di_union_member) == sizeof(di_struct_member));
+
+        bool Open = ImGui::TreeNode(Variable->Name); ImGui::NextColumn();
+        ImGui::Text(Variable->ValueString); ImGui::NextColumn();
+        ImGui::Text(Variable->TypeString); ImGui::NextColumn();
+
+        if(Open)
         {
-            di_variable *Var = &CU->GlobalVariables[I];
-            if(Var->LocationAtom)
+            if(!Variable->Children)
             {
-                GuiShowVariable(Var);
+                // No children, build new
+                di_struct_type *Struct = Variable->Underlaying.Struct;
+                Variable->Children = (variable_representation *)calloc(1, sizeof(Variable->Children[0]) * Struct->MembersCount);
+                Variable->ChildrenCount = Struct->MembersCount;
+                
+                for(u32 I = 0; I < Struct->MembersCount; I++)
+                {
+                    di_struct_member *Member = &Struct->Members[I];
+                    size_t Address = Variable->Address + Member->ByteLocation;
+                    size_t TypeOffset = Member->ActualTypeOffset;
+                    char *Name = Member->Name;
+                    
+                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name);
+                }
             }
+
+            for(u32 I = 0; I < Variable->ChildrenCount; I++)
+            {
+                GuiShowVariable(&Variable->Children[I]);
+            }
+
+            ImGui::TreePop();
         }
     }
-                
-    ImGui::Separator();
-    
+    else if(Variable->Type.IsArray)
+    {
+        bool Open = ImGui::TreeNode(Variable->Name); ImGui::NextColumn();
+        ImGui::Text(Variable->ValueString); ImGui::NextColumn();
+        ImGui::Text(Variable->TypeString); ImGui::NextColumn();
+
+        if(Open)
+        {
+            if(!Variable->Children)
+            {
+                Variable->ChildrenCount = Variable->Underlaying.ArrayUpperBound + 1;
+                Variable->Children = (variable_representation *)calloc(1, sizeof(Variable->Children[0]) * Variable->ChildrenCount);
+
+                for(u32 I = 0; I < Variable->ChildrenCount; I++)
+                {
+                    char *VarNameWI = (char *)malloc(StringLength(Variable->Name) + 16);
+                    sprintf(VarNameWI, "%s[%d]", Variable->Name, I);
+
+                    size_t TypeOffset = Variable->Underlaying.Type->DIEOffset;
+                    size_t Address = Variable->Address + Variable->Underlaying.Type->ByteSize * I;
+
+                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, VarNameWI);
+                }
+            }
+
+            for(u32 I = 0; I < Variable->ChildrenCount; I++)
+            {
+                GuiShowVariable(&Variable->Children[I]);
+            }
+
+            ImGui::TreePop();
+        }
+    }
+    else
+    {
+    }
+}
+
+static void
+GuiShowVariables()
+{
+    // Build global variables
+    variable_representation Variables[512] = {};
+    u32 VariableCnt = 0;
+
+    di_compile_unit *CU = DwarfFindCompileUnitByAddress(DebugeeGetProgramCounter());
+    for(u32 I = 0; CU && I < CU->GlobalVariablesCount; I++)
+    {
+        di_variable *Var = &CU->GlobalVariables[I];
+        if(Var->LocationAtom)
+        {
+            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var);
+        }
+    }
+
     di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(Func && Func->FrameBaseIsCFA)
     {
-        size_t FBReg = DwarfGetCFA(DebugeeGetProgramCounter());
-                    
-        if(Func->ParamCount > 0)
+        for(u32 I = 0; I < Func->ParamCount; I++)
         {
-            for(u32 I = 0; I < Func->ParamCount; I++)
-            {
-                di_variable *Param = &Func->Params[I];
-                GuiShowVariable(Param, FBReg);
-            }
-
-            ImGui::Separator();
+            di_variable *Param = &Func->Params[I];
+            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Param);
         }
-                    
+
         for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
         {
             di_variable *Var = &Func->FuncLexScope.Variables[I];
-            GuiShowVariable(Var, FBReg);
+            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var);
         }
-                    
+
         for(u32 LexScopeIndex = 0;
             LexScopeIndex < Func->LexScopesCount;
             LexScopeIndex++)
@@ -511,7 +468,8 @@ GuiShowVariables()
                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                 {
                     di_variable *Var = &LexScope->Variables[I];
-                    GuiShowVariable(Var, FBReg);
+                    Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var);
+
                 }
             }
         }
@@ -520,6 +478,26 @@ GuiShowVariables()
     {
         assert(false);
     }
+
+    // Build function parameteres
+    // Build function lexiacal variables
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+    ImGui::Columns(3, "tree", true);
+    ImGui::Text("Name");
+    ImGui::NextColumn();
+    ImGui::Text("Value");
+    ImGui::NextColumn();
+    ImGui::Text("Type");
+    ImGui::NextColumn();
+    ImGui::Separator();
+
+    for(u32 I = 0; I < VariableCnt; I++)
+    {
+        GuiShowVariable(&Variables[I]);
+    }
+
+    ImGui::Separator();
 
     ImGui::Columns(1);
     ImGui::PopStyleVar();
@@ -859,4 +837,169 @@ GuiShowBacktrace()
             }
         }
     }
+}
+
+static char *
+idontknowyet(di_underlaying_type *Underlaying, size_t Address)
+{
+    char *Result = (char *)malloc(64);
+
+    if(Underlaying->Flags.IsBase && !Underlaying->Flags.IsArray)
+    {
+        size_t InMemory = DebugeePeekMemory(Address);
+        union types_ptrs
+        {
+            void *Void;
+            float *Float;
+            double *Double;
+            char *Char;
+            short *Short;
+            int *Int;
+            long long *Long;
+        } TypesPtrs;
+        TypesPtrs.Void = &InMemory;
+
+        if(Underlaying->Flags.IsPointer)
+        {
+            // String
+            if(Underlaying->Type->Encoding == DW_ATE_signed_char && Underlaying->PointerCount == 1)
+            {
+            }
+            else
+            {
+                sprintf(Result, "%p", (void *)(*TypesPtrs.Long));
+            }
+        }
+        else
+        {
+            switch(Underlaying->Type->ByteSize)
+            {
+            case 1:
+            {
+                if(Underlaying->Type->Encoding == DW_ATE_signed_char)
+                {
+                    sprintf(Result, "%c (%x)", *TypesPtrs.Char, *TypesPtrs.Char);
+                }
+                else
+                {
+                    sprintf(Result, "%u", (unsigned int)*TypesPtrs.Char);
+                }
+            }
+            break;
+            case 2:
+            {
+                if(Underlaying->Type->Encoding == DW_ATE_signed)
+                {
+                    sprintf(Result, "%d", *TypesPtrs.Short);
+                }
+                else
+                {
+                    sprintf(Result, "%u", (unsigned int)*TypesPtrs.Short);
+                }
+            }
+            break;
+            case 4:
+            {
+                if(Underlaying->Type->Encoding == DW_ATE_unsigned)
+                {
+                    sprintf(Result, "%u", (unsigned int)*TypesPtrs.Int);
+                }
+                else if(Underlaying->Type->Encoding == DW_ATE_float)
+                {
+                    sprintf(Result, "%f", *TypesPtrs.Float);
+                }
+                else
+                {
+                    sprintf(Result, "%d", *TypesPtrs.Int);
+                }
+            }
+            break;
+            case 8:
+            {
+                if(Underlaying->Type->Encoding == DW_ATE_unsigned)
+                {
+                    sprintf(Result, "%llu", (unsigned long long)*TypesPtrs.Long);
+                }
+                else if(Underlaying->Type->Encoding == DW_ATE_float)
+                {
+                    sprintf(Result, "%f", *TypesPtrs.Double);
+                }
+                else
+                {
+                    sprintf(Result, "%lld", *TypesPtrs.Long);
+                }
+            }
+            break;
+            default:
+            {
+                LOG_GUI("Unsupported byte size = %d", Underlaying->Type->ByteSize);
+            }
+            break;
+            }
+        }
+    }
+    else if((Underlaying->Flags.IsStruct || Underlaying->Flags.IsUnion) && !Underlaying->Flags.IsArray)
+    {
+        if(Underlaying->Flags.IsPointer)
+        {
+            size_t InMemory = DebugeePeekMemory(Address);
+            void *Ptr = (void *)InMemory;
+
+            sprintf(Result, "0x%p", Ptr);
+        }
+        else
+        {
+            sprintf(Result, "{...}");
+        }
+    }
+    else if(Underlaying->Flags.IsArray)
+    {
+        sprintf(Result, "[...]");
+    }
+    else
+    {
+        assert(false);
+    }
+
+    return Result;
+}
+
+static variable_representation
+GuiBuildVariableRepresentation(di_variable *Var)
+{
+    variable_representation Result = {};
+
+    Result.Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+
+    Result.Type = Result.Underlaying.Flags;
+    Result.ActualVariable = Var;
+    Result.Name = Var->Name;
+
+    Result.Address = DwarfGetVariableMemoryAddress(Var);
+    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address);
+    
+    // @Memleak
+    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying);
+
+    return Result;
+}
+
+static variable_representation
+GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name)
+{
+    variable_representation Result = {};
+
+    Result.Underlaying = DwarfFindUnderlayingType(TypeOffset);
+
+    Result.Type = Result.Underlaying.Flags;
+    Result.ActualVariable = 0x0;
+    Result.Name = Name;
+
+    Result.Address = Address;
+    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address);
+    
+    // @Memleak
+    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying);
+
+    return Result;
 }

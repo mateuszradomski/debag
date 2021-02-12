@@ -9,6 +9,20 @@ struct function_representation
     di_function *ActualFunction;
 };
 
+struct variable_representation
+{
+    char *Name;
+    char *ValueString;
+    char *TypeString;
+    type_flags Type;
+    size_t Address;
+    di_underlaying_type Underlaying;
+    di_variable *ActualVariable;
+    
+    variable_representation *Children;
+    u32 ChildrenCount;
+};
+
 struct gui_data
 {
     arena Arena;
@@ -46,7 +60,6 @@ gui_data *Gui = &_Gui;
 
 static void GuiEndFrame();
 static void GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
-static void GuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
 static void GuiShowBreakAtAddress();
 static void GuiShowBreakAtFunction();
 static void GuiShowRegisters(x64_registers Regs);
@@ -60,6 +73,8 @@ static void _GuiShowBreakAtFunctionWindow();
 static void GuiSetStatusText(char *Str);
 static void GuiClearStatusText();
 static void GuiCreateBreakpointTexture();
+static variable_representation GuiBuildVariableRepresentation(di_variable *Var);
+static variable_representation GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name);
 static void GuiBuildFunctionRepresentation();
 static void GuiShowBacktrace();
 
