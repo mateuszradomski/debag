@@ -26,6 +26,7 @@ struct variable_representation
 struct gui_data
 {
     arena Arena;
+    arena RepresentationArena;
     char *StatusText;
     char BreakFuncName[128];
     char BreakAddress[32];
@@ -36,14 +37,28 @@ struct gui_data
     char *SpacesArray[10];
     function_representation *FuncRepresentation;
     u32 FuncRepresentationCount;
+
+    variable_representation *Variables;
+    u32 VariableCnt;
+    size_t BuildAddress;
+
     
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
 
     gui_data()
-        {
-            this->Arena = ArenaCreate(Kilobytes(4));
-        }
+    {
+        this->Arena = ArenaCreate(Kilobytes(4));
+        this->RepresentationArena = ArenaCreate(Kilobytes(32));
+    }
+
+#ifdef DEBAG
+    ~gui_data()
+    {
+        ArenaDestroy(this->Arena);
+        ArenaDestroy(this->RepresentationArena);
+    }
+#endif
 };
 
 ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);

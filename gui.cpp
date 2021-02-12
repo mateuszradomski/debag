@@ -366,16 +366,17 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
             {
                 // No children, build new
                 di_struct_type *Struct = Variable->Underlaying.Struct;
-                Variable->Children = (variable_representation *)calloc(1, sizeof(Variable->Children[0]) * Struct->MembersCount);
                 Variable->ChildrenCount = Struct->MembersCount;
-                
+
+                Variable->Children = ArrayPush(Arena, variable_representation, Variable->ChildrenCount);
+
                 for(u32 I = 0; I < Struct->MembersCount; I++)
                 {
                     di_struct_member *Member = &Struct->Members[I];
                     size_t Address = Variable->Address + Member->ByteLocation;
                     size_t TypeOffset = Member->ActualTypeOffset;
                     char *Name = Member->Name;
-                    
+
                     Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name, Arena);
                 }
             }
@@ -399,7 +400,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
             if(!Variable->Children)
             {
                 Variable->ChildrenCount = Variable->Underlaying.ArrayUpperBound + 1;
-                Variable->Children = (variable_representation *)calloc(1, sizeof(Variable->Children[0]) * Variable->ChildrenCount);
+                Variable->Children = ArrayPush(Arena, variable_representation, Variable->ChildrenCount);
 
                 for(u32 I = 0; I < Variable->ChildrenCount; I++)
                 {
@@ -430,65 +431,68 @@ static void
 GuiShowVariables()
 {
     size_t PC = DebugeeGetProgramCounter();
-    di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
-    di_function *Func = DwarfFindFunctionByAddress(PC);
-    
-    size_t ToAllocate = CU ? CU->GlobalVariablesCount : 0;
-    if(Func)
+    if(Gui->BuildAddress != PC)
     {
-        ToAllocate += Func->ParamCount + Func->FuncLexScope.VariablesCount;
-        for(u32 I = 0; I < Func->LexScopesCount; I++)
-        {
-            ToAllocate += Func->LexScopes[I].VariablesCount;
-        }
-    }
+        ArenaClear(&Gui->RepresentationArena);
+        
+        di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
+        di_function *Func = DwarfFindFunctionByAddress(PC);
 
-    // TODO: Trasient memory
-    scratch_arena Scratch;
-    variable_representation *Variables = ArrayPush(Scratch, variable_representation, ToAllocate);
-    u32 VariableCnt = 0;
-
-    for(u32 I = 0; CU && I < CU->GlobalVariablesCount; I++)
-    {
-        di_variable *Var = &CU->GlobalVariables[I];
-        if(Var->LocationAtom)
+        size_t ToAllocate = CU ? CU->GlobalVariablesCount : 0;
+        if(Func)
         {
-            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var, Scratch);
-        }
-    }
-
-    if(Func && Func->FrameBaseIsCFA)
-    {
-        for(u32 I = 0; I < Func->ParamCount; I++)
-        {
-            di_variable *Param = &Func->Params[I];
-            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Param, Scratch);
-        }
-
-        for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
-        {
-            di_variable *Var = &Func->FuncLexScope.Variables[I];
-            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var, Scratch);
-        }
-
-        for(u32 LexScopeIndex = 0;
-            LexScopeIndex < Func->LexScopesCount;
-            LexScopeIndex++)
-        {
-            di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-            if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter()))
+            ToAllocate += Func->ParamCount + Func->FuncLexScope.VariablesCount;
+            for(u32 I = 0; I < Func->LexScopesCount; I++)
             {
-                for(u32 I = 0; I < LexScope->VariablesCount; I++)
+                ToAllocate += Func->LexScopes[I].VariablesCount;
+            }
+        }
+
+        Gui->Variables = ArrayPush(&Gui->RepresentationArena, variable_representation, ToAllocate);
+        Gui->VariableCnt = 0;
+
+        for(u32 I = 0; CU && I < CU->GlobalVariablesCount; I++)
+        {
+            di_variable *Var = &CU->GlobalVariables[I];
+            if(Var->LocationAtom)
+            {
+                Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+            }
+        }
+
+        if(Func && Func->FrameBaseIsCFA)
+        {
+            for(u32 I = 0; I < Func->ParamCount; I++)
+            {
+                di_variable *Param = &Func->Params[I];
+                Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Param, &Gui->RepresentationArena);
+            }
+
+            for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
+            {
+                di_variable *Var = &Func->FuncLexScope.Variables[I];
+                Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+            }
+
+            for(u32 LexScopeIndex = 0;
+                LexScopeIndex < Func->LexScopesCount;
+                LexScopeIndex++)
+            {
+                di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
+                if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter()))
                 {
-                    di_variable *Var = &LexScope->Variables[I];
-                    Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var, Scratch);
+                    for(u32 I = 0; I < LexScope->VariablesCount; I++)
+                    {
+                        di_variable *Var = &LexScope->Variables[I];
+                        Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                    }
                 }
             }
         }
-    }
-    else if(Func)
-    {
-        assert(false);
+        else if(Func)
+        {
+            assert(false);
+        }
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
@@ -501,9 +505,9 @@ GuiShowVariables()
     ImGui::NextColumn();
     ImGui::Separator();
 
-    for(u32 I = 0; I < VariableCnt; I++)
+    for(u32 I = 0; I < Gui->VariableCnt; I++)
     {
-        GuiShowVariable(&Variables[I], Scratch);
+        GuiShowVariable(&Gui->Variables[I], &Gui->RepresentationArena);
     }
 
     ImGui::Separator();
