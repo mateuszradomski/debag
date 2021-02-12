@@ -213,6 +213,16 @@ struct arena
     size_t Size;
 };
 
+struct scratch_arena
+{
+    arena Arena;
+
+    scratch_arena(size_t Size);
+    scratch_arena();
+    operator arena*();
+    ~scratch_arena();
+};
+
 #define MAX_BREAKPOINT_COUNT 8
 breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;

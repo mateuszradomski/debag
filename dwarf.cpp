@@ -239,7 +239,7 @@ DwarfGetVariableMemoryAddress(di_variable *Var)
 }
 
 static char *
-DwarfGetTypeStringRepresentation(di_underlaying_type Type)
+DwarfGetTypeStringRepresentation(di_underlaying_type Type, arena *Arena)
 {
     char *Result = 0x0;
 
@@ -260,12 +260,12 @@ DwarfGetTypeStringRepresentation(di_underlaying_type Type)
 
     if(Type.Flags.IsArray)
     {
-        Result = (char *)calloc(1, NameLen + 32);
+        Result = ArrayPush(Arena, char, NameLen + 32);
         sprintf(Result, "%s [%ld]", TypeName, Type.ArrayUpperBound + 1);
     }
     else if(Type.Flags.IsPointer)
     {
-        Result = (char *)calloc(1, NameLen + Type.PointerCount + 2);
+        Result = ArrayPush(Arena, char, NameLen + Type.PointerCount + 16);
         sprintf(Result, "%s *", TypeName);
         
         for(u32 I = 0; I < Type.PointerCount - 1; I++)
@@ -275,7 +275,7 @@ DwarfGetTypeStringRepresentation(di_underlaying_type Type)
     }
     else
     {
-        Result = (char *)calloc(1, NameLen + 1);
+        Result = ArrayPush(Arena, char, NameLen + 1);
         StringCopy(Result, TypeName);
     }
 
@@ -2450,7 +2450,7 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
 
     di_underlaying_type FuncReturnType = DwarfFindUnderlayingType(Func->TypeOffset);
     
-    char *TypeName = DwarfGetTypeStringRepresentation(FuncReturnType);
+    char *TypeName = DwarfGetTypeStringRepresentation(FuncReturnType, &Gui->Arena);
     char *FuncName = (char *)(Func->Name ? Func->Name : "EMPTY_FUNC_NAME");
 
     u32 TypeLen = StringLength(TypeName);
@@ -2461,7 +2461,7 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
     for(u32 I = 0; I < Func->ParamCount; I++)
     {
         di_underlaying_type ParamType = DwarfFindUnderlayingType(Func->Params[I].TypeOffset);
-        ParamsTypes[I] = DwarfGetTypeStringRepresentation(ParamType);
+        ParamsTypes[I] = DwarfGetTypeStringRepresentation(ParamType, &Gui->Arena);
         
         ParamsLen += StringLength(ParamsTypes[I]);
     }

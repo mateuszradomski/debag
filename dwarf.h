@@ -352,7 +352,7 @@ static char *           DwarfGetFunctionStringRepresentation(di_function *Func);
  * Variables types functions
  */
 static di_underlaying_type  DwarfFindUnderlayingType(size_t BTDIEOffset);
-static char *               DwarfGetTypeStringRepresentation(di_underlaying_type Type);
+static char *               DwarfGetTypeStringRepresentation(di_underlaying_type Type, arena *Arena);
 static char *               DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
 static bool                 DwarfBaseTypeIsFloat(di_base_type *Type);
 static bool                 DwarfBaseTypeIsDoubleFloat(di_base_type *Type);

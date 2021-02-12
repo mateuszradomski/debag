@@ -342,7 +342,7 @@ GuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
 }
 
 static void
-GuiShowVariable(variable_representation *Variable)
+GuiShowVariable(variable_representation *Variable, arena *Arena)
 {
     if(Variable->Type.IsBase && !Variable->Type.IsArray)
     {
@@ -376,13 +376,13 @@ GuiShowVariable(variable_representation *Variable)
                     size_t TypeOffset = Member->ActualTypeOffset;
                     char *Name = Member->Name;
                     
-                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name);
+                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name, Arena);
                 }
             }
 
             for(u32 I = 0; I < Variable->ChildrenCount; I++)
             {
-                GuiShowVariable(&Variable->Children[I]);
+                GuiShowVariable(&Variable->Children[I], Arena);
             }
 
             ImGui::TreePop();
@@ -403,19 +403,19 @@ GuiShowVariable(variable_representation *Variable)
 
                 for(u32 I = 0; I < Variable->ChildrenCount; I++)
                 {
-                    char *VarNameWI = (char *)malloc(StringLength(Variable->Name) + 16);
+                    char *VarNameWI = ArrayPush(Arena, char, StringLength(Variable->Name) + 16);
                     sprintf(VarNameWI, "%s[%d]", Variable->Name, I);
 
                     size_t TypeOffset = Variable->Underlaying.Type->DIEOffset;
                     size_t Address = Variable->Address + Variable->Underlaying.Type->ByteSize * I;
 
-                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, VarNameWI);
+                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, VarNameWI, Arena);
                 }
             }
 
             for(u32 I = 0; I < Variable->ChildrenCount; I++)
             {
-                GuiShowVariable(&Variable->Children[I]);
+                GuiShowVariable(&Variable->Children[I], Arena);
             }
 
             ImGui::TreePop();
@@ -429,33 +429,46 @@ GuiShowVariable(variable_representation *Variable)
 static void
 GuiShowVariables()
 {
-    // Build global variables
-    variable_representation Variables[512] = {};
+    size_t PC = DebugeeGetProgramCounter();
+    di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
+    di_function *Func = DwarfFindFunctionByAddress(PC);
+    
+    size_t ToAllocate = CU ? CU->GlobalVariablesCount : 0;
+    if(Func)
+    {
+        ToAllocate += Func->ParamCount + Func->FuncLexScope.VariablesCount;
+        for(u32 I = 0; I < Func->LexScopesCount; I++)
+        {
+            ToAllocate += Func->LexScopes[I].VariablesCount;
+        }
+    }
+
+    // TODO: Trasient memory
+    scratch_arena Scratch;
+    variable_representation *Variables = ArrayPush(Scratch, variable_representation, ToAllocate);
     u32 VariableCnt = 0;
 
-    di_compile_unit *CU = DwarfFindCompileUnitByAddress(DebugeeGetProgramCounter());
     for(u32 I = 0; CU && I < CU->GlobalVariablesCount; I++)
     {
         di_variable *Var = &CU->GlobalVariables[I];
         if(Var->LocationAtom)
         {
-            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var);
+            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var, Scratch);
         }
     }
 
-    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(Func && Func->FrameBaseIsCFA)
     {
         for(u32 I = 0; I < Func->ParamCount; I++)
         {
             di_variable *Param = &Func->Params[I];
-            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Param);
+            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Param, Scratch);
         }
 
         for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
         {
             di_variable *Var = &Func->FuncLexScope.Variables[I];
-            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var);
+            Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var, Scratch);
         }
 
         for(u32 LexScopeIndex = 0;
@@ -468,8 +481,7 @@ GuiShowVariables()
                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                 {
                     di_variable *Var = &LexScope->Variables[I];
-                    Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var);
-
+                    Variables[VariableCnt++] = GuiBuildVariableRepresentation(Var, Scratch);
                 }
             }
         }
@@ -478,9 +490,6 @@ GuiShowVariables()
     {
         assert(false);
     }
-
-    // Build function parameteres
-    // Build function lexiacal variables
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
     ImGui::Columns(3, "tree", true);
@@ -494,7 +503,7 @@ GuiShowVariables()
 
     for(u32 I = 0; I < VariableCnt; I++)
     {
-        GuiShowVariable(&Variables[I]);
+        GuiShowVariable(&Variables[I], Scratch);
     }
 
     ImGui::Separator();
@@ -840,9 +849,9 @@ GuiShowBacktrace()
 }
 
 static char *
-idontknowyet(di_underlaying_type *Underlaying, size_t Address)
+idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
 {
-    char *Result = (char *)malloc(64);
+    char *Result = ArrayPush(Arena, char, 64);
 
     if(Underlaying->Flags.IsBase && !Underlaying->Flags.IsArray)
     {
@@ -965,7 +974,7 @@ idontknowyet(di_underlaying_type *Underlaying, size_t Address)
 }
 
 static variable_representation
-GuiBuildVariableRepresentation(di_variable *Var)
+GuiBuildVariableRepresentation(di_variable *Var, arena *Arena)
 {
     variable_representation Result = {};
 
@@ -976,16 +985,16 @@ GuiBuildVariableRepresentation(di_variable *Var)
     Result.Name = Var->Name;
 
     Result.Address = DwarfGetVariableMemoryAddress(Var);
-    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address);
+    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, Arena);
     
     // @Memleak
-    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying);
+    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
 
     return Result;
 }
 
 static variable_representation
-GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name)
+GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, arena *Arena)
 {
     variable_representation Result = {};
 
@@ -996,10 +1005,10 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name)
     Result.Name = Name;
 
     Result.Address = Address;
-    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address);
+    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, Arena);
     
     // @Memleak
-    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying);
+    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
 
     return Result;
 }

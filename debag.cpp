@@ -581,7 +581,7 @@ ArenaClear(arena *Arena)
 static void
 ArenaDestroy(arena *Arena)
 {
-    if(Arena)
+    if(Arena && Arena->BasePtr)
     {
         free(Arena->BasePtr);
     }
@@ -630,6 +630,27 @@ AddressBetween(size_t Address, size_t Lower, size_t Upper)
     Result = (Address >= Lower) && (Address <= Upper);
     
     return Result;
+}
+
+scratch_arena::scratch_arena(size_t Size)
+{
+    this->Arena = ArenaCreateZeros(Size);
+}
+
+scratch_arena::scratch_arena() :
+    scratch_arena(Kilobytes(16))
+{
+}
+
+scratch_arena::operator arena*()
+{
+    return &this->Arena;
+}
+
+scratch_arena::~scratch_arena()
+{
+    ArenaDestroy(&this->Arena);
+    this->Arena.BasePtr = 0x0;
 }
 
 static u32
@@ -1283,6 +1304,7 @@ DebugerMain()
     debug_info _DI = {};
     DI = &_DI;
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
+    Gui->Arena = ArenaCreateZeros(Kilobytes(256));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     TempBreakpoints = (breakpoint *)calloc(MAX_TEMP_BREAKPOINT_COUNT, sizeof(breakpoint));
     
