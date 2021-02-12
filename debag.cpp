@@ -1357,7 +1357,7 @@ DebugerMain()
         
         glClear(GL_COLOR_BUFFER_BIT);
         
-        ImGuiStartFrame();
+        GuiStartFrame();
         
         f64 MenuBarHeight = 0.0;
         bool BreakAtFunction = false;
@@ -1552,11 +1552,11 @@ DebugerMain()
             {
                 if(KeyMods.Shift || KeyMods.CapsLock)
                 {
-                    ImGuiShowBreakAtAddress();
+                    GuiShowBreakAtAddress();
                 }
                 else
                 {
-                    ImGuiShowBreakAtFunction();
+                    GuiShowBreakAtFunction();
                 }
             }
 
@@ -1570,11 +1570,11 @@ DebugerMain()
 
         if(BreakAtFunction)
         {
-            ImGuiShowBreakAtFunction();
+            GuiShowBreakAtFunction();
         }
         if(BreakAtAddress)
         {
-            ImGuiShowBreakAtAddress();
+            GuiShowBreakAtAddress();
         }
 
         if(Gui->ModalFuncShow)
@@ -1828,7 +1828,7 @@ DebugerMain()
                 if(Debugee.Flags.Running)
                 {
                     ImGui::BeginChild("regs");
-                    ImGuiShowRegisters(Debugee.Regs);
+                    GuiShowRegisters(Debugee.Regs);
                     ImGui::EndChild();
                 }
                 
@@ -1850,7 +1850,7 @@ DebugerMain()
         
         ImGui::End();
         
-        ImGuiEndFrame();
+        GuiEndFrame();
         //EndDraw:;
         ButtonsUpdate(KeyboardButtons, (sizeof(KeyboardButtons)/sizeof(KeyboardButtons[0])));
         glfwPollEvents();

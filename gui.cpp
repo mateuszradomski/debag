@@ -1,5 +1,5 @@
 static void
-ImGuiStartFrame()
+GuiStartFrame()
 {
     ImGui_ImplOpenGL2_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -7,14 +7,14 @@ ImGuiStartFrame()
 }
 
 static void
-ImGuiEndFrame()
+GuiEndFrame()
 {
     ImGui::Render();
     ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 }
 
 static void
-ImGuiShowRegisters(x64_registers Regs)
+GuiShowRegisters(x64_registers Regs)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(2, 0));
     ImGui::Text("RIP: %lX", Regs.RIP);
@@ -74,7 +74,7 @@ GuiShowBreakpoints()
 }
 
 static void
-ImGuiShowValueAsString(size_t DereferencedAddress)
+GuiShowValueAsString(size_t DereferencedAddress)
 {
     char Temp[256] = {};
     u32 TIndex = 0;
@@ -134,7 +134,7 @@ ImGuiShowValueAsString(size_t DereferencedAddress)
 }
 
 static void
-ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
+GuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_base_type *BType = Underlaying.Type;
     size_t MachineWord = DebugeePeekMemory(VarAddress);
@@ -159,7 +159,7 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
         if(BType->Encoding == DW_ATE_signed_char && Underlaying.PointerCount == 1)
         {
             size_t DereferencedAddress = DebugeePeekMemory(VarAddress);
-            ImGuiShowValueAsString(DereferencedAddress);
+            GuiShowValueAsString(DereferencedAddress);
         }
         else
         {
@@ -247,7 +247,7 @@ ImGuiShowBaseType(di_underlaying_type Underlaying, size_t VarAddress, char *VarN
 }
 
 static void
-ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
+GuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     di_struct_type *Struct = Underlaying.Struct;
     size_t MachineWord = DebugeePeekMemory(VarAddress);
@@ -279,7 +279,7 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
             size_t MemberAddress = VarAddress + Member->ByteLocation;
             assert(Member->Name);
             
-            ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
+            GuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
         }
     }
     else
@@ -305,7 +305,7 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
                 size_t MemberAddress = VarAddress + Member->ByteLocation;
                 assert(Member->Name);
                 
-                ImGuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
+                GuiShowVariable(Member->ActualTypeOffset, MemberAddress, Member->Name);
             }
             
             ImGui::TreePop();
@@ -314,7 +314,7 @@ ImGuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *Va
 }
 
 static void
-ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
+GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName)
 {
     char TypeName[128] = {};
     strcat(TypeName, Underlaying.Name);
@@ -336,7 +336,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
     ImGui::NextColumn();
     if(Underlaying.Type->Encoding == DW_ATE_signed_char)
     {
-        ImGuiShowValueAsString(VarAddress);
+        GuiShowValueAsString(VarAddress);
     }
     else
     {
@@ -358,7 +358,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
                 
-                ImGuiShowStructType(Underlaying, VarAddress, VarNameWI);
+                GuiShowStructType(Underlaying, VarAddress, VarNameWI);
                 
                 VarAddress += Underlaying.Struct->ByteSize;
             }
@@ -367,7 +367,7 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
                 char VarNameWI[128] = {};
                 sprintf(VarNameWI, "%s[%d]", VarName, I);
                 
-                ImGuiShowBaseType(Underlaying, VarAddress, VarNameWI);
+                GuiShowBaseType(Underlaying, VarAddress, VarNameWI);
                 
                 VarAddress += Underlaying.Type->ByteSize;
             }
@@ -382,13 +382,13 @@ ImGuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *Var
 }
 
 static void
-ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
+GuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 {
     di_underlaying_type Underlaying = DwarfFindUnderlayingType(TypeOffset);
     
     if(Underlaying.Flags & TYPE_IS_ARRAY)
     {
-        ImGuiShowArrayType(Underlaying, VarAddress, VarName);
+        GuiShowArrayType(Underlaying, VarAddress, VarName);
     }
     else if(Underlaying.Flags & TYPE_IS_STRUCT || Underlaying.Flags & TYPE_IS_UNION)
     {
@@ -396,11 +396,11 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
         assert(sizeof(di_union_type) == sizeof(di_struct_type));
         assert(sizeof(di_union_member) == sizeof(di_struct_member));
         
-        ImGuiShowStructType(Underlaying, VarAddress, VarName);
+        GuiShowStructType(Underlaying, VarAddress, VarName);
     }
     else if(Underlaying.Flags & TYPE_IS_BASE)
     {
-        ImGuiShowBaseType(Underlaying, VarAddress, VarName);
+        GuiShowBaseType(Underlaying, VarAddress, VarName);
     }
     else
     {
@@ -417,24 +417,24 @@ ImGuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName = "")
 }
 
 static void
-ImGuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
+GuiShowVariable(di_variable *Var, size_t FBReg = 0x0)
 {
     if(Var->LocationAtom == DW_OP_fbreg)
     {
         size_t VarAddress = FBReg + Var->Offset;
-        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
+        GuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else if(Var->LocationAtom == DW_OP_addr)
     {
         size_t VarAddress = Debugee.Flags.PIE ? Var->Offset + Debugee.LoadAddress : Var->Offset;
-        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
+        GuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else if(Var->LocationAtom >= DW_OP_breg0 && Var->LocationAtom <= DW_OP_breg15)
     {
         size_t Register = RegisterGetByABINumber(Debugee.Regs, Var->LocationAtom - DW_OP_breg0);
         size_t VarAddress = Var->Offset + Register;
         
-        ImGuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
+        GuiShowVariable(Var->TypeOffset, VarAddress, Var->Name);
     }
     else
     {
@@ -472,7 +472,7 @@ GuiShowVariables()
             di_variable *Var = &CU->GlobalVariables[I];
             if(Var->LocationAtom)
             {
-                ImGuiShowVariable(Var);
+                GuiShowVariable(Var);
             }
         }
     }
@@ -489,7 +489,7 @@ GuiShowVariables()
             for(u32 I = 0; I < Func->ParamCount; I++)
             {
                 di_variable *Param = &Func->Params[I];
-                ImGuiShowVariable(Param, FBReg);
+                GuiShowVariable(Param, FBReg);
             }
 
             ImGui::Separator();
@@ -498,7 +498,7 @@ GuiShowVariables()
         for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
         {
             di_variable *Var = &Func->FuncLexScope.Variables[I];
-            ImGuiShowVariable(Var, FBReg);
+            GuiShowVariable(Var, FBReg);
         }
                     
         for(u32 LexScopeIndex = 0;
@@ -511,7 +511,7 @@ GuiShowVariables()
                 for(u32 I = 0; I < LexScope->VariablesCount; I++)
                 {
                     di_variable *Var = &LexScope->Variables[I];
-                    ImGuiShowVariable(Var, FBReg);
+                    GuiShowVariable(Var, FBReg);
                 }
             }
         }
@@ -526,7 +526,7 @@ GuiShowVariables()
 }
 
 static void
-_ImGuiShowBreakAtFunctionModalWindow()
+_GuiShowBreakAtFunctionWindow()
 {
 
     if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
@@ -595,18 +595,18 @@ END:;
 }
 
 static void
-ImGuiShowBreakAtFunction()
+GuiShowBreakAtFunction()
 {
     char *FuncBreakLabel = "Function to break at"; 
     
     ImGui::OpenPopup(FuncBreakLabel);
     ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    Gui->ModalFuncShow = _ImGuiShowBreakAtFunctionModalWindow;
+    Gui->ModalFuncShow = _GuiShowBreakAtFunctionWindow;
 }
 
 static void 
-_ImGuiShowBreakAtAddressModalWindow()
+_GuiShowBreakAtAddressModalWindow()
 {
     char *AddressBreakLabel = "Address to break at";
     
@@ -665,14 +665,14 @@ _ImGuiShowBreakAtAddressModalWindow()
 }
 
 static void
-ImGuiShowBreakAtAddress()
+GuiShowBreakAtAddress()
 {
     char *AddressBreakLabel = "Address to break at";
     ImGui::OpenPopup(AddressBreakLabel);
     ImVec2 Center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(Center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     
-    Gui->ModalFuncShow = _ImGuiShowBreakAtAddressModalWindow;
+    Gui->ModalFuncShow = _GuiShowBreakAtAddressModalWindow;
 }
 
 static void
