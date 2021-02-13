@@ -78,10 +78,6 @@ static void GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress,
 static void GuiShowBreakAtAddress();
 static void GuiShowBreakAtFunction();
 static void GuiShowRegisters(x64_registers Regs);
-static void GuiShowStructType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
-static void GuiShowValueAsString(size_t DereferencedAddress);
-static void GuiShowVariable(size_t TypeOffset, size_t VarAddress, char *VarName);
-static void GuiShowVariable(di_variable *Var, size_t FBReg);
 static void GuiStartFrame();
 static void _GuiShowBreakAtAddressModalWindow();
 static void _GuiShowBreakAtFunctionWindow();
