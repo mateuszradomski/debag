@@ -559,22 +559,25 @@ _GuiShowBreakAtFunctionWindow()
     
     ImGui::BeginChild("func_list");
     
-
     for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
     {
         function_representation *Repr = &Gui->FuncRepresentation[I];
-        bool NoInput = StringEmpty(Gui->BreakFuncName);
-        if(NoInput || (!NoInput && StringStartsWith(Repr->ActualFunction->Name, Gui->BreakFuncName)))
+        bool FuncHasName = Repr->ActualFunction->Name != 0x0;
+        if(FuncHasName)
         {
-            if(ImGui::Selectable(Repr->Label))
+            bool NoInput = StringEmpty(Gui->BreakFuncName);
+            if(NoInput || (!NoInput && StringStartsWith(Repr->ActualFunction->Name, Gui->BreakFuncName)))
             {
-                Gui->ModalFuncShow = 0x0;
-                memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
-                BreakAtAddress(Repr->ActualFunction->FuncLexScope.LowPC);
-                DebugerUpdateTransient();
+                if(ImGui::Selectable(Repr->Label))
+                {
+                    Gui->ModalFuncShow = 0x0;
+                    memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
+                    BreakAtAddress(Repr->ActualFunction->FuncLexScope.LowPC);
+                    DebugerUpdateTransient();
 
-                goto END;
-                return;
+                    goto END;
+                    return;
+                }
             }
         }
     }

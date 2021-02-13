@@ -40,6 +40,7 @@
  * is running.
  * - When the program seg faults show a backtrace
  * - Define a rigorous way of being able to restart the program
+ * - Big goal is to be able to run the debugger inside the debugger.
  * - hamster_debug
  *   - While in a class/struct/union method you cannot see the variables, because they have no names
  *     the entry for the subprogram is heavily fragmented around the DWARF info
@@ -1274,6 +1275,13 @@ DebugerDeallocTransient()
     _UPT_destroy(Debuger.UnwindRemoteArg);
     
     ArenaDestroy(&DI->Arena);
+    
+    Gui->FuncRepresentation = 0x0;
+    Gui->FuncRepresentationCount = 0;
+    Gui->Variables = 0x0;
+    Gui->VariableCnt = 0;
+    Gui->BuildAddress = 0x0;
+    
     memset(DI, 0, sizeof(debug_info));
 }
 
@@ -1773,11 +1781,14 @@ DebugerMain()
 
                     if(Debugee.Flags.Steped)
                     {
-                        f32 Max = ImGui::GetScrollMaxY();
-                        f32 Curr = ((f32)Line->LineNum / (f32)Src->ContentLineCount);
-                        Curr *= Max;
-
-                        ImGui::SetScrollY(Curr);
+                        if(Line && Src)
+                        {
+                            f32 Max = ImGui::GetScrollMaxY();
+                            f32 Curr = ((f32)Line->LineNum / (f32)Src->ContentLineCount);
+                            Curr *= Max;
+                            
+                            ImGui::SetScrollY(Curr);
+                        }
                     }
 
                     while(Clipper.Step())

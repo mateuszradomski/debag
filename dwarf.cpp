@@ -2477,12 +2477,6 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
         WriteHead += sprintf(WriteHead, ParamFmtStr, ParamsTypes[I]);
     }
 
-    free(TypeName);
-    for(u32 I = 0; I < Func->ParamCount; I++)
-    {
-        free(ParamsTypes[I]);
-    }
-
     free(ParamsTypes);
     
     return Result;
