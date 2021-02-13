@@ -959,7 +959,7 @@ idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
             size_t InMemory = DebugeePeekMemory(Address);
             void *Ptr = (void *)InMemory;
 
-            sprintf(Result, "0x%p", Ptr);
+            sprintf(Result, "%p", Ptr);
         }
         else
         {
@@ -972,7 +972,7 @@ idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
     }
     else
     {
-        assert(false);
+        sprintf(Result, "Unknown thingee");
     }
 
     return Result;
