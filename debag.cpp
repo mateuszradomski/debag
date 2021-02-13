@@ -547,15 +547,70 @@ HexDump(void *Ptr, size_t Count)
     printf("\n");
 }
 
+static memory_cursor_node *
+ArenaNewNode(arena *Arena, size_t Size)
+{
+    memory_cursor_node *Result = 0x0;
+    Size = MAX(Arena->ChunkSize, Size);
+    
+    void *Memory = (u8 *)malloc(Size + sizeof(memory_cursor_node));
+    assert(Memory);
+
+    Result = (memory_cursor_node *)Memory;
+    
+    Result->Cursor.BasePtr = (u8 *)Memory + sizeof(memory_cursor_node);
+    Result->Cursor.CursorPtr = Result->Cursor.BasePtr;
+    Result->Cursor.Size = Size;
+    SLL_STACK_PUSH(Arena->CursorNode, Result);
+
+    CursorClear(&Result->Cursor);
+
+    return Result;
+}
+
+static void
+CursorClear(memory_cursor *Cursor, u8 ClearTo)
+{
+    memset(Cursor->BasePtr, ClearTo, Cursor->Size);
+    Cursor->CursorPtr = Cursor->BasePtr;
+}
+
+static void
+CursorDestroy(memory_cursor *Cursor)
+{
+    if(Cursor && Cursor->BasePtr)
+    {
+        void *Ptr = (u8 *)Cursor->BasePtr - sizeof(memory_cursor_node);
+
+        free(Ptr);
+    }
+}
+
+static size_t
+CursorFreeBytes(memory_cursor *Cursor)
+{
+    size_t Result = Cursor->Size - (size_t)(Cursor->CursorPtr - Cursor->BasePtr);
+    
+    return Result;
+}
+
+static arena
+ArenaCreate(size_t ChunkSize, size_t Aligment)
+{
+    arena Result = {};
+
+    Result.ChunkSize = ChunkSize;
+    Result.Aligment = Aligment;
+
+    return Result;
+}
+
 static arena
 ArenaCreate(size_t Size)
 {
-    arena Result = {};
-    
-    Result.BasePtr = (u8 *)malloc(Size);
-    assert(Result.BasePtr);
-    Result.CursorPtr = Result.BasePtr;
-    Result.Size = Size;
+    arena Result = ArenaCreate(Kilobytes(16), 8);
+
+    ArenaNewNode(&Result, Size);
     
     return Result;
 }
@@ -566,7 +621,7 @@ ArenaCreateZeros(size_t Size)
     arena Result = {};
     
     Result = ArenaCreate(Size);
-    memset(Result.BasePtr, 0, Size);
+    CursorClear(&Result.CursorNode->Cursor);
     
     return Result;
 }
@@ -574,16 +629,31 @@ ArenaCreateZeros(size_t Size)
 static void
 ArenaClear(arena *Arena)
 {
-    memset(Arena->BasePtr, 0, Arena->Size);
-    Arena->CursorPtr = Arena->BasePtr;
+    for(memory_cursor_node *CursorNode = Arena->CursorNode;
+        CursorNode != 0x0;
+        CursorNode = CursorNode->Next)
+    {
+        CursorClear(&CursorNode->Cursor);
+    }
 }
 
 static void
 ArenaDestroy(arena *Arena)
 {
-    if(Arena && Arena->BasePtr)
+    if(Arena)
     {
-        free(Arena->BasePtr);
+        memory_cursor_node *ToDestroy = 0x0;
+        for(memory_cursor_node *CursorNode = Arena->CursorNode;
+            CursorNode != 0x0;
+            CursorNode = CursorNode->Next)
+        {
+            if(ToDestroy)
+            {
+                CursorDestroy(&ToDestroy->Cursor);
+            }
+            
+            ToDestroy = CursorNode;
+        }
     }
 }
 
@@ -592,32 +662,29 @@ ArenaPush(arena *Arena, size_t Size)
 {
     void *Result = 0x0;
     
-    if(Arena)
+    if(Arena && Size)
     {
-        size_t BytesLeft = ArenaFreeBytes(Arena);
-        // Calculates how many bytes we need to add to be aligned on the 16 bytes.
-        size_t PaddingNeeded = (0x10 - ((size_t)Arena->CursorPtr & 0xf)) & 0xf;
-        
-        if(Size + PaddingNeeded <= BytesLeft)
+        memory_cursor_node *CursorNode = Arena->CursorNode;
+        if(!CursorNode)
         {
-            Arena->CursorPtr += PaddingNeeded;
-            Result = Arena->CursorPtr;
-            Arena->CursorPtr += Size;
+            CursorNode = ArenaNewNode(Arena, Size);
         }
-        else
-        {
-            LOG_MAIN("%lu\n", (size_t)(Arena->CursorPtr - Arena->BasePtr));
-            assert(false);
-        }
-    }
-    
-    return Result;
-}
 
-static size_t
-ArenaFreeBytes(arena *Arena)
-{
-    size_t Result = Arena->Size - (size_t)(Arena->CursorPtr - Arena->BasePtr);
+        memory_cursor *Cursor = &CursorNode->Cursor;
+        size_t BytesLeft = CursorFreeBytes(Cursor);
+        // Calculates how many bytes we need to add to be aligned on the 16 bytes.
+        size_t PaddingNeeded = (0x10 - ((size_t)Cursor->CursorPtr & 0xf)) & 0xf;
+        
+        if(Size + PaddingNeeded > BytesLeft)
+        {
+            CursorNode = ArenaNewNode(Arena, Size + PaddingNeeded);
+            Cursor = &CursorNode->Cursor;
+        }
+
+        Cursor->CursorPtr += PaddingNeeded;
+        Result = Cursor->CursorPtr;
+        Cursor->CursorPtr += Size;
+    }
     
     return Result;
 }
@@ -650,7 +717,6 @@ scratch_arena::operator arena*()
 scratch_arena::~scratch_arena()
 {
     ArenaDestroy(&this->Arena);
-    this->Arena.BasePtr = 0x0;
 }
 
 static u32
@@ -977,7 +1043,6 @@ DisassembleAroundAddress(address_range AddrRange)
     }
     cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
 
-    assert(DisasmArena.Size > InstCount * sizeof(disasm_inst));
     DisasmInstCount = 0;
     
     InstructionAddress = AddrRange.Start;

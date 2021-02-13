@@ -2251,7 +2251,7 @@ DwarfRead()
     DwarfOpenSymbolsHandle(&DI->DwarfFd, &DI->Debug);
     
     u32 *CountTable = (u32 *)calloc(DWARF_TAGS_COUNT, sizeof(u32));
-    DI->Arena = ArenaCreateZeros(Kilobytes(4096 * 4));
+    DI->Arena = ArenaCreateZeros(Kilobytes(64));
     
     for(i32 CUCount = 0;;++CUCount)
     {

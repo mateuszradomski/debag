@@ -206,11 +206,24 @@ struct dbg
     logging_switches Log;
 };
 
-struct arena
+struct memory_cursor
 {
     u8* BasePtr;
     u8* CursorPtr;
     size_t Size;
+};
+
+struct memory_cursor_node
+{
+    memory_cursor_node *Next;
+    memory_cursor Cursor;
+};
+
+struct arena
+{
+    memory_cursor_node *CursorNode;
+    size_t ChunkSize;
+    size_t Aligment;
 };
 
 struct scratch_arena
@@ -292,6 +305,13 @@ static void     StringToArgv(char *Str, char **ArgvOut, u32 *Argc);
 /*
  * Arena functions
  */
+
+static memory_cursor_node * ArenaNewNode(arena *Arena, size_t Size);
+static void                 CursorClear(memory_cursor *Cursor, u8 ClearTo = 0);
+static void                 CursorDestroy(memory_cursor *Cursor);
+static size_t               CursorFreeBytes(memory_cursor *Cursor);
+
+static arena    ArenaCreate(size_t ChunkSize, size_t Aligment);
 static arena    ArenaCreate(size_t Size);
 static arena    ArenaCreateZeros(size_t Size);
 static void     ArenaClear(arena *Arena);
