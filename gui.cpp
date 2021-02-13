@@ -434,6 +434,7 @@ GuiShowVariables()
     if(Gui->BuildAddress != PC)
     {
         ArenaClear(&Gui->RepresentationArena);
+        Gui->BuildAddress = PC;
         
         di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
         di_function *Func = DwarfFindFunctionByAddress(PC);
