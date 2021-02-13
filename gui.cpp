@@ -856,7 +856,8 @@ GuiShowBacktrace()
 static char *
 idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
 {
-    char *Result = ArrayPush(Arena, char, 64);
+    u32 ResultSize = 64;
+    char *Result = ArrayPush(Arena, char, ResultSize);
 
     if(Underlaying->Flags.IsBase && !Underlaying->Flags.IsArray)
     {
@@ -878,6 +879,41 @@ idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
             // String
             if(Underlaying->Type->Encoding == DW_ATE_signed_char && Underlaying->PointerCount == 1)
             {
+                if(InMemory)
+                {
+                    size_t StringPart = DebugeePeekMemory(InMemory);
+                    char *CharHead = (char *)&StringPart;
+                    
+                    u32 WrittenToString = 0;
+                    Result[WrittenToString++] = '\"';
+                    
+                    u32 RemainingBytes = sizeof(StringPart);
+                    while(CharHead[0] && IS_PRINTABLE(CharHead[0]))
+                    {
+                        if(WrittenToString == ResultSize - 6)
+                        {
+                            assert(RemainingBytes);
+
+                            for(u32 I = 0; I < 3; I++) { Result[WrittenToString++] = '.'; };
+                            break;
+                        }
+
+                        Result[WrittenToString++] = CharHead[0];
+                        CharHead += 1;
+                        RemainingBytes -= 1;
+
+                        if(!RemainingBytes)
+                        {
+                            RemainingBytes = sizeof(StringPart);
+                            InMemory += sizeof(StringPart);
+                
+                            StringPart = DebugeePeekMemory(InMemory);
+                            CharHead = (char *)&StringPart;
+                        }
+                    }
+                    
+                    Result[WrittenToString++] = '\"';
+                }
             }
             else
             {

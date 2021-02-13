@@ -654,6 +654,11 @@ ArenaDestroy(arena *Arena)
             
             ToDestroy = CursorNode;
         }
+
+        if(ToDestroy)
+        {
+            CursorDestroy(&ToDestroy->Cursor);
+        }
     }
 }
 
