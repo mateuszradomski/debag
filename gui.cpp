@@ -82,7 +82,9 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
 
         if(Variable->IsEdited)
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
             ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer));
+            ImGui::PopStyleVar();
 
             if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
             {
