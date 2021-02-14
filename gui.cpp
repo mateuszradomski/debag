@@ -86,27 +86,26 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
 
             if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
             {
-                // Overwrite variables memory
-                assert(Variable->Underlaying.Type->ByteSize == 4);
+                size_t ToPoke = 0x0;
 
-                union FloatInt
-                {
-                    float Float;
-                    u8 Bytes[4];
-                };
+                u8 *ParsedBytes = (u8 *)&ToPoke;
+                di_underlaying_type *Underlaying = &Variable->Underlaying;
+                char *String = Gui->VariableEditBuffer;
                 
-                FloatInt FI = {};
-                FI.Float = atof(Gui->VariableEditBuffer);
+                u32 TypeBytesCnt = DwarfParseTypeStringToBytes(Underlaying, String, ParsedBytes);
 
-                size_t InMemory = DebugeePeekMemory(Variable->Address);
-                u8 *Bytes = (u8 *)&InMemory;
+                if(TypeBytesCnt < sizeof(size_t))
+                {
+                    size_t InMemoryAlready = DebugeePeekMemory(Variable->Address);
+                    u8 *MemoryBytes = (u8 *)&InMemoryAlready;
 
-                Bytes[0] = FI.Bytes[0];
-                Bytes[1] = FI.Bytes[1];
-                Bytes[2] = FI.Bytes[2];
-                Bytes[3] = FI.Bytes[3];
+                    for(u32 I = TypeBytesCnt; I < sizeof(size_t); I++)
+                    {
+                        ParsedBytes[I] = MemoryBytes[I];
+                    }
+                }
 
-                DebugeePokeMemory(Variable->Address, InMemory);
+                DebugeePokeMemory(Variable->Address, ToPoke);
 
                 Variable[0] = GuiRebuildVariableRepresentation(Variable, Arena);
             }

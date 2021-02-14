@@ -357,6 +357,7 @@ static char *               DwarfBaseTypeToFormatStr(di_base_type *Type, type_fl
 static bool                 DwarfBaseTypeIsFloat(di_base_type *Type);
 static bool                 DwarfBaseTypeIsDoubleFloat(di_base_type *Type);
 static size_t               DwarfGetVariableMemoryAddress(di_variable *Var);
+static u32                  DwarfParseTypeStringToBytes(di_underlaying_type *Underlaying, char *String, u8 *Result);
 
 /*
  * Lexical scopes functions

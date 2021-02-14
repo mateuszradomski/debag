@@ -238,6 +238,117 @@ DwarfGetVariableMemoryAddress(di_variable *Var)
     return Address;
 }
 
+static u32
+DwarfParseTypeStringToBytes(di_underlaying_type *Underlaying, char *String, u8 *Result)
+{
+    u32 WrittenBytes = 0;
+
+    if(Underlaying->Type->Encoding == DW_ATE_float)
+    {
+        switch(Underlaying->Type->ByteSize)
+        {
+        case 4:
+        {
+            union Float4Int
+            {
+                float Float;
+                u8 Bytes[4];
+            };
+
+            Float4Int FI = {};
+            FI.Float = atof(String);
+
+            WrittenBytes = sizeof(Float4Int);
+            assert(WrittenBytes == 4);
+            memcpy(Result, FI.Bytes, WrittenBytes);
+
+            break;
+        }
+        case 8:
+        {
+            union Float8Int
+            {
+                double Float;
+                u8 Bytes[8];
+            };
+
+            Float8Int FI = {};
+            FI.Float = atof(String);
+
+            WrittenBytes = sizeof(Float8Int);
+            assert(WrittenBytes == 8);
+            memcpy(Result, FI.Bytes, WrittenBytes);
+
+            break;
+        }
+        default:
+        {
+            assert(false && "Non default float type.");
+            break;
+        }
+        }
+    }
+    else
+    {
+        assert(Underlaying->Type->Encoding == DW_ATE_unsigned || Underlaying->Type->Encoding == DW_ATE_signed);
+
+        switch(Underlaying->Type->ByteSize)
+        {
+        case 1:
+        {
+            i64 Val = atol(String);
+            WrittenBytes = 1;
+            Result[0] = (u8)(Val & 0xff);
+
+            break;
+        }
+        case 2:
+        {
+            i64 Val = atol(String);
+            WrittenBytes = 2;
+            Result[0] = (u8)(Val & 0xff);
+            Result[1] = (u8)(Val & 0xff00);
+
+            break;
+        }
+        case 4:
+        {
+            i64 Val = atol(String);
+            WrittenBytes = 4;
+            memcpy(Result, &Val, WrittenBytes);
+            break;
+        }
+        case 8:
+        {
+            // TODO(mateusz): Do we need these if's?
+            if(Underlaying->Type->Encoding == DW_ATE_unsigned)
+            {
+                i64 Val = atol(String);
+                WrittenBytes = 8;
+                memcpy(Result, &Val, WrittenBytes);
+            }
+            else
+            {
+                char *StrEnd = 0x0;
+                u64 Val = strtoull(String, &StrEnd, 10);
+                assert(StrEnd);
+
+                WrittenBytes = 8;
+                memcpy(Result, &Val, WrittenBytes);
+            }
+            break;
+        }
+        default:
+        {
+            assert(false && "Non default int type.");
+            break;
+        }
+        }
+    }
+
+    return WrittenBytes;
+}
+
 static char *
 DwarfGetTypeStringRepresentation(di_underlaying_type Type, arena *Arena)
 {
