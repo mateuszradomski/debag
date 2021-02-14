@@ -1466,27 +1466,31 @@ ranges have been read then don't read the low-high
             di_variable *Var = &DI->Variables[DI->VariablesCount++];
 
             di_compile_unit *CompUnit = &DI->CompileUnits[DI->CompileUnitsCount - 1];
-            if(!CompUnit->Functions && !CompUnit->GlobalVariables)
-            {
-                CompUnit->GlobalVariables = Var;
-            }
+            bool GlobalVariable = DI->DIEIndentLevel == 1;
 
-            if(!CompUnit->Functions && CompUnit->GlobalVariables)
+            if(GlobalVariable)
             {
+                if(!CompUnit->GlobalVariables)
+                {
+                    CompUnit->GlobalVariables = Var;
+                }
+                
                 CompUnit->GlobalVariablesCount++;
             }
-
-            if(CompUnit->Functions)
+            else
             {
-                di_function *Func = &DI->Functions[DI->FunctionsCount - 1];
-                bool HasLexScopes = Func->LexScopesCount != 0;
-                di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
-                if(!LexScope->Variables)
+                if(CompUnit->Functions)
                 {
-                    LexScope->Variables = Var;
-                }
+                    di_function *Func = &DI->Functions[DI->FunctionsCount - 1];
+                    bool HasLexScopes = Func->LexScopesCount != 0;
+                    di_lexical_scope *LexScope = HasLexScopes ? &Func->LexScopes[Func->LexScopesCount - 1] : &Func->FuncLexScope;
+                    if(!LexScope->Variables)
+                    {
+                        LexScope->Variables = Var;
+                    }
 
-                LexScope->VariablesCount += 1;
+                    LexScope->VariablesCount += 1;
+                }
             }
 
             for(u32 I = 0; I < AttrCount; I++)
