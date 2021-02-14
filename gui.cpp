@@ -76,13 +76,13 @@ GuiShowBreakpoints()
 static void
 GuiShowVariable(variable_representation *Variable, arena *Arena)
 {
-    if(Variable->Type.IsBase && !Variable->Type.IsArray)
+    if(Variable->Underlaying.Flags.IsBase && !Variable->Underlaying.Flags.IsArray)
     {
         ImGui::Text(Variable->Name); ImGui::NextColumn();
         ImGui::Text(Variable->ValueString); ImGui::NextColumn();
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
     }
-    else if((Variable->Type.IsStruct || Variable->Type.IsUnion) && !Variable->Type.IsArray)
+    else if((Variable->Underlaying.Flags.IsStruct || Variable->Underlaying.Flags.IsUnion) && !Variable->Underlaying.Flags.IsArray)
     {
         // NOTE(mateusz): We are treating unions and struct as the same thing, but with ByteLocation = 0
         assert(sizeof(di_union_type) == sizeof(di_struct_type));
@@ -121,7 +121,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
             ImGui::TreePop();
         }
     }
-    else if(Variable->Type.IsArray)
+    else if(Variable->Underlaying.Flags.IsArray)
     {
         bool Open = ImGui::TreeNode(Variable->Name); ImGui::NextColumn();
         ImGui::Text(Variable->ValueString); ImGui::NextColumn();
@@ -756,14 +756,12 @@ GuiBuildVariableRepresentation(di_variable *Var, arena *Arena)
 
     Result.Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
 
-    Result.Type = Result.Underlaying.Flags;
     Result.ActualVariable = Var;
     Result.Name = Var->Name;
 
     Result.Address = DwarfGetVariableMemoryAddress(Var);
     Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, Arena);
     
-    // @Memleak
     Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
 
     return Result;
@@ -776,14 +774,12 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, aren
 
     Result.Underlaying = DwarfFindUnderlayingType(TypeOffset);
 
-    Result.Type = Result.Underlaying.Flags;
     Result.ActualVariable = 0x0;
     Result.Name = Name;
 
     Result.Address = Address;
     Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, Arena);
     
-    // @Memleak
     Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
 
     return Result;

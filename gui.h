@@ -14,7 +14,6 @@ struct variable_representation
     char *Name;
     char *ValueString;
     char *TypeString;
-    type_flags Type;
     size_t Address;
     di_underlaying_type Underlaying;
     di_variable *ActualVariable;
