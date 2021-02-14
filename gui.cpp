@@ -80,7 +80,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
     {
         ImGui::Text(Variable->Name); ImGui::NextColumn();
 
-        if(Variable->IsEdited)
+        if(Gui->VariableInEdit && Gui->VariableInEdit == Variable)
         {
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
             ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer));
@@ -114,7 +114,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
 
             if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
             {
-                Variable->IsEdited = false;
+                Gui->VariableInEdit = 0x0;
                 memset(Gui->VariableEditBuffer, 0, sizeof(Gui->VariableEditBuffer));
             }
         }
@@ -123,10 +123,10 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
             ImGui::Text(Variable->ValueString);
         } ImGui::NextColumn();
 
-        bool Change = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemClicked();
-        if(Change)
-        {
-            Variable->IsEdited = true;
+        if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemClicked())
+        {            
+            memset(Gui->VariableEditBuffer, 0, sizeof(Gui->VariableEditBuffer));
+            Gui->VariableInEdit = Variable;
         }
 
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();

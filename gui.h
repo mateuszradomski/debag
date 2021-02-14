@@ -15,7 +15,6 @@ struct variable_representation
     char *ValueString;
     char *TypeString;
     size_t Address;
-    bool IsEdited;
     di_underlaying_type Underlaying;
     di_variable *ActualVariable;
     
@@ -41,6 +40,7 @@ struct gui_data
     variable_representation *Variables;
     u32 VariableCnt;
     size_t BuildAddress;
+    variable_representation *VariableInEdit;
     char VariableEditBuffer[128];
 
     u32 WindowWidth = 1024;
