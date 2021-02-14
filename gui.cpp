@@ -97,21 +97,18 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
                 
                 FloatInt FI = {};
                 FI.Float = atof(Gui->VariableEditBuffer);
-                printf("Parsed = %f\n", FI.Float);
 
-                size_t Old = DebugeePeekMemory(Variable->Address);
-                printf("old = %lx\n", Old);
-                size_t New = Old;
-                u8 *Bytes = (u8 *)&New;
+                size_t InMemory = DebugeePeekMemory(Variable->Address);
+                u8 *Bytes = (u8 *)&InMemory;
 
                 Bytes[0] = FI.Bytes[0];
                 Bytes[1] = FI.Bytes[1];
                 Bytes[2] = FI.Bytes[2];
                 Bytes[3] = FI.Bytes[3];
 
-                printf("new = %lx\n", New);
+                DebugeePokeMemory(Variable->Address, InMemory);
 
-                DebugeePokeMemory(Variable->Address, New);
+                Variable[0] = GuiRebuildVariableRepresentation(Variable, Arena);
             }
 
             if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
@@ -798,6 +795,22 @@ idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
     }
 
     return Result;
+}
+
+static variable_representation
+GuiRebuildVariableRepresentation(variable_representation *Var, arena *Arena)
+{
+    if(Var->ActualVariable)
+    {
+        return GuiBuildVariableRepresentation(Var->ActualVariable, Arena);
+    }
+    else
+    {
+        size_t TypeOffset = Var->Underlaying.Type->DIEOffset;
+        size_t Address = Var->Address;
+
+        return GuiBuildMemberRepresentation(TypeOffset, Address, Var->Name, Arena);
+    }
 }
 
 static variable_representation
