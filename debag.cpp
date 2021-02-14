@@ -960,6 +960,12 @@ DebugeePeekMemory(size_t Address)
     return MachineWord;
 }
 
+static void
+DebugeePokeMemory(size_t Address, size_t MachineWord)
+{
+    ptrace(PTRACE_POKEDATA, Debugee.PID, Address, MachineWord);
+}
+
 // Out array has be a multiple of 8 sized 
 static void
 DebugeePeekMemoryArray(size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead)

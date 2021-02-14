@@ -79,7 +79,58 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
     if(Variable->Underlaying.Flags.IsBase && !Variable->Underlaying.Flags.IsArray)
     {
         ImGui::Text(Variable->Name); ImGui::NextColumn();
-        ImGui::Text(Variable->ValueString); ImGui::NextColumn();
+
+        if(Variable->IsEdited)
+        {
+            ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer));
+
+            if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+            {
+                // Overwrite variables memory
+                assert(Variable->Underlaying.Type->ByteSize == 4);
+
+                union FloatInt
+                {
+                    float Float;
+                    u8 Bytes[4];
+                };
+                
+                FloatInt FI = {};
+                FI.Float = atof(Gui->VariableEditBuffer);
+                printf("Parsed = %f\n", FI.Float);
+
+                size_t Old = DebugeePeekMemory(Variable->Address);
+                printf("old = %lx\n", Old);
+                size_t New = Old;
+                u8 *Bytes = (u8 *)&New;
+
+                Bytes[0] = FI.Bytes[0];
+                Bytes[1] = FI.Bytes[1];
+                Bytes[2] = FI.Bytes[2];
+                Bytes[3] = FI.Bytes[3];
+
+                printf("new = %lx\n", New);
+
+                DebugeePokeMemory(Variable->Address, New);
+            }
+
+            if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+            {
+                Variable->IsEdited = false;
+                memset(Gui->VariableEditBuffer, 0, sizeof(Gui->VariableEditBuffer));
+            }
+        }
+        else
+        {
+            ImGui::Text(Variable->ValueString);
+        } ImGui::NextColumn();
+
+        bool Change = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemClicked();
+        if(Change)
+        {
+            Variable->IsEdited = true;
+        }
+
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
     }
     else if((Variable->Underlaying.Flags.IsStruct || Variable->Underlaying.Flags.IsUnion) && !Variable->Underlaying.Flags.IsArray)

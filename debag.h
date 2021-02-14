@@ -356,6 +356,7 @@ static x64_registers    DebugeePeekRegisters();
 static void             DebugeeSetRegisters(x64_registers Regs);
 static size_t           DebugeeGetProgramCounter();
 static size_t           DebugeeGetReturnAddress(size_t Address);
+static void             DebugeePokeMemory(size_t Address, size_t MachineWord);
 static size_t           DebugeePeekMemory(size_t Address);
 static void             DebugeePeekMemoryArray(size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead);
 static size_t           DebugeeGetLoadAddress(i32 DebugeePID);
