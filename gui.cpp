@@ -83,7 +83,8 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
         if(Gui->VariableInEdit && Gui->VariableInEdit == Variable)
         {
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-            ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer));
+            auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
+            ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer), ITFlags);
             ImGui::PopStyleVar();
 
             if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
@@ -126,6 +127,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
         if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemClicked())
         {            
             memset(Gui->VariableEditBuffer, 0, sizeof(Gui->VariableEditBuffer));
+            StringCopy(Gui->VariableEditBuffer, Variable->ValueString);
             Gui->VariableInEdit = Variable;
         }
 
