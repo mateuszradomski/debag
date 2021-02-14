@@ -76,6 +76,9 @@ GuiShowBreakpoints()
 static void
 GuiShowVariable(variable_representation *Variable, arena *Arena)
 {
+    // I'm taking a gamble here and seeing if i can leave it like this
+    assert(!(Variable->Underlaying.Flags.IsArray && Variable->Underlaying.Flags.IsPointer));
+    
     if(Variable->Underlaying.Flags.IsBase && !Variable->Underlaying.Flags.IsArray)
     {
         ImGui::Text(Variable->Name); ImGui::NextColumn();
@@ -156,9 +159,25 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
                 for(u32 I = 0; I < Struct->MembersCount; I++)
                 {
                     di_struct_member *Member = &Struct->Members[I];
-                    size_t Address = Variable->Address + Member->ByteLocation;
                     size_t TypeOffset = Member->ActualTypeOffset;
                     char *Name = Member->Name;
+                    size_t Address = 0x0;
+
+                    // TODO(mateusz): I would love to move it somewhere else
+                    if(Variable->Underlaying.Flags.IsPointer)
+                    {
+                        Address = DebugeePeekMemory(Variable->Address);
+                        for(u32 I = 0; I < Variable->Underlaying.PointerCount; I++)
+                        {
+                            Address = DebugeePeekMemory(Variable->Address);
+                        }
+
+                        Address += Member->ByteLocation;
+                    }
+                    else
+                    {
+                        Address = Variable->Address + Member->ByteLocation;
+                    }
 
                     Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name, Arena);
                 }
