@@ -346,7 +346,7 @@ static bool             DwarfAddressConfinedByFunction(di_function *Func, size_t
 static di_function *    DwarfFindFunctionByAddress(size_t Address);
 static di_variable *    DwarfGetFunctionsFirstVariable(di_function *Func);
 static size_t           DwarfFindEntryPointAddress();
-static char *           DwarfGetFunctionStringRepresentation(di_function *Func);
+static char *           DwarfGetFunctionStringRepresentation(di_function *Func, arena *Arena);
 
 /*
  * Variables types functions

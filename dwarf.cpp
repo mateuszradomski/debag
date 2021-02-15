@@ -117,102 +117,126 @@ This function recursivley adds "decorator" types to the flags, and ultimately re
 
 */
 
+static ordering_type
+DIEOffsetPredicate(void *Cmp, void *Search)
+{
+    ordering_type Result = 0;
+    
+    size_t CmpVal = *(size_t *)Cmp;
+    size_t SearchVal = *(size_t *)Search;
+
+    if(CmpVal == SearchVal)
+    {
+        Result = ORD_EQ;
+    }
+    else if(CmpVal < SearchVal)
+    {
+        Result = ORD_LT;
+    }
+    else
+    {
+        Result = ORD_GT;
+    }
+
+    return Result;
+}
+
 static di_underlaying_type
 DwarfFindUnderlayingType(size_t BTDIEOffset)
 {
     di_underlaying_type Result = {};
+
+    bin_search_res SearchResult = BinarySearch(DI->Typedefs, DI->TypedefsCount, offsetof(di_typedef, DIEOffset),
+                                               sizeof(di_typedef), DIEOffsetPredicate, (void *)&BTDIEOffset);
     
-    for(u32 I = 0; I < DI->TypedefsCount; I++)
+    if(SearchResult.Found)
     {
-        if(DI->Typedefs[I].DIEOffset == BTDIEOffset)
-        {
-            Result = DwarfFindUnderlayingType(DI->Typedefs[I].ActualTypeOffset);
-            Result.Flags.IsTypedef = 1;
-            Result.Name = DI->Typedefs[I].Name;
-            
-            return Result;
-        }
+        Result = DwarfFindUnderlayingType(DI->Typedefs[SearchResult.Index].ActualTypeOffset);
+        Result.Flags.IsTypedef = 1;
+        Result.Name = DI->Typedefs[SearchResult.Index].Name;
+
+        return Result;
     }
-    
-    for(u32 I = 0; I < DI->PointerTypesCount; I++)
+
+    SearchResult = BinarySearch(DI->PointerTypes, DI->PointerTypesCount, offsetof(di_pointer_type, DIEOffset),
+                                sizeof(di_pointer_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
+
+    if(SearchResult.Found)
     {
-        if(DI->PointerTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result = DwarfFindUnderlayingType(DI->PointerTypes[I].ActualTypeOffset);
-            Result.Flags.IsPointer = 1;
-            Result.PointerCount += 1;
-            return Result;
-        }
+        Result = DwarfFindUnderlayingType(DI->PointerTypes[SearchResult.Index].ActualTypeOffset);
+        Result.Flags.IsPointer = 1;
+        Result.PointerCount += 1;
+        return Result;
     }
-    
-    for(u32 I = 0; I < DI->ConstTypesCount; I++)
+
+    SearchResult = BinarySearch(DI->ConstTypes, DI->ConstTypesCount, offsetof(di_const_type, DIEOffset),
+                                sizeof(di_const_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
+
+    if(SearchResult.Found)
     {
-        if(DI->ConstTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result = DwarfFindUnderlayingType(DI->ConstTypes[I].ActualTypeOffset);
-            Result.Flags.IsConst = 1;
-            return Result;
-        }
+        Result = DwarfFindUnderlayingType(DI->ConstTypes[SearchResult.Index].ActualTypeOffset);
+        Result.Flags.IsConst = 1;
+        return Result;
     }
-    
-    for(u32 I = 0; I < DI->RestrictTypesCount; I++)
+
+    SearchResult = BinarySearch(DI->RestrictTypes, DI->RestrictTypesCount, offsetof(di_restrict_type, DIEOffset),
+                                sizeof(di_restrict_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
+
+    if(SearchResult.Found)
     {
-        if(DI->RestrictTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result = DwarfFindUnderlayingType(DI->RestrictTypes[I].ActualTypeOffset);
-            Result.Flags.IsRestrict = 1;
-            return Result;
-        }
+        Result = DwarfFindUnderlayingType(DI->RestrictTypes[SearchResult.Index].ActualTypeOffset);
+        Result.Flags.IsRestrict = 1;
+        return Result;
     }
-    
-    for(u32 I = 0; I < DI->ArrayTypesCount; I++)
+
+    SearchResult = BinarySearch(DI->ArrayTypes, DI->ArrayTypesCount, offsetof(di_array_type, DIEOffset),
+                                sizeof(di_array_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
+
+    if(SearchResult.Found)
     {
-        if(DI->ArrayTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result = DwarfFindUnderlayingType(DI->ArrayTypes[I].ActualTypeOffset);
-            Result.ArrayUpperBound = DI->ArrayTypes[I].UpperBound;
-            Result.Flags.IsArray = 1;
-            return Result;
-        }
+        Result = DwarfFindUnderlayingType(DI->ArrayTypes[SearchResult.Index].ActualTypeOffset);
+        Result.ArrayUpperBound = DI->ArrayTypes[SearchResult.Index].UpperBound;
+        Result.Flags.IsArray = 1;
+        return Result;
     }
-    
+
+    SearchResult = BinarySearch(DI->StructTypes, DI->StructTypesCount, offsetof(di_struct_type, DIEOffset),
+                                sizeof(di_struct_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
+
     // Underlaying types
-    for(u32 I = 0; I < DI->StructTypesCount; I++)
+    if(SearchResult.Found)
     {
-        if(DI->StructTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result.Flags.IsStruct = 1;
-            Result.Struct = &DI->StructTypes[I];
-            Result.Name = DI->StructTypes[I].Name;
-            
-            return Result;
-        }
+        Result.Flags.IsStruct = 1;
+        Result.Struct = &DI->StructTypes[SearchResult.Index];
+        Result.Name = DI->StructTypes[SearchResult.Index].Name;
+
+        return Result;
     }
-    
-    for(u32 I = 0; I < DI->UnionTypesCount; I++)
+
+    SearchResult = BinarySearch(DI->UnionTypes, DI->UnionTypesCount, offsetof(di_union_type, DIEOffset),
+                                sizeof(di_union_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
+
+    if(SearchResult.Found)
     {
-        if(DI->UnionTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result.Flags.IsUnion = 1;
-            Result.Union = &DI->UnionTypes[I];
-            Result.Name = DI->UnionTypes[I].Name;
-            
-            return Result;
-        }
+        Result.Flags.IsUnion = 1;
+        Result.Union = &DI->UnionTypes[SearchResult.Index];
+        Result.Name = DI->UnionTypes[SearchResult.Index].Name;
+
+        return Result;
     }
+
+    SearchResult = BinarySearch(DI->BaseTypes, DI->BaseTypesCount, offsetof(di_base_type, DIEOffset),
+                                sizeof(di_base_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
     
-    for(u32 I = 0; I < DI->BaseTypesCount; I++)
+    if(SearchResult.Found)
     {
-        if(DI->BaseTypes[I].DIEOffset == BTDIEOffset)
-        {
-            Result.Flags.IsBase = 1;
-            Result.Type = &DI->BaseTypes[I];
-            Result.Name = DI->BaseTypes[I].Name;
-            
-            return Result;
-        }
+        Result.Flags.IsBase = 1;
+        Result.Type = &DI->BaseTypes[SearchResult.Index];
+        Result.Name = DI->BaseTypes[SearchResult.Index].Name;
+
+        return Result;
     }
-    
+
     return Result;
 }
 
@@ -2559,20 +2583,21 @@ DwarfGetFunctionsFirstVariable(di_function *Func)
 }
 
 static char *
-DwarfGetFunctionStringRepresentation(di_function *Func)
+DwarfGetFunctionStringRepresentation(di_function *Func, arena *Arena)
 {
     char *Result = 0x0;
 
     di_underlaying_type FuncReturnType = DwarfFindUnderlayingType(Func->TypeOffset);
     
-    char *TypeName = DwarfGetTypeStringRepresentation(FuncReturnType, &Gui->Arena);
+    char *TypeName = DwarfGetTypeStringRepresentation(FuncReturnType, Arena);
     char *FuncName = (char *)(Func->Name ? Func->Name : "EMPTY_FUNC_NAME");
 
     u32 TypeLen = StringLength(TypeName);
     u32 NameLen = StringLength(FuncName);
     u32 ParamsLen = 0;
 
-    char **ParamsTypes = (char **)malloc(Func->ParamCount * sizeof(ParamsTypes[0]));
+    scratch_arena Scratch;
+    char **ParamsTypes = ArrayPush(Scratch, char *, Func->ParamCount);
     for(u32 I = 0; I < Func->ParamCount; I++)
     {
         di_underlaying_type ParamType = DwarfFindUnderlayingType(Func->Params[I].TypeOffset);
@@ -2581,7 +2606,7 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
         ParamsLen += StringLength(ParamsTypes[I]);
     }
 
-    Result = (char *)malloc(TypeLen + NameLen + ParamsLen + Func->ParamCount * 3 + 32 + 4096);
+    Result = ArrayPush(Arena, char, TypeLen + NameLen + ParamsLen + Func->ParamCount * 3 + 128);
     char *WriteHead = Result;
 
     const char *MainFmtStr = Func->ParamCount ? "%s %s(" : "%s %s()";
@@ -2591,8 +2616,6 @@ DwarfGetFunctionStringRepresentation(di_function *Func)
         const char *ParamFmtStr = I == Func->ParamCount - 1 ? "%s)" : "%s, ";
         WriteHead += sprintf(WriteHead, ParamFmtStr, ParamsTypes[I]);
     }
-
-    free(ParamsTypes);
     
     return Result;
 }

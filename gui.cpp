@@ -562,18 +562,6 @@ _ImGuiShowOpenFileModalWindow()
         
     ImGui::EndChild();
 
-#if 0
-    if(ImGui::Button("OK", ImVec2(120, 0)))
-    {
-        Gui->ModalFuncShow = 0x0;
-    } ImGui::SetItemDefaultFocus(); ImGui::SameLine();
-    
-    if(ImGui::Button("Cancel", ImVec2(120, 0)))
-    {
-        Gui->ModalFuncShow = 0x0;
-    }
-#endif
-
     ImGui::End();
 }
 
@@ -664,14 +652,14 @@ GuiBuildFunctionRepresentation()
 {
     assert(Gui->FuncRepresentation == 0x0);
 
-    Gui->FuncRepresentation = (function_representation *)malloc(sizeof(Gui->FuncRepresentation[0]) * DI->FunctionsCount);
+    Gui->FuncRepresentation = ArrayPush(&Gui->Arena, function_representation, DI->FunctionsCount);
     Gui->FuncRepresentationCount = 0;
     
     for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
         di_function *Func = &DI->Functions[I];
         function_representation Repr = {};
-        Repr.Label = DwarfGetFunctionStringRepresentation(Func);
+        Repr.Label = DwarfGetFunctionStringRepresentation(Func, &Gui->Arena);
         Repr.ActualFunction = Func;
         Gui->FuncRepresentation[Gui->FuncRepresentationCount++] = Repr;
     }
