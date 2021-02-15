@@ -1,4 +1,14 @@
 static void
+GuiInit()
+{
+    Gui->Arena = ArenaCreateZeros(Kilobytes(256));
+
+    Gui->Flags.VarShowGlobals = true;
+    Gui->Flags.VarShowParams = true;
+    Gui->Flags.VarShowLocals = true;
+}
+
+static void
 GuiStartFrame()
 {
     ImGui_ImplOpenGL2_NewFrame();
@@ -254,40 +264,49 @@ GuiShowVariables()
         Gui->Variables = ArrayPush(&Gui->RepresentationArena, variable_representation, ToAllocate);
         Gui->VariableCnt = 0;
 
-        for(u32 I = 0; CU && I < CU->GlobalVariablesCount; I++)
+        if(Gui->Flags.VarShowGlobals)
         {
-            di_variable *Var = &CU->GlobalVariables[I];
-            if(Var->LocationAtom)
+            for(u32 I = 0; CU && I < CU->GlobalVariablesCount; I++)
             {
-                Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                di_variable *Var = &CU->GlobalVariables[I];
+                if(Var->LocationAtom)
+                {
+                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                }
             }
         }
 
         if(Func && Func->FrameBaseIsCFA)
         {
-            for(u32 I = 0; I < Func->ParamCount; I++)
+            if(Gui->Flags.VarShowParams)
             {
-                di_variable *Param = &Func->Params[I];
-                Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Param, &Gui->RepresentationArena);
-            }
-
-            for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
-            {
-                di_variable *Var = &Func->FuncLexScope.Variables[I];
-                Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
-            }
-
-            for(u32 LexScopeIndex = 0;
-                LexScopeIndex < Func->LexScopesCount;
-                LexScopeIndex++)
-            {
-                di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-                if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter()))
+                for(u32 I = 0; I < Func->ParamCount; I++)
                 {
-                    for(u32 I = 0; I < LexScope->VariablesCount; I++)
+                    di_variable *Param = &Func->Params[I];
+                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Param, &Gui->RepresentationArena);
+                }
+            }
+
+            if(Gui->Flags.VarShowLocals)
+            {
+                for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
+                {
+                    di_variable *Var = &Func->FuncLexScope.Variables[I];
+                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                }
+
+                for(u32 LexScopeIndex = 0;
+                    LexScopeIndex < Func->LexScopesCount;
+                    LexScopeIndex++)
+                {
+                    di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
+                    if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter()))
                     {
-                        di_variable *Var = &LexScope->Variables[I];
-                        Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                        for(u32 I = 0; I < LexScope->VariablesCount; I++)
+                        {
+                            di_variable *Var = &LexScope->Variables[I];
+                            Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                        }
                     }
                 }
             }
@@ -296,6 +315,32 @@ GuiShowVariables()
         {
             assert(false);
         }
+    }
+
+    char *PUID = "###varscontextmenu";
+    if(ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+    {
+        ImGui::OpenPopup(PUID);
+    }
+
+    bool Options[] = { (bool)Gui->Flags.VarShowGlobals, (bool)Gui->Flags.VarShowParams, (bool)Gui->Flags.VarShowLocals };
+    if(ImGui::BeginPopup(PUID))
+    {
+        bool Change = false;
+        Change = ImGui::Checkbox("Show Globals", &Options[0]) || Change;
+        Change = ImGui::Checkbox("Show Params", &Options[1]) || Change;
+        Change = ImGui::Checkbox("Show Locals", &Options[2]) || Change;
+
+        if(Change)
+        {
+            Gui->Flags.VarShowGlobals = Options[0];
+            Gui->Flags.VarShowParams = Options[1];
+            Gui->Flags.VarShowLocals = Options[2];
+
+            Gui->BuildAddress = 0x0;
+        }
+
+        ImGui::EndPopup();
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));

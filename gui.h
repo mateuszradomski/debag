@@ -22,6 +22,13 @@ struct variable_representation
     u32 ChildrenCount;
 };
 
+struct gui_flags
+{
+    u8 VarShowGlobals : 1;
+    u8 VarShowParams : 1;
+    u8 VarShowLocals : 1;
+};
+
 struct gui_data
 {
     arena Arena;
@@ -45,6 +52,7 @@ struct gui_data
 
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
+    gui_flags Flags;
 
     gui_data()
     {
@@ -73,6 +81,7 @@ gui_data *Gui = &_Gui;
 #define LOG_GUI(...) do { } while (0)
 #endif
 
+static void GuiInit();
 static void GuiEndFrame();
 static void GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
 static void GuiShowBreakAtAddress();

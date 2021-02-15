@@ -1387,8 +1387,8 @@ DebugerMain()
 {
     debug_info _DI = {};
     DI = &_DI;
+    GuiInit();
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
-    Gui->Arena = ArenaCreateZeros(Kilobytes(256));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     TempBreakpoints = (breakpoint *)calloc(MAX_TEMP_BREAKPOINT_COUNT, sizeof(breakpoint));
     
