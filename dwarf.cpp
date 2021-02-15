@@ -148,7 +148,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
 
     bin_search_res SearchResult = BinarySearch(DI->Typedefs, DI->TypedefsCount, offsetof(di_typedef, DIEOffset),
                                                sizeof(di_typedef), DIEOffsetPredicate, (void *)&BTDIEOffset);
-    
+
     if(SearchResult.Found)
     {
         Result = DwarfFindUnderlayingType(DI->Typedefs[SearchResult.Index].ActualTypeOffset);
@@ -227,7 +227,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
 
     SearchResult = BinarySearch(DI->BaseTypes, DI->BaseTypesCount, offsetof(di_base_type, DIEOffset),
                                 sizeof(di_base_type), DIEOffsetPredicate, (void *)&BTDIEOffset);
-    
+
     if(SearchResult.Found)
     {
         Result.Flags.IsBase = 1;
