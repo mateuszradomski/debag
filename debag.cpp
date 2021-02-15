@@ -1839,7 +1839,6 @@ DebugerMain()
                             ImGui::PushID(I);
 
                             auto Font = ImGui::GetFont();
-                            //ImVec4()ImGui::GetStyle().Colors[ImGuiCol_ChildBg];
                             auto Texture = LineHasBreakpoint ? Gui->BreakpointTextureActive : Gui->BreakpointTextureBlank;
                             ImVec2 ButtonSize = ImVec2(Font->FontSize, Font->FontSize);
                             ImVec2 UV0 = ImVec2(0.0f, 0.0f);
@@ -1871,7 +1870,6 @@ DebugerMain()
 
                             if(Button && DrawingLine)
                             {
-                                breakpoint *BP = BreakpointFind(DrawingLine->Address);
                                 if(BreakpointEnabled(BP))
                                 {
                                     BreakpointDisable(BP);

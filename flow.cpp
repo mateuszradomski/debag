@@ -140,7 +140,11 @@ static void
 BreakpointDisable(breakpoint *BP)
 {
     BP->State.Enabled = false;
-    ptrace(PTRACE_POKEDATA, Debugee.PID, BP->Address, BP->SavedOpCodes);
+    size_t MachineWord = DebugeePeekMemory(BP->Address);
+
+    size_t PokeData = (MachineWord & (~0xff)) | (BP->SavedOpCodes & 0xff);
+    
+    ptrace(PTRACE_POKEDATA, Debugee.PID, BP->Address, PokeData);
 }
 
 static void
@@ -249,12 +253,13 @@ DebugeeStepInstruction()
 {
     i32 PID = Debugee.PID;
     breakpoint *BP = BreakpointFind(DebugeeGetProgramCounter());
-    if(BP && BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointDisable(BP); }
+    bool EnabledAtEntry = BreakpointEnabled(BP);
+    if(BP && EnabledAtEntry && !BP->State.ExectuedSavedOpCode) { BreakpointDisable(BP); }
     
     ptrace(PTRACE_SINGLESTEP, PID, 0x0, 0x0);
     DebugeeWaitForSignal();
     
-    if(BP && !BreakpointEnabled(BP) && !BP->State.ExectuedSavedOpCode) { BreakpointEnable(BP); }
+    if(BP && EnabledAtEntry && !BP->State.ExectuedSavedOpCode) { BreakpointEnable(BP); }
     if(BP) { BP->State.ExectuedSavedOpCode = !BP->State.ExectuedSavedOpCode; }
     
     Debugee.Regs = DebugeePeekRegisters();
@@ -383,6 +388,7 @@ DebugeeContinueProgram()
     breakpoint *BP = 0x0;
     if((BP = BreakpointFind(DebugeeGetProgramCounter())) && BreakpointEnabled(BP))
     {
+        return;
     }
     else
     {
