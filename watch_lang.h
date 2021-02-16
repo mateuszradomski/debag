@@ -55,6 +55,8 @@ enum
 	ASTNodeKind_IntLit,
 	ASTNodeKind_Ident,
 	ASTNodeKind_IndexExpr,
+    ASTNodeKind_DotAccess,
+    ASTNodeKind_ArrowAccess,
 };
 
 typedef u32 ast_node_kind;

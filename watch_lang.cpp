@@ -245,21 +245,25 @@ LexerBuildTokens(lexer *Lexer)
 static char *
 ParserASTNodeKindToString(ast_node_kind Kind)
 {
-	switch(Kind)
-	{
-	case ASTNodeKind_None:
-		return "ASTNodeKind_None";
-	case ASTNodeKind_Expr:
-		return "ASTNodeKind_Expr";
-	case ASTNodeKind_IntLit:
-		return "ASTNodeKind_IntLit";
-	case ASTNodeKind_Ident:
-		return "ASTNodeKind_Ident";
-	case ASTNodeKind_IndexExpr:
-		return "ASTNodeKind_IndexExpr";
-	default:
-		return "Unexpected ASTNodeKind";
-	}
+    switch(Kind)
+    {
+    case ASTNodeKind_None:
+        return "ASTNodeKind_None";
+    case ASTNodeKind_Expr:
+        return "ASTNodeKind_Expr";
+    case ASTNodeKind_IntLit:
+        return "ASTNodeKind_IntLit";
+    case ASTNodeKind_Ident:
+        return "ASTNodeKind_Ident";
+    case ASTNodeKind_IndexExpr:
+        return "ASTNodeKind_IndexExpr";
+    case ASTNodeKind_DotAccess:
+        return "ASTNodeKind_DotAccess";
+    case ASTNodeKind_ArrowAccess:
+        return "ASTNodeKind_ArrowAccess";
+    default:
+        return "Unexpected ASTNodeKind";
+    }
 }
 
 static parser
@@ -332,15 +336,17 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 
 			return ParserNextExpression(Parser, Node, Delimiter);
 		}
+        else
+        {
+			printf("Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
+            assert(false);
+        }
 	}
 	else
 	{
 		if(Token->Kind == TokenKind_BracketOp)
 		{
 			ast_node *IndexingExpr = ParserNextExpression(Parser, 0x0, TokenKind_BracketCl);
-			assert(IndexingExpr->Kind == ASTNodeKind_Ident || IndexingExpr->Kind == ASTNodeKind_IntLit);
-			//lex_token *NextToken = ParserConsumeToken(Parser);
-			//assert(NextToken->Kind == TokenKind_BracketCl && "Expected a closing brace");
 
 			ast_node *Node = StructPush(&Parser->Arena, ast_node);
 			Node->Kind = ASTNodeKind_IndexExpr;
@@ -352,6 +358,44 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 
 			return ParserNextExpression(Parser, Node, Delimiter);		
 		}
+        else if(Token->Kind == TokenKind_Dot)
+        {
+            lex_token *Token2 = ParserConsumeToken(Parser);
+            assert(Token2->Kind == TokenKind_Symbol);
+
+            ast_node *IdentNode = StructPush(&Parser->Arena, ast_node);
+            IdentNode->Kind = ASTNodeKind_Ident;
+            IdentNode->Token = Token2;
+
+            ast_node *Node = StructPush(&Parser->Arena, ast_node);
+            Node->Kind = ASTNodeKind_DotAccess;
+            Node->ChildrenCount = 2;
+            Node->Children = ArrayPush(&Parser->Arena, ast_node *, Node->ChildrenCount);
+
+            Node->Children[0] = Prev;
+            Node->Children[1] = IdentNode;
+
+            return ParserNextExpression(Parser, Node, Delimiter);
+        }
+        else if(Token->Kind == TokenKind_Arrow)
+        {
+            lex_token *Token2 = ParserConsumeToken(Parser);
+            assert(Token2->Kind == TokenKind_Symbol);
+
+            ast_node *IdentNode = StructPush(&Parser->Arena, ast_node);
+            IdentNode->Kind = ASTNodeKind_Ident;
+            IdentNode->Token = Token2;
+
+            ast_node *Node = StructPush(&Parser->Arena, ast_node);
+            Node->Kind = ASTNodeKind_ArrowAccess;
+            Node->ChildrenCount = 2;
+            Node->Children = ArrayPush(&Parser->Arena, ast_node *, Node->ChildrenCount);
+
+            Node->Children[0] = Prev;
+            Node->Children[1] = IdentNode;
+
+            return ParserNextExpression(Parser, Node, Delimiter);
+        }
 		else
 		{
 			printf("Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
@@ -396,7 +440,6 @@ static void
 ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb)
 {
 	u32 MyArbNumber = ++LastArbNumber;
-	__ASTNodePointerToArbNumber[(void *)Node] = MyArbNumber;
 	char ScratchString[256] = {};
 
 	if(Node == Parser->AST.Root)
