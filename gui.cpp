@@ -909,7 +909,7 @@ GuiShowWatch()
 {
     ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
 
-    if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    if(KeyboardButtons[GLFW_KEY_B].Pressed)
     {
         lexer Lexer = LexerCreate(Gui->WatchBuffer);
         LexerBuildTokens(&Lexer);
@@ -931,5 +931,13 @@ GuiShowWatch()
                 printf("%s\n", LexerTokenKindToString(Token->Kind));
             }
         }
+
+        parser Parser = ParserCreate(&Lexer.Tokens);
+        ParserBuildAST(&Parser);
+
+
+
+        ParserDestroy(&Parser);
+        LexerDestroy(&Lexer);
     }
 }

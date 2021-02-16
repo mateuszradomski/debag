@@ -5,6 +5,7 @@
 
 enum
 {
+	TokenKind_None,
 	TokenKind_Symbol,
     TokenKind_BracketOp,
     TokenKind_BracketCl,
@@ -14,6 +15,8 @@ enum
     TokenKind_Arrow,
     TokenKind_Dot,
     TokenKind_Star,
+    TokenKind_DotDot,
+    TokenKind_EOF,
 };
 
 typedef u32 token_kind;
@@ -45,6 +48,39 @@ struct lexer
 	lex_token_list Tokens;
 };
 
+enum 
+{
+	ASTNodeKind_None,
+	ASTNodeKind_Expr,
+	ASTNodeKind_IntLit,
+	ASTNodeKind_Ident,
+	ASTNodeKind_IndexExpr,
+};
+
+typedef u32 ast_node_kind;
+
+struct ast_node
+{
+	ast_node_kind Kind;
+	lex_token *Token;
+	ast_node **Children;
+	u32 ChildrenCount;
+};
+
+struct ast
+{
+	ast_node *Root;
+};
+
+struct parser
+{
+	arena Arena;
+
+	lex_token_list *Tokens;
+	lex_token_node *PosNode;
+	ast AST;
+};
+
 static char *	LexerTokenKindToString(token_kind Kind);
 
 static lexer 	LexerCreate(char *Content);
@@ -52,5 +88,12 @@ static void 	LexerDestroy(lexer *Lexer);
 static char 	LexerPeekChar(lexer *Lexer);
 static char 	LexerConsumeChar(lexer *Lexer);
 static void 	LexerBuildTokens(lexer *Lexer);
+
+static parser		ParserCreate(lex_token_list *Tokens);
+static void			ParserDestroy(parser *Parser);
+static lex_token *	ParserPeekToken(parser *Parser);
+static lex_token *	ParserConsumeToken(parser *Parser);
+static ast_node *	ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter);
+static void 		ParserBuildAST(parser *Parser);
 
 #endif //WATCH_LANG_H
