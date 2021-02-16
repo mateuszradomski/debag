@@ -935,7 +935,7 @@ GuiShowWatch()
         parser Parser = ParserCreate(&Lexer.Tokens);
         ParserBuildAST(&Parser);
 
-
+        ParserCreateGraphvizFileFromAST(&Parser, "graph_src.dot");
 
         ParserDestroy(&Parser);
         LexerDestroy(&Lexer);

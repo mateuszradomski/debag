@@ -81,6 +81,8 @@ struct parser
 	ast AST;
 };
 
+#define FILE_WRITE_STR(str, file) (fwrite(str, sizeof(str) - 1, 1, file))
+
 static char *	LexerTokenKindToString(token_kind Kind);
 
 static lexer 	LexerCreate(char *Content);
@@ -89,11 +91,15 @@ static char 	LexerPeekChar(lexer *Lexer);
 static char 	LexerConsumeChar(lexer *Lexer);
 static void 	LexerBuildTokens(lexer *Lexer);
 
+static char * 		ParserASTNodeKindToString(ast_node_kind Kind);
+
 static parser		ParserCreate(lex_token_list *Tokens);
 static void			ParserDestroy(parser *Parser);
 static lex_token *	ParserPeekToken(parser *Parser);
 static lex_token *	ParserConsumeToken(parser *Parser);
 static ast_node *	ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter);
 static void 		ParserBuildAST(parser *Parser);
+static void 		ParserCreateGraphvizFileFromAST(parser *Parser, char *OutputFilename);
+static void			ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb = 0);
 
 #endif //WATCH_LANG_H

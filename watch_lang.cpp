@@ -242,6 +242,26 @@ LexerBuildTokens(lexer *Lexer)
 	LexerPushToken(Lexer, Token);
 }
 
+static char *
+ParserASTNodeKindToString(ast_node_kind Kind)
+{
+	switch(Kind)
+	{
+	case ASTNodeKind_None:
+		return "ASTNodeKind_None";
+	case ASTNodeKind_Expr:
+		return "ASTNodeKind_Expr";
+	case ASTNodeKind_IntLit:
+		return "ASTNodeKind_IntLit";
+	case ASTNodeKind_Ident:
+		return "ASTNodeKind_Ident";
+	case ASTNodeKind_IndexExpr:
+		return "ASTNodeKind_IndexExpr";
+	default:
+		return "Unexpected ASTNodeKind";
+	}
+}
+
 static parser
 ParserCreate(lex_token_list *Tokens)
 {
@@ -348,4 +368,64 @@ ParserBuildAST(parser *Parser)
 	assert(ParserPeekToken(Parser));
 
 	Parser->AST.Root = ParserNextExpression(Parser, 0x0, TokenKind_EOF);
+}
+
+u32 LastArbNumber = 0;
+
+static void
+ParserCreateGraphvizFileFromAST(parser *Parser, char *OutputFilename)
+{
+	FILE *FileHandle = fopen(OutputFilename, "w");
+
+	FILE_WRITE_STR("graph \"\"\n", FileHandle);
+	FILE_WRITE_STR("{\n", FileHandle);
+
+	FILE_WRITE_STR("subgraph main\n", FileHandle);
+	FILE_WRITE_STR("{\n", FileHandle);
+
+	ParserReasonAboutNode(Parser, FileHandle, Parser->AST.Root);
+
+	FILE_WRITE_STR("}\n", FileHandle);
+
+	FILE_WRITE_STR("}\n", FileHandle);
+
+	fclose(FileHandle);
+}
+
+static void
+ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb)
+{
+	u32 MyArbNumber = ++LastArbNumber;
+	__ASTNodePointerToArbNumber[(void *)Node] = MyArbNumber;
+	char ScratchString[256] = {};
+
+	if(Node == Parser->AST.Root)
+	{
+		u32 Written = sprintf(ScratchString, "n%d ;\n", MyArbNumber);
+		fwrite(ScratchString, Written, 1, FileHandle);
+	}
+	else
+	{
+		u32 Written = sprintf(ScratchString, "n%d -- n%d ;\n", PrevArb, MyArbNumber);
+		fwrite(ScratchString, Written, 1, FileHandle);
+	}
+
+	char ScratchString2[128] = {};
+	char *NodeKindStr = ParserASTNodeKindToString(Node->Kind);
+	if(Node->Token && Node->Token->Content)
+	{
+		sprintf(ScratchString2, "%s (%s)", NodeKindStr, Node->Token->Content);
+	}
+	else
+	{
+		sprintf(ScratchString2, "%s", NodeKindStr);
+	}
+
+	u32 Written = sprintf(ScratchString, "n%d [label=\"%s\"]", MyArbNumber, ScratchString2);
+	fwrite(ScratchString, Written, 1, FileHandle);
+
+	for(u32 I = 0; I < Node->ChildrenCount; I++)
+	{
+		ParserReasonAboutNode(Parser, FileHandle, Node->Children[I], MyArbNumber);
+	}
 }
