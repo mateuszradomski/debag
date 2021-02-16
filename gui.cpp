@@ -907,11 +907,33 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, aren
 static void
 GuiShowWatch()
 {
-    ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
+    static variable_representation *Showing = 0x0;
+
+    if(Showing)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+        ImGui::Columns(3, "tree", true);
+        ImGui::Text("Name");
+        ImGui::NextColumn();
+        ImGui::Text("Value");
+        ImGui::NextColumn();
+        ImGui::Text("Type");
+        ImGui::NextColumn();
+        ImGui::Separator();
+
+        GuiShowVariable(Showing, &Gui->Arena);
+
+        ImGui::Separator();
+
+        ImGui::Columns(1);
+        ImGui::PopStyleVar();
+    }
 
     if(KeyboardButtons[GLFW_KEY_B].Pressed)
     {
-        lexer Lexer = LexerCreate(Gui->WatchBuffer);
+        char *WatchLangSrc = (char *)"array[0]";
+
+        lexer Lexer = LexerCreate(WatchLangSrc);
         LexerBuildTokens(&Lexer);
 
         printf("There are %d tokens\n", Lexer.Tokens.Count);
@@ -935,7 +957,9 @@ GuiShowWatch()
         parser Parser = ParserCreate(&Lexer.Tokens);
         ParserBuildAST(&Parser);
 
-        ParserCreateGraphvizFileFromAST(&Parser, "graph_src.dot");
+        evaluator Eval = EvaluatorCreate(Parser.AST, Gui->Variables, Gui->VariableCnt);
+        Showing = EvaluatorRun(&Eval);
+        assert(Showing);
 
         ParserDestroy(&Parser);
         LexerDestroy(&Lexer);

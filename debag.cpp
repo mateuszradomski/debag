@@ -1991,7 +1991,7 @@ main(i32 ArgCount, char **Args)
     {
         if(StringMatches(Args[1], "-wl"))
         {
-            char *WatchLangSrc = (char *)"__Tiles[tomtomi[1]][dy]->Member.Position->X->actualPosition.megaValue";
+            char *WatchLangSrc = (char *)"array[4]";
 
             lexer Lexer = LexerCreate(WatchLangSrc);
             LexerBuildTokens(&Lexer);

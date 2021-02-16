@@ -83,6 +83,21 @@ struct parser
 	ast AST;
 };
 
+struct eval_result
+{
+    size_t Int;
+    size_t ByteSize;
+    char *Name;
+    variable_representation Repr;
+};
+
+struct evaluator
+{
+    variable_representation *Vars;
+    u32 VarCount;
+    ast AST;
+};
+
 #define FILE_WRITE_STR(str, file) (fwrite(str, sizeof(str) - 1, 1, file))
 
 static char *	LexerTokenKindToString(token_kind Kind);
@@ -103,5 +118,10 @@ static ast_node *	ParserNextExpression(parser *Parser, ast_node *Prev, token_kin
 static void 		ParserBuildAST(parser *Parser);
 static void 		ParserCreateGraphvizFileFromAST(parser *Parser, char *OutputFilename);
 static void			ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb = 0);
+
+static evaluator                    EvaluatorCreate(ast AST, variable_representation *Vars, u32 VarCount);
+static void                         EvaluatorDestroy(evaluator *Eval);
+static eval_result                  EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
+static variable_representation *    EvaluatorRun(evaluator *Eval);
 
 #endif //WATCH_LANG_H

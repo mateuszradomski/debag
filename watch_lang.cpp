@@ -472,3 +472,96 @@ ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 Prev
 		ParserReasonAboutNode(Parser, FileHandle, Node->Children[I], MyArbNumber);
 	}
 }
+
+static evaluator
+EvaluatorCreate(ast AST, variable_representation *Vars, u32 VarCount)
+{
+    evaluator Result = {};
+
+    Result.Vars = Vars;
+    Result.VarCount = VarCount;
+    Result.AST = AST;
+
+    return Result;
+}
+
+static void
+EvaluatorDestroy(evaluator *Eval)
+{
+    (void)Eval;
+}
+
+static eval_result
+EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
+{
+    if(Expr->Kind == ASTNodeKind_IndexExpr)
+    {
+        assert(Expr->ChildrenCount == 2);
+
+        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
+
+        assert(LeftSide.Name);
+        char *VarName = LeftSide.Name;
+
+        variable_representation *VarRepr = 0x0;
+        for(u32 I = 0; I < Eval->VarCount; I++)
+        {
+            variable_representation *Current = &Eval->Vars[I];
+            if(StringMatches(VarName, Current->Name))
+            {
+                VarRepr = Current;
+            }
+        }
+
+        assert(VarRepr);
+        
+        static_assert((offsetof(di_base_type, ByteSize) == offsetof(di_struct_type, ByteSize)) &&
+                      (offsetof(di_base_type, ByteSize) == offsetof(di_union_type, ByteSize)),
+                      "ByteSize arguments need to have the same offset between the checked types");
+        // This is true only if the above assert passes 
+        size_t TypeSize = VarRepr->Underlaying.Type->ByteSize;
+        size_t BaseAddress = VarRepr->Address;
+        size_t Index = RightSide.Int;
+
+        size_t ResultAddress = BaseAddress + Index * TypeSize;
+
+        eval_result Result = {};
+
+        size_t TypeOffset = VarRepr->Underlaying.Type->DIEOffset;
+        size_t Address = ResultAddress;
+
+        // TODO(mateusz): No gui Arena
+        Result.Repr = GuiBuildMemberRepresentation(TypeOffset, Address, VarRepr->Name, &Gui->Arena);
+
+        return Result;
+    }
+    else if(Expr->Kind == ASTNodeKind_Ident)
+    {
+        assert(Expr->Token && Expr->Token->Content);
+        eval_result Result = {};
+        Result.Name = Expr->Token->Content;
+
+        return Result;
+    }
+    else if(Expr->Kind == ASTNodeKind_IntLit)
+    {
+        eval_result Result = {};
+        Result.Int = atoi(Expr->Token->Content);
+
+        return Result;
+    }
+
+    assert(false);
+}
+
+static variable_representation *
+EvaluatorRun(evaluator *Eval)
+{
+    eval_result EvalResult = EvaluatorEvalExpression(Eval, Eval->AST.Root);
+
+    variable_representation *Result = StructPush(&Gui->Arena, variable_representation);
+    (*Result) = EvalResult.Repr;
+
+    return Result;
+}
