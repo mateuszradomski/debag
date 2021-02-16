@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <err.h>
+#include <cctype>
 
 #include <GLFW/glfw3.h>
 #include <capstone/capstone.h>
@@ -28,10 +29,12 @@
 #include "utils.h"
 #include "dwarf.h"
 #include "gui.h"
+#include "watch_lang.h"
 #include "utils.cpp"
 #include "dwarf.cpp"
 #include "flow.cpp"
 #include "gui.cpp"
+#include "watch_lang.cpp"
 
 /*
  * A big big TODO list:
@@ -1912,8 +1915,19 @@ DebugerMain()
             {
                 if(Debugee.Flags.Running)
                 {
-                    ImGui::BeginChild("regs");
+                    ImGui::BeginChild("locals");
                     GuiShowVariables();
+                    ImGui::EndChild();
+                }
+                
+                ImGui::EndTabItem();
+            }
+            if(ImGui::BeginTabItem("Watch"))
+            {
+                if(Debugee.Flags.Running)
+                {
+                    ImGui::BeginChild("watch");
+                    GuiShowWatch();
                     ImGui::EndChild();
                 }
                 

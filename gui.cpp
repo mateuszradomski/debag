@@ -903,3 +903,33 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, aren
 
     return Result;
 }
+
+static void
+GuiShowWatch()
+{
+    ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
+
+    if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    {
+        lexer Lexer = LexerCreate(Gui->WatchBuffer);
+        LexerBuildTokens(&Lexer);
+
+        printf("There are %d tokens\n", Lexer.Tokens.Count);
+
+        for(lex_token_node *TokenNode = Lexer.Tokens.Head;
+            TokenNode != 0x0;
+            TokenNode = TokenNode->Next)
+        {
+            lex_token *Token = &TokenNode->Token;
+
+            if(Token->Content)
+            {
+                printf("%s [%s]\n", LexerTokenKindToString(Token->Kind), Token->Content);
+            }
+            else
+            {
+                printf("%s\n", LexerTokenKindToString(Token->Kind));
+            }
+        }
+    }
+}

@@ -22,7 +22,6 @@ typedef double f64;
 #define DWARF_CALL(x) assert((x) == DW_DLV_OK)
 
 #define Kilobytes(x) ((x) * 1024)
-#define ArrayPush(a,T,c) ((T *)ArenaPush((a), sizeof(T)*(c)))
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -318,6 +317,10 @@ static void     ArenaClear(arena *Arena);
 static void     ArenaDestroy(arena *Arena);
 static void *   ArenaPush(arena *Arena, size_t Size);
 static size_t   ArenaFreeBytes(arena *Arena);
+
+#define ArrayPush(a,T,c) ((T *)ArenaPush((a), sizeof(T)*(c)))
+#define StructPush(a, T) ((T *)ArenaPush((a), sizeof(T)))
+#define BytesPush(a, c) (ArenaPush((a), (c)))
 
 /*
  * File functions

@@ -50,6 +50,8 @@ struct gui_data
     variable_representation *VariableInEdit;
     char VariableEditBuffer[128];
 
+    char WatchBuffer[128];
+
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
     gui_flags Flags;
@@ -98,5 +100,6 @@ static variable_representation GuiBuildVariableRepresentation(di_variable *Var, 
 static variable_representation GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, arena *Arena);
 static void GuiBuildFunctionRepresentation();
 static void GuiShowBacktrace();
+static void GuiShowWatch();
 
 #endif //GUI_H
