@@ -76,6 +76,16 @@ struct di_variable
     ssize_t Offset;
 };
 
+struct scoped_vars
+{
+    di_variable *Global;
+    u32 GlobalCount;
+    di_variable *Param;
+    u32 ParamCount;
+    di_variable *Local;
+    u32 LocalCount;
+};
+
 struct di_frame_info
 {
     Dwarf_Cie *CIEs;
@@ -356,8 +366,12 @@ static char *               DwarfGetTypeStringRepresentation(di_underlaying_type
 static char *               DwarfBaseTypeToFormatStr(di_base_type *Type, type_flags TFlag);
 static bool                 DwarfBaseTypeIsFloat(di_base_type *Type);
 static bool                 DwarfBaseTypeIsDoubleFloat(di_base_type *Type);
+static di_struct_member *   DwarfStructGetMemberByName(di_struct_type *Type, char *Name);
+static di_union_member *    DwarfUnionGetMemberByName(di_union_type *Type, char *Name);
 static size_t               DwarfGetVariableMemoryAddress(di_variable *Var);
 static u32                  DwarfParseTypeStringToBytes(di_underlaying_type *Underlaying, char *String, u8 *Result);
+static scoped_vars          DwarfGetScopedVars(size_t PC);
+static di_variable *        DwarfFindVariableByNameInScope(scoped_vars Scope, char *Name);
 
 /*
  * Lexical scopes functions

@@ -373,6 +373,63 @@ DwarfParseTypeStringToBytes(di_underlaying_type *Underlaying, char *String, u8 *
     return WrittenBytes;
 }
 
+static scoped_vars
+DwarfGetScopedVars(size_t PC)
+{
+    scoped_vars Result = {};
+
+    di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
+
+    if(CU)
+    {
+        Result.Global = CU->GlobalVariables;
+        Result.GlobalCount = CU->GlobalVariablesCount;
+    }
+
+    di_function *Func = DwarfFindFunctionByAddress(PC);
+    if(Func && Func->FrameBaseIsCFA)
+    {
+        Result.Param = Func->Params;
+        Result.ParamCount = Func->ParamCount;
+
+        //TODO(mateusz): Some variables are missing that way, fix it.
+        Result.Local = Func->FuncLexScope.Variables;
+        Result.LocalCount = Func->FuncLexScope.VariablesCount;
+    }
+
+    return Result;
+}
+
+static di_variable *
+DwarfFindVariableByNameInScope(scoped_vars Scope, char *Name)
+{
+    for(u32 I = 0; I < Scope.GlobalCount; I++)
+    {
+        if(StringMatches(Name, Scope.Global[I].Name))
+        {
+            return &Scope.Global[I];
+        }
+    }
+
+    for(u32 I = 0; I < Scope.ParamCount; I++)
+    {
+        if(StringMatches(Name, Scope.Param[I].Name))
+        {
+            return &Scope.Param[I];
+        }
+    }
+
+    for(u32 I = 0; I < Scope.LocalCount; I++)
+    {
+        if(StringMatches(Name, Scope.Local[I].Name))
+        {
+            return &Scope.Local[I];
+        }
+    }
+
+    return 0x0;
+}
+
 static char *
 DwarfGetTypeStringRepresentation(di_underlaying_type Type, arena *Arena)
 {
@@ -497,6 +554,39 @@ static bool
 DwarfBaseTypeIsDoubleFloat(di_base_type *Type)
 {
     return Type && Type->Encoding == DW_ATE_float && Type->ByteSize == 8;
+}
+
+static di_struct_member *
+DwarfStructGetMemberByName(di_struct_type *Type, char *Name)
+{
+    di_struct_member *Result = 0x0;
+    for(u32 I = 0; I < Type->MembersCount; I++)
+    {
+        if(StringMatches(Name, Type->Members[I].Name))
+        {
+            Result = &Type->Members[I];
+            break;
+        }
+    }
+
+    return Result;
+}
+
+static di_union_member *
+DwarfUnionGetMemberByName(di_union_type *Type, char *Name)
+{
+    di_union_member *Result = 0x0;
+
+    for(u32 I = 0; I < Type->MembersCount; I++)
+    {
+        if(StringMatches(Name, Type->Members[I].Name))
+        {
+            Result = &Type->Members[I];
+            break;
+        }
+    }
+
+    return Result;
 }
 
 static bool

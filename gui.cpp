@@ -934,7 +934,10 @@ GuiShowWatch()
     if(ImGui::Button("Compile!"))
     {
         char *WatchLangSrc = Gui->WatchBuffer;
-        wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Gui->Variables, Gui->VariableCnt);
+
+        size_t PC = DebugeeGetProgramCounter();
+        scoped_vars Scope = DwarfGetScopedVars(PC);
+        wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Scope, Gui->Variables, Gui->VariableCnt);
 
         WLangInterpRun(&Interp);
         Showing = Interp.Result;

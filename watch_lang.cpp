@@ -503,12 +503,11 @@ ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 Prev
 }
 
 static evaluator
-EvaluatorCreate(ast AST, variable_representation *Vars, u32 VarCount)
+EvaluatorCreate(ast AST, scoped_vars Scope)
 {
     evaluator Result = {};
 
-    Result.Vars = Vars;
-    Result.VarCount = VarCount;
+    Result.Scope = Scope;
     Result.AST = AST;
 
     return Result;
@@ -530,84 +529,76 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
         eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
 
-        auto VarRepr = LeftSide.Repr;
+        assert(LeftSide.Kind == EvalResultKind_Ident || LeftSide.Kind == EvalResultKind_Repr);
+
+        size_t VarAddress = 0x0;
+        size_t TypeSize = 0x0;
+        size_t TypeOffset = 0x0;
+        char *VarName = 0x0;
+
+        di_underlaying_type Underlaying = {};
+        if(LeftSide.Kind == EvalResultKind_Ident)
+        {
+            di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, LeftSide.Ident);
+            assert(Var);
+
+            VarAddress = DwarfGetVariableMemoryAddress(Var);
+            VarName = Var->Name;
+            Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+        }
+        else if(LeftSide.Kind == EvalResultKind_Repr)
+        {
+            auto VarRepr = LeftSide.Repr;
+            assert(VarRepr);
+
+            VarAddress = VarRepr->Address;
+            VarName = VarRepr->Name;
+            Underlaying = VarRepr->Underlaying;
+        }
 
         static_assert((offsetof(di_base_type, ByteSize) == offsetof(di_struct_type, ByteSize)) &&
                       (offsetof(di_base_type, ByteSize) == offsetof(di_union_type, ByteSize)),
                       "ByteSize arguments need to have the same offset between the checked types");
         // This is true only if the above assert passes 
-        size_t TypeSize = VarRepr->Underlaying.Type->ByteSize;
+        VarAddress = Underlaying.Flags.IsPointer ? DebugeePeekMemory(VarAddress) : VarAddress;
+        TypeSize = Underlaying.Type->ByteSize;
+        TypeOffset = Underlaying.Type->DIEOffset;
         
-        size_t BaseAddress = VarRepr->Underlaying.Flags.IsPointer ? DebugeePeekMemory(VarRepr->Address) : VarRepr->Address;
-        
+        assert(RightSide.Kind == EvalResultKind_Ident || RightSide.Kind == EvalResultKind_NumberInt || RightSide.Kind == EvalResultKind_Repr);
         i64 Index = 0;
-        if(RightSide.Repr)
+        if(RightSide.Kind == EvalResultKind_Ident)
         {
-            assert(RightSide.Repr->Underlaying.Flags.IsBase &&
-                   RightSide.Repr->Underlaying.Type->Encoding != DW_ATE_float);
+            di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, RightSide.Ident);
+            assert(Var);
 
-            Index = atoll(RightSide.Repr->ValueString);
+            scratch_arena Scratch;
+            variable_representation Repr = GuiBuildVariableRepresentation(Var, Scratch);
+            assert(Repr.Underlaying.Flags.IsBase && Repr.Underlaying.Type->Encoding != DW_ATE_float);
+
+            Index = atoll(Repr.ValueString);
         }
-        else
+        else if(RightSide.Kind == EvalResultKind_NumberInt)
         {
             Index = RightSide.Int;
         }
+        else if(RightSide.Kind == EvalResultKind_Repr)
+        {
+            Index = atoll(RightSide.Repr->ValueString);
+        }
 
-        size_t ResultAddress = BaseAddress + Index * TypeSize;
+        size_t ResultAddress = VarAddress + Index * TypeSize;
 
         eval_result Result = {};
-
-        size_t TypeOffset = VarRepr->Underlaying.Type->DIEOffset;
         size_t Address = ResultAddress;
 
         // TODO(mateusz): No gui Arena
+        Result.Kind = EvalResultKind_Repr;
         Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, VarRepr->Name, &Gui->Arena);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, VarName, &Gui->Arena);
 
         return Result;
     }
-    else if(Expr->Kind == ASTNodeKind_DotAccess)
-    {
-        assert(Expr->Lhs && Expr->Rhs);
-
-        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
-        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
-
-        assert(RightSide.Ident);
-        
-        auto VarRepr = LeftSide.Repr;
-        assert(VarRepr);
-        assert(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion);
-
-        bool Found = false;
-        size_t ByteLocation = 0x0;
-        size_t TypeOffset = 0x0;
-        if(VarRepr->Underlaying.Flags.IsStruct)
-        {
-            di_struct_type *Struct = VarRepr->Underlaying.Struct;
-            for(u32 I = 0; I < Struct->MembersCount; I++)
-            {
-                if(StringMatches(RightSide.Ident, Struct->Members[I].Name))
-                {
-                    ByteLocation = Struct->Members[I].ByteLocation;
-                    TypeOffset = Struct->Members[I].ActualTypeOffset;
-                    Found = true;
-                    break;
-                }
-            }
-        }
-
-        assert(Found);
-
-        eval_result Result = {};
-
-        size_t Address = VarRepr->Address + ByteLocation;
-        Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
-        
-        return Result;
-    }
-    else if(Expr->Kind == ASTNodeKind_ArrowAccess)
+    else if(Expr->Kind == ASTNodeKind_DotAccess || Expr->Kind == ASTNodeKind_ArrowAccess)
     {
         assert(Expr->Lhs && Expr->Rhs);
 
@@ -616,35 +607,57 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
         assert(RightSide.Ident);
 
-        auto VarRepr = LeftSide.Repr;
-        assert(VarRepr);
-        assert(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion);
+        assert(LeftSide.Kind == EvalResultKind_Repr || LeftSide.Kind == EvalResultKind_Ident);
 
-        bool Found = false;
+        size_t VarAddress = 0x0;
         size_t ByteLocation = 0x0;
         size_t TypeOffset = 0x0;
-        if(VarRepr->Underlaying.Flags.IsStruct)
+
+        di_underlaying_type Underlaying = {};
+        if(LeftSide.Kind == EvalResultKind_Repr)
         {
-            di_struct_type *Struct = VarRepr->Underlaying.Struct;
-            for(u32 I = 0; I < Struct->MembersCount; I++)
-            {
-                if(StringMatches(RightSide.Ident, Struct->Members[I].Name))
-                {
-                    ByteLocation = Struct->Members[I].ByteLocation;
-                    TypeOffset = Struct->Members[I].ActualTypeOffset;
-                    Found = true;
-                    break;
-                }
-            }
+            auto VarRepr = LeftSide.Repr;
+            assert(VarRepr);
+            assert(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion);
+
+            VarAddress = VarRepr->Address;
+            Underlaying = VarRepr->Underlaying;
+        }
+        else if(LeftSide.Kind == EvalResultKind_Ident)
+        {
+            di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, LeftSide.Ident);
+            assert(Var);
+
+            VarAddress = DwarfGetVariableMemoryAddress(Var);
+            Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
         }
 
-        assert(Found);
+        if(Underlaying.Flags.IsStruct)
+        {
+            di_struct_member *Member = DwarfStructGetMemberByName(Underlaying.Struct, RightSide.Ident);
+            assert(Member);
+
+            ByteLocation = Member->ByteLocation;
+            TypeOffset = Member->ActualTypeOffset;
+        }
+        else if(Underlaying.Flags.IsUnion)
+        {
+            di_union_member *Member = DwarfUnionGetMemberByName(Underlaying.Union, RightSide.Ident);
+            assert(Member);
+
+            ByteLocation = Member->ByteLocation;
+            TypeOffset = Member->ActualTypeOffset;
+        }
 
         eval_result Result = {};
 
-        size_t VarAddress = DebugeePeekMemory(VarRepr->Address);
+        if(Expr->Kind == ASTNodeKind_ArrowAccess)
+        {
+            VarAddress = DebugeePeekMemory(VarAddress);
+        }
 
         size_t Address = VarAddress + ByteLocation;
+        Result.Kind = EvalResultKind_Repr;
         Result.Repr = StructPush(&Gui->Arena, variable_representation);
         (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
 
@@ -654,33 +667,17 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
     {
         assert(Expr->Token && Expr->Token->Content);
         char *Ident = Expr->Token->Content;
-        
-        eval_result Result = {};
-        variable_representation *VarRepr = 0x0;
-        for(u32 I = 0; I < Eval->VarCount; I++)
-        {
-            variable_representation *Current = &Eval->Vars[I];
-            if(StringMatches(Ident, Current->Name))
-            {
-                VarRepr = Current;
-                break;
-            }
-        }
 
-        if(VarRepr)
-        {
-            Result.Repr = VarRepr;
-        }
-        else
-        {
-            Result.Ident = Ident;
-        }
+        eval_result Result = {};
+        Result.Kind = EvalResultKind_Ident;
+        Result.Ident = Ident;
 
         return Result;
     }
     else if(Expr->Kind == ASTNodeKind_IntLit)
     {
         eval_result Result = {};
+        Result.Kind = EvalResultKind_NumberInt;
         Result.Int = atoi(Expr->Token->Content);
 
         return Result;
@@ -701,12 +698,13 @@ EvaluatorRun(evaluator *Eval)
 }
 
 static wlang_interp
-WLangInterpCreate(char *Src, variable_representation *Vars, u32 VarCount)
+WLangInterpCreate(char *Src, scoped_vars Scope, variable_representation *Vars, u32 VarCount)
 {
 	wlang_interp Result = {};
 
 	Result.Arena = ArenaCreate(Kilobytes(4));
 	Result.Src = StringDuplicate(&Result.Arena, Src);
+    Result.Scope = Scope;
 	Result.Vars = Vars;
 	Result.VarCount = VarCount;
 
@@ -734,7 +732,7 @@ WLangInterpRun(wlang_interp *Interp)
 	Interp->Parser = ParserCreate(&Interp->Lexer.Tokens, &Interp->Arena);
 	ParserBuildAST(&Interp->Parser);
 
-	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Vars, Interp->VarCount);
+	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Scope);
 	EvaluatorRun(&Interp->Eval);
 	Interp->Result = Interp->Eval.Result;
 }

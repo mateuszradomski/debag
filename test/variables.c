@@ -87,6 +87,9 @@ int main()
 
     int intarray[2] = {2, 8};
 
+    struct vec2 *ptrToV2 = &myVec2s[1];
+    ptrToV2->y = global_variable * global_variable;
+
     union test_union testu = {};
     testu.abs.x = 1.0f;
 

@@ -83,8 +83,18 @@ struct parser
 	ast AST;
 };
 
+enum
+{
+    EvalResultKind_NumberInt,
+    EvalResultKind_Ident,
+    EvalResultKind_Repr,
+};
+
+typedef u32 eval_result_kind;
+
 struct eval_result
 {
+    eval_result_kind Kind;
     i64 Int;
     char *Ident;
     variable_representation *Repr;
@@ -92,9 +102,8 @@ struct eval_result
 
 struct evaluator
 {
-	variable_representation *Vars;
-    u32 VarCount;
     variable_representation *Result;
+    scoped_vars Scope;
     ast AST;
 };
 
@@ -106,6 +115,7 @@ struct wlang_interp
 	evaluator Eval;
 
 	char *Src;
+    scoped_vars Scope;
 	variable_representation *Vars;
     u32 VarCount;
 
@@ -141,12 +151,12 @@ static void 		ParserBuildAST(parser *Parser);
 static void 		ParserCreateGraphvizFileFromAST(parser *Parser, char *OutputFilename);
 static void			ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb = 0);
 
-static evaluator    EvaluatorCreate(ast AST, variable_representation *Vars, u32 VarCount);
+static evaluator    EvaluatorCreate(ast AST, scoped_vars Scope);
 static void         EvaluatorDestroy(evaluator *Eval);
 static eval_result	EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
 static void    		EvaluatorRun(evaluator *Eval);
 
-static wlang_interp	WLangInterpCreate(char *Src, variable_representation *Vars, u32 VarCount);
+static wlang_interp	WLangInterpCreate(char *Src, scoped_vars Scope, variable_representation *Vars, u32 VarCount);
 static void 		WLangInterpDestroy(wlang_interp *Interp);
 static void			WLangInterpRun(wlang_interp *Interp);
 
