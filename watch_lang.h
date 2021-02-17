@@ -66,8 +66,8 @@ struct ast_node
 {
 	ast_node_kind Kind;
 	lex_token *Token;
-	ast_node **Children;
-	u32 ChildrenCount;
+    ast_node *Rhs;
+    ast_node *Lhs;
 };
 
 struct ast

@@ -372,11 +372,12 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 
 			ast_node *Node = StructPush(Parser->Arena, ast_node);
 			Node->Kind = ASTNodeKind_IndexExpr;
-			Node->ChildrenCount = 2;
-			Node->Children = ArrayPush(Parser->Arena, ast_node *, Node->ChildrenCount);
 
-			Node->Children[0] = Prev;
-			Node->Children[1] = IndexingExpr;
+            Node->Lhs = StructPush(Parser->Arena, ast_node);
+            Node->Rhs = StructPush(Parser->Arena, ast_node);
+
+            Node->Lhs = Prev;
+            Node->Rhs = IndexingExpr;
 
 			return ParserNextExpression(Parser, Node, Delimiter);		
 		}
@@ -391,11 +392,12 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 
             ast_node *Node = StructPush(Parser->Arena, ast_node);
             Node->Kind = ASTNodeKind_DotAccess;
-            Node->ChildrenCount = 2;
-            Node->Children = ArrayPush(Parser->Arena, ast_node *, Node->ChildrenCount);
 
-            Node->Children[0] = Prev;
-            Node->Children[1] = IdentNode;
+            Node->Lhs = StructPush(Parser->Arena, ast_node);
+            Node->Rhs = StructPush(Parser->Arena, ast_node);
+
+            Node->Lhs = Prev;
+            Node->Rhs = IdentNode;
 
             return ParserNextExpression(Parser, Node, Delimiter);
         }
@@ -410,11 +412,12 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 
             ast_node *Node = StructPush(Parser->Arena, ast_node);
             Node->Kind = ASTNodeKind_ArrowAccess;
-            Node->ChildrenCount = 2;
-            Node->Children = ArrayPush(Parser->Arena, ast_node *, Node->ChildrenCount);
 
-            Node->Children[0] = Prev;
-            Node->Children[1] = IdentNode;
+            Node->Lhs = StructPush(Parser->Arena, ast_node);
+            Node->Rhs = StructPush(Parser->Arena, ast_node);
+
+            Node->Lhs = Prev;
+            Node->Rhs = IdentNode;
 
             return ParserNextExpression(Parser, Node, Delimiter);
         }
@@ -489,10 +492,14 @@ ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 Prev
 	u32 Written = sprintf(ScratchString, "n%d [label=\"%s\"]", MyArbNumber, ScratchString2);
 	fwrite(ScratchString, Written, 1, FileHandle);
 
-	for(u32 I = 0; I < Node->ChildrenCount; I++)
-	{
-		ParserReasonAboutNode(Parser, FileHandle, Node->Children[I], MyArbNumber);
-	}
+    if(Node->Lhs)
+    {
+		ParserReasonAboutNode(Parser, FileHandle, Node->Lhs, MyArbNumber);
+    }
+    if(Node->Rhs)
+    {
+		ParserReasonAboutNode(Parser, FileHandle, Node->Rhs, MyArbNumber);
+    }
 }
 
 static evaluator
@@ -518,10 +525,10 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 {
     if(Expr->Kind == ASTNodeKind_IndexExpr)
     {
-        assert(Expr->ChildrenCount == 2);
+        assert(Expr->Lhs && Expr->Rhs);
 
-        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
-        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
+        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
 
         auto VarRepr = LeftSide.Repr;
 
@@ -561,10 +568,10 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
     }
     else if(Expr->Kind == ASTNodeKind_DotAccess)
     {
-        assert(Expr->ChildrenCount == 2);
+        assert(Expr->Lhs && Expr->Rhs);
 
-        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
-        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
+        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
 
         assert(RightSide.Ident);
         
@@ -602,10 +609,10 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
     }
     else if(Expr->Kind == ASTNodeKind_ArrowAccess)
     {
-        assert(Expr->ChildrenCount == 2);
+        assert(Expr->Lhs && Expr->Rhs);
 
-        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
-        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
+        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
 
         assert(RightSide.Ident);
 
