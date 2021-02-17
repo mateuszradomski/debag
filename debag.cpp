@@ -670,8 +670,10 @@ static void *
 ArenaPush(arena *Arena, size_t Size)
 {
     void *Result = 0x0;
+
+    assert(Arena);
     
-    if(Arena && Size)
+    if(Size)
     {
         memory_cursor_node *CursorNode = Arena->CursorNode;
         if(!CursorNode)

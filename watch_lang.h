@@ -44,6 +44,7 @@ struct lex_token_list
 struct lexer
 {
 	arena *Arena;
+    char *ErrorStr;
 	char *Content;
 	u32 ContentPos;
 	lex_token_list Tokens;
@@ -78,6 +79,7 @@ struct ast
 struct parser
 {
 	arena *Arena;
+    char *ErrorStr;
 	lex_token_list *Tokens;
 	lex_token_node *PosNode;
 	ast AST;
@@ -102,7 +104,9 @@ struct eval_result
 
 struct evaluator
 {
+    arena *Arena;
     variable_representation *Result;
+    char *ErrorStr;
     scoped_vars Scope;
     ast AST;
 };
@@ -119,10 +123,13 @@ struct wlang_interp
 	variable_representation *Vars;
     u32 VarCount;
 
+    char *ErrorStr;
+
     variable_representation *Result;
 };
 
 #define FILE_WRITE_STR(str, file) (fwrite(str, sizeof(str) - 1, 1, file))
+#define WATCHLANG_ERRORFMT "Unexpected character (%c)\n"
 
 #ifdef DEBUG
 #define LOG_LANG(fmt, ...) if(Debuger.Log.LangLogs) { printf(fmt, ##__VA_ARGS__); }
@@ -139,7 +146,6 @@ static char 	LexerPeekChar(lexer *Lexer);
 static char 	LexerConsumeChar(lexer *Lexer);
 static void 	LexerBuildTokens(lexer *Lexer);
 
-
 static char * 		ParserASTNodeKindToString(ast_node_kind Kind);
 
 static parser		ParserCreate(lex_token_list *Tokens, arena *Arena);
@@ -151,7 +157,9 @@ static void 		ParserBuildAST(parser *Parser);
 static void 		ParserCreateGraphvizFileFromAST(parser *Parser, char *OutputFilename);
 static void			ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb = 0);
 
-static evaluator    EvaluatorCreate(ast AST, scoped_vars Scope);
+static char *       ExpressionResultKindToString(eval_result_kind Kind);
+
+static evaluator    EvaluatorCreate(ast AST, scoped_vars Scope, arena *Arena);
 static void         EvaluatorDestroy(evaluator *Eval);
 static eval_result	EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
 static void    		EvaluatorRun(evaluator *Eval);

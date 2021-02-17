@@ -188,7 +188,10 @@ LexerBuildTokens(lexer *Lexer)
 		}
 		else if(C == '>')
 		{
-			assert(Minus);
+            Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof(WATCHLANG_ERRORFMT));
+            sprintf(Lexer->ErrorStr, WATCHLANG_ERRORFMT, C);
+            return;
+                
 			Minus = false;
 
 			lex_token Token = {};
@@ -255,7 +258,9 @@ LexerBuildTokens(lexer *Lexer)
 		}
 		else
 		{
-			assert(false && "Unreachable code");
+            Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof(WATCHLANG_ERRORFMT));
+            sprintf(Lexer->ErrorStr, WATCHLANG_ERRORFMT, C);
+            return;
 		}
 	}
 
@@ -333,8 +338,18 @@ ParserConsumeToken(parser *Parser)
 static ast_node *
 ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 {
+    if(Parser->ErrorStr)
+    {
+        return 0x0;
+    }
+    
 	lex_token *Token = ParserConsumeToken(Parser);
-	assert(Token);
+	if(!Token)
+    {
+        Parser->ErrorStr = "Unexpected end of file.";
+        return 0x0;
+    }
+    
 	if(Token->Kind == Delimiter)
 	{
 		return Prev;
@@ -360,8 +375,9 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 		}
         else
         {
-			printf("Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
-            assert(false);
+            Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
+			sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
+            return 0x0;
         }
 	}
 	else
@@ -384,7 +400,13 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
         else if(Token->Kind == TokenKind_Dot)
         {
             lex_token *Token2 = ParserConsumeToken(Parser);
-            assert(Token2->Kind == TokenKind_Symbol);
+            
+            if(Token2->Kind != TokenKind_Symbol)
+            {
+                Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
+                sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
+                return 0x0;
+            }
 
             ast_node *IdentNode = StructPush(Parser->Arena, ast_node);
             IdentNode->Kind = ASTNodeKind_Ident;
@@ -404,7 +426,12 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
         else if(Token->Kind == TokenKind_Arrow)
         {
             lex_token *Token2 = ParserConsumeToken(Parser);
-            assert(Token2->Kind == TokenKind_Symbol);
+            if(Token2->Kind != TokenKind_Symbol)
+            {
+                Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
+                sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
+                return 0x0;
+            }
 
             ast_node *IdentNode = StructPush(Parser->Arena, ast_node);
             IdentNode->Kind = ASTNodeKind_Ident;
@@ -423,8 +450,9 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
         }
 		else
 		{
-			printf("Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
-			assert(false);
+            Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
+            sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
+            return 0x0;
 		}
 	}
 
@@ -434,9 +462,18 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 static void
 ParserBuildAST(parser *Parser)
 {
-	assert(ParserPeekToken(Parser));
+    lex_token *FirstToken = ParserPeekToken(Parser);
+    if(!FirstToken)
+    {
+        Parser->ErrorStr = "Unexpected end of file.";
+        return;
+    }
 
-	Parser->AST.Root = ParserNextExpression(Parser, 0x0, TokenKind_EOF);
+    ast_node *RootNode = ParserNextExpression(Parser, 0x0, TokenKind_EOF);
+    if(RootNode)
+    {
+        Parser->AST.Root = RootNode;
+    }
 }
 
 u32 LastArbNumber = 0;
@@ -502,12 +539,29 @@ ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 Prev
     }
 }
 
+static char *
+ExpressionResultKindToString(eval_result_kind Kind)
+{
+    switch(Kind)
+    {
+    case EvalResultKind_NumberInt:
+        return "EvalResultKind_NumberInt";
+    case EvalResultKind_Ident:
+        return "EvalResultKind_Ident";
+    case EvalResultKind_Repr:
+        return "EvalResultKind_Repr";
+    default:
+        return "Unexpected expression kind";
+    }
+}
+
 static evaluator
-EvaluatorCreate(ast AST, scoped_vars Scope)
+EvaluatorCreate(ast AST, scoped_vars Scope, arena *Arena)
 {
     evaluator Result = {};
 
     Result.Scope = Scope;
+    Result.Arena = Arena;
     Result.AST = AST;
 
     return Result;
@@ -522,14 +576,35 @@ EvaluatorDestroy(evaluator *Eval)
 static eval_result
 EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 {
+    if(Eval->ErrorStr)
+    {
+        return {};
+    }
+
+    if(!Expr)
+    {
+        Eval->ErrorStr = (char *)"Unexpected lack of expression";
+        return {};
+    }
+
     if(Expr->Kind == ASTNodeKind_IndexExpr)
     {
-        assert(Expr->Lhs && Expr->Rhs);
+        if(!(Expr->Lhs && Expr->Rhs))
+        {
+            Eval->ErrorStr = (char *)"Unexpected lack of AST node children";
+            return {};
+        }
 
         eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
         eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
 
-        assert(LeftSide.Kind == EvalResultKind_Ident || LeftSide.Kind == EvalResultKind_Repr);
+        if(!(LeftSide.Kind == EvalResultKind_Ident || LeftSide.Kind == EvalResultKind_Repr))
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Unexpected expression kind %s\n", ExpressionResultKindToString(LeftSide.Kind));
+
+            return {};
+        }
 
         size_t VarAddress = 0x0;
         size_t TypeSize = 0x0;
@@ -540,8 +615,14 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         if(LeftSide.Kind == EvalResultKind_Ident)
         {
             di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, LeftSide.Ident);
-            assert(Var);
+            if(!Var)
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Variable [%s] not found in current scope\n", LeftSide.Ident);
 
+                return {};
+            }
+            
             VarAddress = DwarfGetVariableMemoryAddress(Var);
             VarName = Var->Name;
             Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
@@ -563,17 +644,38 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         VarAddress = Underlaying.Flags.IsPointer ? DebugeePeekMemory(VarAddress) : VarAddress;
         TypeSize = Underlaying.Type->ByteSize;
         TypeOffset = Underlaying.Type->DIEOffset;
-        
-        assert(RightSide.Kind == EvalResultKind_Ident || RightSide.Kind == EvalResultKind_NumberInt || RightSide.Kind == EvalResultKind_Repr);
+
+        if(!(RightSide.Kind == EvalResultKind_Ident ||
+           RightSide.Kind == EvalResultKind_NumberInt ||
+           RightSide.Kind == EvalResultKind_Repr))
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Cannot index with %s with %s ast node kind\n", RightSide.Ident, ExpressionResultKindToString(RightSide.Kind));
+
+            return {};
+        }
+
         i64 Index = 0;
         if(RightSide.Kind == EvalResultKind_Ident)
         {
             di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, RightSide.Ident);
-            assert(Var);
+            if(!Var)
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Variable [%s] not found in current scope\n", RightSide.Ident);
 
+                return {};
+            }
+            
             scratch_arena Scratch;
             variable_representation Repr = GuiBuildVariableRepresentation(Var, Scratch);
-            assert(Repr.Underlaying.Flags.IsBase && Repr.Underlaying.Type->Encoding != DW_ATE_float);
+            if(!(Repr.Underlaying.Flags.IsBase && Repr.Underlaying.Type->Encoding != DW_ATE_float))
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Cannot index with (%s) that is a non int type\n", RightSide.Ident);
+
+                return {};
+            }
 
             Index = atoll(Repr.ValueString);
         }
@@ -600,14 +702,28 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
     }
     else if(Expr->Kind == ASTNodeKind_DotAccess || Expr->Kind == ASTNodeKind_ArrowAccess)
     {
-        assert(Expr->Lhs && Expr->Rhs);
+        if(!(Expr->Lhs && Expr->Rhs))
+        {
+            Eval->ErrorStr = (char *)"Unexpected lack of AST node children";
+            return {};
+        }
 
         eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Lhs);
         eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
 
-        assert(RightSide.Ident);
+        if(RightSide.Kind != EvalResultKind_Ident)
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Cannot access a struct/union member with %s ast node kind.", ExpressionResultKindToString(RightSide.Kind));
+            return {};
+        }
 
-        assert(LeftSide.Kind == EvalResultKind_Repr || LeftSide.Kind == EvalResultKind_Ident);
+        if(!(LeftSide.Kind == EvalResultKind_Repr || LeftSide.Kind == EvalResultKind_Ident))
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Cannot access %s ast node kind as a struct/union.", ExpressionResultKindToString(LeftSide.Kind));
+            return {};
+        }
 
         size_t VarAddress = 0x0;
         size_t ByteLocation = 0x0;
@@ -618,7 +734,13 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         {
             auto VarRepr = LeftSide.Repr;
             assert(VarRepr);
-            assert(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion);
+            
+            if(!(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion))
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Variable [%s] is not a struct/union type.", VarRepr->Name);
+                return {};
+            }
 
             VarAddress = VarRepr->Address;
             Underlaying = VarRepr->Underlaying;
@@ -626,7 +748,13 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         else if(LeftSide.Kind == EvalResultKind_Ident)
         {
             di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, LeftSide.Ident);
-            assert(Var);
+            if(!Var)
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Variable [%s] not found in current scope\n", LeftSide.Ident);
+
+                return {};
+            }
 
             VarAddress = DwarfGetVariableMemoryAddress(Var);
             Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
@@ -635,7 +763,13 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         if(Underlaying.Flags.IsStruct)
         {
             di_struct_member *Member = DwarfStructGetMemberByName(Underlaying.Struct, RightSide.Ident);
-            assert(Member);
+            if(!Member)
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Struct [%s] does not contain [%s] as a member\n", Underlaying.Name, RightSide.Ident);
+
+                return {};
+            }
 
             ByteLocation = Member->ByteLocation;
             TypeOffset = Member->ActualTypeOffset;
@@ -643,7 +777,13 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         else if(Underlaying.Flags.IsUnion)
         {
             di_union_member *Member = DwarfUnionGetMemberByName(Underlaying.Union, RightSide.Ident);
-            assert(Member);
+            if(!Member)
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Union [%s] does not contain [%s] as a member\n", Underlaying.Name, RightSide.Ident);
+
+                return {};
+            }
 
             ByteLocation = Member->ByteLocation;
             TypeOffset = Member->ActualTypeOffset;
@@ -694,7 +834,37 @@ EvaluatorRun(evaluator *Eval)
 {
     eval_result EvalResult = EvaluatorEvalExpression(Eval, Eval->AST.Root);
 
-    Eval->Result = EvalResult.Repr;
+    if(Eval->ErrorStr)
+    {
+        return;
+    }
+    
+    if(EvalResult.Kind == EvalResultKind_Ident)
+    {
+        di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, EvalResult.Ident);
+        if(!Var)
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Variable [%s] not found in current scope\n", EvalResult.Ident);
+
+            return;
+        }
+
+        Eval->Result = StructPush(&Gui->Arena, variable_representation);
+        (*Eval->Result) = GuiBuildVariableRepresentation(Var, &Gui->Arena);
+
+    }
+    else if(EvalResult.Kind == EvalResultKind_Repr)
+    {
+        Eval->Result = EvalResult.Repr;
+    }
+    else
+    {
+        Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+        sprintf(Eval->ErrorStr, "Can't convert [%s] result kind to a showable representation\n", ExpressionResultKindToString(EvalResult.Kind));
+
+        return;
+    }
 }
 
 static wlang_interp
@@ -726,13 +896,33 @@ WLangInterpRun(wlang_interp *Interp)
 {
 	Interp->Lexer = LexerCreate(Interp->Src, &Interp->Arena);
 	LexerBuildTokens(&Interp->Lexer);
+    if(Interp->Lexer.ErrorStr)
+    {
+        LOG_LANG("[Lexer Error]: %s\n", Interp->Lexer.ErrorStr);
+        Interp->ErrorStr = Interp->Lexer.ErrorStr;
+        return;
+    }
 
 	LexerLogTokens(&Interp->Lexer);
 
 	Interp->Parser = ParserCreate(&Interp->Lexer.Tokens, &Interp->Arena);
 	ParserBuildAST(&Interp->Parser);
+    if(Interp->Parser.ErrorStr)
+    {
+        LOG_LANG("[Parser Error]: %s\n", Interp->Parser.ErrorStr);
+        Interp->ErrorStr = Interp->Parser.ErrorStr;
+        return;
+    }
 
-	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Scope);
+	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Scope, &Interp->Arena);
 	EvaluatorRun(&Interp->Eval);
+    
+    if(Interp->Eval.ErrorStr)
+    {
+        LOG_LANG("[Evaluator Error]: %s\n", Interp->Eval.ErrorStr);
+        Interp->ErrorStr = Interp->Eval.ErrorStr;
+        return;
+    }
+
 	Interp->Result = Interp->Eval.Result;
 }

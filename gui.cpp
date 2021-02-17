@@ -908,28 +908,36 @@ static void
 GuiShowWatch()
 {
     static variable_representation *Showing = 0x0;
+    static char *Error = 0x0;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+    ImGui::Columns(3, "tree", true);
+    ImGui::Text("Name");
+    ImGui::NextColumn();
+    ImGui::Text("Value");
+    ImGui::NextColumn();
+    ImGui::Text("Type");
+    ImGui::NextColumn();
+    ImGui::Separator();
 
     if(Showing)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
-        ImGui::Columns(3, "tree", true);
-        ImGui::Text("Name");
-        ImGui::NextColumn();
-        ImGui::Text("Value");
-        ImGui::NextColumn();
-        ImGui::Text("Type");
-        ImGui::NextColumn();
-        ImGui::Separator();
-
         GuiShowVariable(Showing, &Gui->Arena);
-
-        ImGui::Separator();
-
-        ImGui::Columns(1);
-        ImGui::PopStyleVar();
     }
 
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
     ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
+    ImGui::PopStyleVar();
+    ImGui::NextColumn();
+
+    if(Error) { ImGui::Text(Error); }
+    ImGui::NextColumn();
+    ImGui::NextColumn();
+
+    ImGui::Separator();
+
+    ImGui::Columns(1);
+    ImGui::PopStyleVar();
 
     if(ImGui::Button("Compile!"))
     {
@@ -940,7 +948,15 @@ GuiShowWatch()
         wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Scope, Gui->Variables, Gui->VariableCnt);
 
         WLangInterpRun(&Interp);
-        Showing = Interp.Result;
+        if(Interp.ErrorStr)
+        {
+            Error = StringDuplicate(&Gui->Arena, Interp.ErrorStr);
+        }
+        else
+        {
+            Showing = Interp.Result;
+            Error = 0x0;
+        }
 
         WLangInterpDestroy(&Interp);
     }
