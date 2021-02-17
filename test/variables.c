@@ -80,6 +80,13 @@ int main()
     
     real32 Result = X * ssss;
 
+    int idx = 0;
+    idx++;
+    idx = 8;
+    idx = 7;
+
+    int intarray[2] = {2, 8};
+
     union test_union testu = {};
     testu.abs.x = 1.0f;
 

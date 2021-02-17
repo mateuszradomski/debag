@@ -17,6 +17,7 @@ enum
     TokenKind_Star,
     TokenKind_DotDot,
     TokenKind_EOF,
+
 };
 
 typedef u32 token_kind;
@@ -85,10 +86,9 @@ struct parser
 
 struct eval_result
 {
-    size_t Int;
-    size_t ByteSize;
-    char *Name;
-    variable_representation Repr;
+    i64 Int;
+    char *Ident;
+    variable_representation *Repr;
 };
 
 struct evaluator
@@ -107,6 +107,7 @@ static void 	LexerDestroy(lexer *Lexer);
 static char 	LexerPeekChar(lexer *Lexer);
 static char 	LexerConsumeChar(lexer *Lexer);
 static void 	LexerBuildTokens(lexer *Lexer);
+
 
 static char * 		ParserASTNodeKindToString(ast_node_kind Kind);
 

@@ -207,7 +207,7 @@ LexerBuildTokens(lexer *Lexer)
 
 			while((C = LexerPeekChar(Lexer)))
 			{
-				if(C == '_' || isalpha(C))
+				if(C == '_' || isalpha(C) || isdigit(C))
 				{
 					if(!BytesLeft)
 					{
@@ -501,28 +501,28 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
         eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
 
-        assert(LeftSide.Name);
-        char *VarName = LeftSide.Name;
+        auto VarRepr = LeftSide.Repr;
 
-        variable_representation *VarRepr = 0x0;
-        for(u32 I = 0; I < Eval->VarCount; I++)
-        {
-            variable_representation *Current = &Eval->Vars[I];
-            if(StringMatches(VarName, Current->Name))
-            {
-                VarRepr = Current;
-            }
-        }
-
-        assert(VarRepr);
-        
         static_assert((offsetof(di_base_type, ByteSize) == offsetof(di_struct_type, ByteSize)) &&
                       (offsetof(di_base_type, ByteSize) == offsetof(di_union_type, ByteSize)),
                       "ByteSize arguments need to have the same offset between the checked types");
         // This is true only if the above assert passes 
         size_t TypeSize = VarRepr->Underlaying.Type->ByteSize;
-        size_t BaseAddress = VarRepr->Address;
-        size_t Index = RightSide.Int;
+        
+        size_t BaseAddress = VarRepr->Underlaying.Flags.IsPointer ? DebugeePeekMemory(VarRepr->Address) : VarRepr->Address;
+        
+        i64 Index = 0;
+        if(RightSide.Repr)
+        {
+            assert(RightSide.Repr->Underlaying.Flags.IsBase &&
+                   RightSide.Repr->Underlaying.Type->Encoding != DW_ATE_float);
+
+            Index = atoll(RightSide.Repr->ValueString);
+        }
+        else
+        {
+            Index = RightSide.Int;
+        }
 
         size_t ResultAddress = BaseAddress + Index * TypeSize;
 
@@ -532,15 +532,120 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         size_t Address = ResultAddress;
 
         // TODO(mateusz): No gui Arena
-        Result.Repr = GuiBuildMemberRepresentation(TypeOffset, Address, VarRepr->Name, &Gui->Arena);
+        Result.Repr = StructPush(&Gui->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, VarRepr->Name, &Gui->Arena);
+
+        return Result;
+    }
+    else if(Expr->Kind == ASTNodeKind_DotAccess)
+    {
+        assert(Expr->ChildrenCount == 2);
+
+        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
+
+        assert(RightSide.Ident);
+        
+        auto VarRepr = LeftSide.Repr;
+        assert(VarRepr);
+        assert(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion);
+
+        bool Found = false;
+        size_t ByteLocation = 0x0;
+        size_t TypeOffset = 0x0;
+        if(VarRepr->Underlaying.Flags.IsStruct)
+        {
+            di_struct_type *Struct = VarRepr->Underlaying.Struct;
+            for(u32 I = 0; I < Struct->MembersCount; I++)
+            {
+                if(StringMatches(RightSide.Ident, Struct->Members[I].Name))
+                {
+                    ByteLocation = Struct->Members[I].ByteLocation;
+                    TypeOffset = Struct->Members[I].ActualTypeOffset;
+                    Found = true;
+                    break;
+                }
+            }
+        }
+
+        assert(Found);
+
+        eval_result Result = {};
+
+        size_t Address = VarRepr->Address + ByteLocation;
+        Result.Repr = StructPush(&Gui->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
+        
+        return Result;
+    }
+    else if(Expr->Kind == ASTNodeKind_ArrowAccess)
+    {
+        assert(Expr->ChildrenCount == 2);
+
+        eval_result LeftSide = EvaluatorEvalExpression(Eval, Expr->Children[0]);
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Children[1]);
+
+        assert(RightSide.Ident);
+
+        auto VarRepr = LeftSide.Repr;
+        assert(VarRepr);
+        assert(VarRepr->Underlaying.Flags.IsStruct || VarRepr->Underlaying.Flags.IsUnion);
+
+        bool Found = false;
+        size_t ByteLocation = 0x0;
+        size_t TypeOffset = 0x0;
+        if(VarRepr->Underlaying.Flags.IsStruct)
+        {
+            di_struct_type *Struct = VarRepr->Underlaying.Struct;
+            for(u32 I = 0; I < Struct->MembersCount; I++)
+            {
+                if(StringMatches(RightSide.Ident, Struct->Members[I].Name))
+                {
+                    ByteLocation = Struct->Members[I].ByteLocation;
+                    TypeOffset = Struct->Members[I].ActualTypeOffset;
+                    Found = true;
+                    break;
+                }
+            }
+        }
+
+        assert(Found);
+
+        eval_result Result = {};
+
+        size_t VarAddress = DebugeePeekMemory(VarRepr->Address);
+
+        size_t Address = VarAddress + ByteLocation;
+        Result.Repr = StructPush(&Gui->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
 
         return Result;
     }
     else if(Expr->Kind == ASTNodeKind_Ident)
     {
         assert(Expr->Token && Expr->Token->Content);
+        char *Ident = Expr->Token->Content;
+        
         eval_result Result = {};
-        Result.Name = Expr->Token->Content;
+        variable_representation *VarRepr = 0x0;
+        for(u32 I = 0; I < Eval->VarCount; I++)
+        {
+            variable_representation *Current = &Eval->Vars[I];
+            if(StringMatches(Ident, Current->Name))
+            {
+                VarRepr = Current;
+                break;
+            }
+        }
+
+        if(VarRepr)
+        {
+            Result.Repr = VarRepr;
+        }
+        else
+        {
+            Result.Ident = Ident;
+        }
 
         return Result;
     }
@@ -551,8 +656,11 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
         return Result;
     }
-
-    assert(false);
+    else
+    {
+        printf("Unexpected AST Kind = %s\n", ParserASTNodeKindToString(Expr->Kind));
+        assert(false);
+    }
 }
 
 static variable_representation *
@@ -560,8 +668,7 @@ EvaluatorRun(evaluator *Eval)
 {
     eval_result EvalResult = EvaluatorEvalExpression(Eval, Eval->AST.Root);
 
-    variable_representation *Result = StructPush(&Gui->Arena, variable_representation);
-    (*Result) = EvalResult.Repr;
+    variable_representation *Result = EvalResult.Repr;
 
     return Result;
 }

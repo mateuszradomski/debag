@@ -929,9 +929,11 @@ GuiShowWatch()
         ImGui::PopStyleVar();
     }
 
-    if(KeyboardButtons[GLFW_KEY_B].Pressed)
+    ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
+
+    if(ImGui::Button("Compile!"))
     {
-        char *WatchLangSrc = (char *)"array[0]";
+        char *WatchLangSrc = Gui->WatchBuffer;
 
         lexer Lexer = LexerCreate(WatchLangSrc);
         LexerBuildTokens(&Lexer);

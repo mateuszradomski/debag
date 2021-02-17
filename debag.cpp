@@ -1991,7 +1991,7 @@ main(i32 ArgCount, char **Args)
     {
         if(StringMatches(Args[1], "-wl"))
         {
-            char *WatchLangSrc = (char *)"array[4]";
+            char *WatchLangSrc = (char *)"myVec2->x";
 
             lexer Lexer = LexerCreate(WatchLangSrc);
             LexerBuildTokens(&Lexer);
