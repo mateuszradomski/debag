@@ -934,36 +934,11 @@ GuiShowWatch()
     if(ImGui::Button("Compile!"))
     {
         char *WatchLangSrc = Gui->WatchBuffer;
+        wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Gui->Variables, Gui->VariableCnt);
 
-        lexer Lexer = LexerCreate(WatchLangSrc);
-        LexerBuildTokens(&Lexer);
+        WLangInterpRun(&Interp);
+        Showing = Interp.Result;
 
-        printf("There are %d tokens\n", Lexer.Tokens.Count);
-
-        for(lex_token_node *TokenNode = Lexer.Tokens.Head;
-            TokenNode != 0x0;
-            TokenNode = TokenNode->Next)
-        {
-            lex_token *Token = &TokenNode->Token;
-
-            if(Token->Content)
-            {
-                printf("%s [%s]\n", LexerTokenKindToString(Token->Kind), Token->Content);
-            }
-            else
-            {
-                printf("%s\n", LexerTokenKindToString(Token->Kind));
-            }
-        }
-
-        parser Parser = ParserCreate(&Lexer.Tokens);
-        ParserBuildAST(&Parser);
-
-        evaluator Eval = EvaluatorCreate(Parser.AST, Gui->Variables, Gui->VariableCnt);
-        Showing = EvaluatorRun(&Eval);
-        assert(Showing);
-
-        ParserDestroy(&Parser);
-        LexerDestroy(&Lexer);
+        WLangInterpDestroy(&Interp);
     }
 }

@@ -43,7 +43,7 @@ struct lex_token_list
 
 struct lexer
 {
-	arena Arena;
+	arena *Arena;
 	char *Content;
 	u32 ContentPos;
 	lex_token_list Tokens;
@@ -77,8 +77,7 @@ struct ast
 
 struct parser
 {
-	arena Arena;
-
+	arena *Arena;
 	lex_token_list *Tokens;
 	lex_token_node *PosNode;
 	ast AST;
@@ -93,16 +92,38 @@ struct eval_result
 
 struct evaluator
 {
-    variable_representation *Vars;
+	variable_representation *Vars;
     u32 VarCount;
+    variable_representation *Result;
     ast AST;
+};
+
+struct wlang_interp
+{
+	arena Arena;
+	lexer Lexer;
+	parser Parser;
+	evaluator Eval;
+
+	char *Src;
+	variable_representation *Vars;
+    u32 VarCount;
+
+    variable_representation *Result;
 };
 
 #define FILE_WRITE_STR(str, file) (fwrite(str, sizeof(str) - 1, 1, file))
 
-static char *	LexerTokenKindToString(token_kind Kind);
+#ifdef DEBUG
+#define LOG_LANG(fmt, ...) if(Debuger.Log.LangLogs) { printf(fmt, ##__VA_ARGS__); }
+#else
+#define LOG_LANG(...) do { } while (0)
+#endif
 
-static lexer 	LexerCreate(char *Content);
+static char *	LexerTokenKindToString(token_kind Kind);
+static void 	LexerLogTokens(lexer *Lexer);
+
+static lexer 	LexerCreate(char *Content, arena *Arena);
 static void 	LexerDestroy(lexer *Lexer);
 static char 	LexerPeekChar(lexer *Lexer);
 static char 	LexerConsumeChar(lexer *Lexer);
@@ -111,7 +132,7 @@ static void 	LexerBuildTokens(lexer *Lexer);
 
 static char * 		ParserASTNodeKindToString(ast_node_kind Kind);
 
-static parser		ParserCreate(lex_token_list *Tokens);
+static parser		ParserCreate(lex_token_list *Tokens, arena *Arena);
 static void			ParserDestroy(parser *Parser);
 static lex_token *	ParserPeekToken(parser *Parser);
 static lex_token *	ParserConsumeToken(parser *Parser);
@@ -120,9 +141,13 @@ static void 		ParserBuildAST(parser *Parser);
 static void 		ParserCreateGraphvizFileFromAST(parser *Parser, char *OutputFilename);
 static void			ParserReasonAboutNode(parser *Parser, FILE *FileHandle, ast_node *Node, u32 PrevArb = 0);
 
-static evaluator                    EvaluatorCreate(ast AST, variable_representation *Vars, u32 VarCount);
-static void                         EvaluatorDestroy(evaluator *Eval);
-static eval_result                  EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
-static variable_representation *    EvaluatorRun(evaluator *Eval);
+static evaluator    EvaluatorCreate(ast AST, variable_representation *Vars, u32 VarCount);
+static void         EvaluatorDestroy(evaluator *Eval);
+static eval_result	EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
+static void    		EvaluatorRun(evaluator *Eval);
+
+static wlang_interp	WLangInterpCreate(char *Src, variable_representation *Vars, u32 VarCount);
+static void 		WLangInterpDestroy(wlang_interp *Interp);
+static void			WLangInterpRun(wlang_interp *Interp);
 
 #endif //WATCH_LANG_H

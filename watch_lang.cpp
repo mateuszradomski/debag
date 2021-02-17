@@ -30,13 +30,35 @@ LexerTokenKindToString(token_kind Kind)
 	}
 }
 
+static void
+LexerLogTokens(lexer *Lexer)
+{
+	LOG_LANG("There are %d toknes\n", Lexer->Tokens.Count);
+
+	for(lex_token_node *TokenNode = Lexer->Tokens.Head;
+		TokenNode != 0x0;
+		TokenNode = TokenNode->Next)
+	{
+		lex_token *Token = &TokenNode->Token;
+
+		if(Token->Content)
+		{
+			LOG_LANG("%s [%s]\n", LexerTokenKindToString(Token->Kind), Token->Content);
+		}
+		else
+		{
+			LOG_LANG("%s\n", LexerTokenKindToString(Token->Kind));
+		}
+	}
+}
+
 static lexer
-LexerCreate(char *Content)
+LexerCreate(char *Content, arena *Arena)
 {
 	lexer Result = {};
 
-	Result.Arena = ArenaCreateZeros(Kilobytes(4));
-	Result.Content = StringDuplicate(&Result.Arena, Content);
+	Result.Arena = Arena;
+	Result.Content = Content;
 
 	return Result;
 }
@@ -44,7 +66,7 @@ LexerCreate(char *Content)
 static void
 LexerDestroy(lexer *Lexer)
 {
-	ArenaDestroy(&Lexer->Arena);
+	(void)Lexer;
 }
 
 static char
@@ -79,7 +101,7 @@ LexerConsumeChar(lexer *Lexer)
 static void
 LexerPushToken(lexer *Lexer, lex_token Token)
 {
-	lex_token_node *Node = ArrayPush(&Lexer->Arena, lex_token_node, 1);
+	lex_token_node *Node = ArrayPush(Lexer->Arena, lex_token_node, 1);
 	Node->Token = Token;
 	SLL_QUEUE_PUSH(Lexer->Tokens.Head, Lexer->Tokens.Tail, Node);
 	Lexer->Tokens.Count += 1;
@@ -97,7 +119,7 @@ LexerBuildTokens(lexer *Lexer)
 		if(isdigit(C))
 		{
 			u32 BytesLeft = 16;
-			char *String = ArrayPush(&Lexer->Arena, char, BytesLeft);
+			char *String = ArrayPush(Lexer->Arena, char, BytesLeft);
 			u32 StringPos = 0;
 
 			if(Minus)
@@ -116,7 +138,7 @@ LexerBuildTokens(lexer *Lexer)
 				{
 					if(!BytesLeft)
 					{
-						BytesPush(&Lexer->Arena, 16);
+						BytesPush(Lexer->Arena, 16);
 						BytesLeft = 16;
 					}
 
@@ -199,7 +221,7 @@ LexerBuildTokens(lexer *Lexer)
 		else if(C == '_' || isalpha(C))
 		{
 			u32 BytesLeft = 16;
-			char *String = ArrayPush(&Lexer->Arena, char, BytesLeft);
+			char *String = ArrayPush(Lexer->Arena, char, BytesLeft);
 			u32 StringPos = 0;
 
 			String[StringPos++] = C;
@@ -211,7 +233,7 @@ LexerBuildTokens(lexer *Lexer)
 				{
 					if(!BytesLeft)
 					{
-						BytesPush(&Lexer->Arena, 16);
+						BytesPush(Lexer->Arena, 16);
 						BytesLeft = 16;
 					}
 
@@ -267,12 +289,12 @@ ParserASTNodeKindToString(ast_node_kind Kind)
 }
 
 static parser
-ParserCreate(lex_token_list *Tokens)
+ParserCreate(lex_token_list *Tokens, arena *Arena)
 {
 	parser Result = {};
 
 	Result.Tokens = Tokens;
-	Result.Arena = ArenaCreateZeros(Kilobytes(4));
+	Result.Arena = Arena;
 
 	return Result;
 }
@@ -280,7 +302,7 @@ ParserCreate(lex_token_list *Tokens)
 static void	
 ParserDestroy(parser *Parser)
 {
-	ArenaDestroy(&Parser->Arena);
+	(void)Parser;
 }
 
 static lex_token *
@@ -322,7 +344,7 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 	{
 		if(Token->Kind == TokenKind_Symbol)
 		{
-			ast_node *Node = StructPush(&Parser->Arena, ast_node);
+			ast_node *Node = StructPush(Parser->Arena, ast_node);
 			Node->Kind = ASTNodeKind_Ident;
 			Node->Token = Token;
 
@@ -330,7 +352,7 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 		}
 		else if(Token->Kind == TokenKind_ImmInt)
 		{
-			ast_node *Node = StructPush(&Parser->Arena, ast_node);
+			ast_node *Node = StructPush(Parser->Arena, ast_node);
 			Node->Kind = ASTNodeKind_IntLit;
 			Node->Token = Token;
 
@@ -348,10 +370,10 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 		{
 			ast_node *IndexingExpr = ParserNextExpression(Parser, 0x0, TokenKind_BracketCl);
 
-			ast_node *Node = StructPush(&Parser->Arena, ast_node);
+			ast_node *Node = StructPush(Parser->Arena, ast_node);
 			Node->Kind = ASTNodeKind_IndexExpr;
 			Node->ChildrenCount = 2;
-			Node->Children = ArrayPush(&Parser->Arena, ast_node *, Node->ChildrenCount);
+			Node->Children = ArrayPush(Parser->Arena, ast_node *, Node->ChildrenCount);
 
 			Node->Children[0] = Prev;
 			Node->Children[1] = IndexingExpr;
@@ -363,14 +385,14 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
             lex_token *Token2 = ParserConsumeToken(Parser);
             assert(Token2->Kind == TokenKind_Symbol);
 
-            ast_node *IdentNode = StructPush(&Parser->Arena, ast_node);
+            ast_node *IdentNode = StructPush(Parser->Arena, ast_node);
             IdentNode->Kind = ASTNodeKind_Ident;
             IdentNode->Token = Token2;
 
-            ast_node *Node = StructPush(&Parser->Arena, ast_node);
+            ast_node *Node = StructPush(Parser->Arena, ast_node);
             Node->Kind = ASTNodeKind_DotAccess;
             Node->ChildrenCount = 2;
-            Node->Children = ArrayPush(&Parser->Arena, ast_node *, Node->ChildrenCount);
+            Node->Children = ArrayPush(Parser->Arena, ast_node *, Node->ChildrenCount);
 
             Node->Children[0] = Prev;
             Node->Children[1] = IdentNode;
@@ -382,14 +404,14 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
             lex_token *Token2 = ParserConsumeToken(Parser);
             assert(Token2->Kind == TokenKind_Symbol);
 
-            ast_node *IdentNode = StructPush(&Parser->Arena, ast_node);
+            ast_node *IdentNode = StructPush(Parser->Arena, ast_node);
             IdentNode->Kind = ASTNodeKind_Ident;
             IdentNode->Token = Token2;
 
-            ast_node *Node = StructPush(&Parser->Arena, ast_node);
+            ast_node *Node = StructPush(Parser->Arena, ast_node);
             Node->Kind = ASTNodeKind_ArrowAccess;
             Node->ChildrenCount = 2;
-            Node->Children = ArrayPush(&Parser->Arena, ast_node *, Node->ChildrenCount);
+            Node->Children = ArrayPush(Parser->Arena, ast_node *, Node->ChildrenCount);
 
             Node->Children[0] = Prev;
             Node->Children[1] = IdentNode;
@@ -663,12 +685,49 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
     }
 }
 
-static variable_representation *
+static void
 EvaluatorRun(evaluator *Eval)
 {
     eval_result EvalResult = EvaluatorEvalExpression(Eval, Eval->AST.Root);
 
-    variable_representation *Result = EvalResult.Repr;
+    Eval->Result = EvalResult.Repr;
+}
 
-    return Result;
+static wlang_interp
+WLangInterpCreate(char *Src, variable_representation *Vars, u32 VarCount)
+{
+	wlang_interp Result = {};
+
+	Result.Arena = ArenaCreate(Kilobytes(4));
+	Result.Src = StringDuplicate(&Result.Arena, Src);
+	Result.Vars = Vars;
+	Result.VarCount = VarCount;
+
+	return Result;
+}
+
+static void
+WLangInterpDestroy(wlang_interp *Interp)
+{
+	LexerDestroy(&Interp->Lexer);
+	ParserDestroy(&Interp->Parser);
+	EvaluatorDestroy(&Interp->Eval);
+
+	ArenaDestroy(&Interp->Arena);
+}
+
+static void
+WLangInterpRun(wlang_interp *Interp)
+{
+	Interp->Lexer = LexerCreate(Interp->Src, &Interp->Arena);
+	LexerBuildTokens(&Interp->Lexer);
+
+	LexerLogTokens(&Interp->Lexer);
+
+	Interp->Parser = ParserCreate(&Interp->Lexer.Tokens, &Interp->Arena);
+	ParserBuildAST(&Interp->Parser);
+
+	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Vars, Interp->VarCount);
+	EvaluatorRun(&Interp->Eval);
+	Interp->Result = Interp->Eval.Result;
 }

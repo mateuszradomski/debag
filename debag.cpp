@@ -1991,9 +1991,10 @@ main(i32 ArgCount, char **Args)
     {
         if(StringMatches(Args[1], "-wl"))
         {
+            scratch_arena Scratch;
             char *WatchLangSrc = (char *)"myVec2->x";
 
-            lexer Lexer = LexerCreate(WatchLangSrc);
+            lexer Lexer = LexerCreate(WatchLangSrc, Scratch);
             LexerBuildTokens(&Lexer);
 
             printf("There are %d tokens\n", Lexer.Tokens.Count);
@@ -2014,7 +2015,7 @@ main(i32 ArgCount, char **Args)
                 }
             }
 
-            parser Parser = ParserCreate(&Lexer.Tokens);
+            parser Parser = ParserCreate(&Lexer.Tokens, Scratch);
             ParserBuildAST(&Parser);
 
             ParserCreateGraphvizFileFromAST(&Parser, "graph_src.dot");

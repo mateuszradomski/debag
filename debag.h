@@ -191,6 +191,7 @@ struct logging_switches
     bool MainLogs;
     bool DisasmLogs;
     bool FlowLogs;
+    bool LangLogs;
 };
 
 struct dbg
