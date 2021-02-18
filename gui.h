@@ -42,6 +42,14 @@ struct gui_flags
     u8 VarShowLocals : 1;
 };
 
+enum
+{
+    VarEditKind_Name,
+    VarEditKind_Value,
+};
+
+typedef u8 var_edit_kind;
+
 struct gui_data
 {
     arena Arena;
@@ -61,8 +69,10 @@ struct gui_data
     variable_representation *Variables;
     u32 VariableCnt;
     size_t LocalsBuildAddress;
-    variable_representation *VariableInEdit;
-    char VariableEditBuffer[128];
+    variable_representation *VarInEdit;
+    var_edit_kind VarEditKind;
+    char VarValueEditBuffer[128];
+    char VarNameEditBuffer[128];
 
     char WatchBuffer[128];
     variable_representation_list WatchVars;

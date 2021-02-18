@@ -86,65 +86,130 @@ GuiShowBreakpoints()
 }
 
 static void
-GuiShowVariable(variable_representation *Variable, arena *Arena)
+GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+    auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
+    ImGui::InputText("###input_label", Gui->VarValueEditBuffer, sizeof(Gui->VarValueEditBuffer), ITFlags);
+    ImGui::PopStyleVar();
+
+    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    {
+        size_t ToPoke = 0x0;
+        Gui->EnterCaptured = true;
+
+        u8 *ParsedBytes = (u8 *)&ToPoke;
+        di_underlaying_type *Underlaying = &Variable->Underlaying;
+        char *String = Gui->VarValueEditBuffer;
+
+        u32 TypeBytesCnt = DwarfParseTypeStringToBytes(Underlaying, String, ParsedBytes);
+
+        if(TypeBytesCnt < sizeof(size_t))
+        {
+            size_t InMemoryAlready = DebugeePeekMemory(Variable->Address);
+            u8 *MemoryBytes = (u8 *)&InMemoryAlready;
+
+            for(u32 I = TypeBytesCnt; I < sizeof(size_t); I++)
+            {
+                ParsedBytes[I] = MemoryBytes[I];
+            }
+        }
+
+        DebugeePokeMemory(Variable->Address, ToPoke);
+
+        Variable[0] = GuiRebuildVariableRepresentation(Variable, Arena);
+    }
+
+    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    {
+        Gui->VarInEdit = 0x0;
+        memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
+    }
+}
+
+static void
+GuiEditVariableName(variable_representation *Variable, arena *Arena)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+    auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
+    ImGui::InputText("###input_label", Gui->VarNameEditBuffer, sizeof(Gui->VarNameEditBuffer), ITFlags);
+    ImGui::PopStyleVar();
+
+    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    {
+        Gui->EnterCaptured = true;
+
+        size_t PC = DebugeeGetProgramCounter();
+        scoped_vars Scope = DwarfGetScopedVars(PC);
+        wlang_interp Interp = WLangInterpCreate(Gui->VarNameEditBuffer, Scope);
+
+        WLangInterpRun(&Interp);
+        if(Interp.ErrorStr)
+        {
+            Variable->ValueString = StringDuplicate(&Gui->Arena, Interp.ErrorStr);
+        }
+        else
+        {
+            *(Variable) = *Interp.Result;
+            Variable->Name = StringDuplicate(&Gui->Arena, Gui->VarNameEditBuffer);
+            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
+        }
+    }
+
+    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    {
+        Gui->VarInEdit = 0x0;
+        memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
+    }
+}
+
+static void
+GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditName = false)
 {
     // I'm taking a gamble here and seeing if i can leave it like this
     assert(!(Variable->Underlaying.Flags.IsArray && Variable->Underlaying.Flags.IsPointer));
     
     if(Variable->Underlaying.Flags.IsBase && !Variable->Underlaying.Flags.IsArray)
     {
-        ImGui::Text(Variable->Name); ImGui::NextColumn();
-
-        if(Gui->VariableInEdit && Gui->VariableInEdit == Variable)
+        // Watch variables src/name editing
+        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Name && Gui->VarInEdit == Variable)
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-            auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
-            ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer), ITFlags);
-            ImGui::PopStyleVar();
+            GuiEditVariableName(Variable, Arena);
+        }
+        else
+        {
+            ImGui::Text(Variable->Name);
+        } ImGui::NextColumn();
 
-            if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
-            {
-                size_t ToPoke = 0x0;
-                Gui->EnterCaptured = true;
+        if(LetEditName &&
+           !Gui->VarInEdit &&
+           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+           ImGui::IsItemClicked())
+        {
+            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
+            StringCopy(Gui->VarNameEditBuffer, Variable->Name);
+            Gui->VarEditKind = VarEditKind_Name;
+            Gui->VarInEdit = Variable;
+        }
 
-                u8 *ParsedBytes = (u8 *)&ToPoke;
-                di_underlaying_type *Underlaying = &Variable->Underlaying;
-                char *String = Gui->VariableEditBuffer;
-                
-                u32 TypeBytesCnt = DwarfParseTypeStringToBytes(Underlaying, String, ParsedBytes);
-
-                if(TypeBytesCnt < sizeof(size_t))
-                {
-                    size_t InMemoryAlready = DebugeePeekMemory(Variable->Address);
-                    u8 *MemoryBytes = (u8 *)&InMemoryAlready;
-
-                    for(u32 I = TypeBytesCnt; I < sizeof(size_t); I++)
-                    {
-                        ParsedBytes[I] = MemoryBytes[I];
-                    }
-                }
-
-                DebugeePokeMemory(Variable->Address, ToPoke);
-
-                Variable[0] = GuiRebuildVariableRepresentation(Variable, Arena);
-            }
-
-            if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
-            {
-                Gui->VariableInEdit = 0x0;
-                memset(Gui->VariableEditBuffer, 0, sizeof(Gui->VariableEditBuffer));
-            }
+        // Variables value editing
+        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Value && Gui->VarInEdit == Variable)
+        {
+            GuiEditBaseVariableValue(Variable, Arena);
         }
         else
         {
             ImGui::Text(Variable->ValueString);
         } ImGui::NextColumn();
 
-        if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemClicked())
+        if(!Gui->VarInEdit &&
+           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+           ImGui::IsItemClicked())
         {            
-            memset(Gui->VariableEditBuffer, 0, sizeof(Gui->VariableEditBuffer));
-            StringCopy(Gui->VariableEditBuffer, Variable->ValueString);
-            Gui->VariableInEdit = Variable;
+            memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
+            StringCopy(Gui->VarValueEditBuffer, Variable->ValueString);
+            Gui->VarEditKind = VarEditKind_Value;
+            Gui->VarInEdit = Variable;
         }
 
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
@@ -942,7 +1007,8 @@ GuiShowWatch()
         VarNode != 0x0; VarNode = VarNode->Next)
     {
         variable_representation *Var = &VarNode->Var;
-        GuiShowVariable(Var, &Gui->Arena);
+        bool AllowNameEditing = true;
+        GuiShowVariable(Var, &Gui->Arena, AllowNameEditing);
     }
     
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
@@ -977,6 +1043,7 @@ GuiShowWatch()
         {
             variable_representation_node *VarNode = StructPush(&Gui->Arena, variable_representation_node);
             VarNode->Var = *Interp.Result;
+            VarNode->Var.Name = StringDuplicate(&Gui->Arena, Gui->WatchBuffer);
             SLL_QUEUE_PUSH(Gui->WatchVars.Head, Gui->WatchVars.Tail, VarNode);
             Gui->WatchVars.Count += 1;
             memset(Gui->WatchBuffer, 0, sizeof(Gui->WatchBuffer));
