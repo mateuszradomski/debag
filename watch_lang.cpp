@@ -291,6 +291,8 @@ ParserASTNodeKindToString(ast_node_kind Kind)
         return "ASTNodeKind_DotAccess";
     case ASTNodeKind_ArrowAccess:
         return "ASTNodeKind_ArrowAccess";
+    case ASTNodeKind_PtrDeref:
+        return "ASTNodeKind_PtrDeref";
     default:
         return "Unexpected ASTNodeKind";
     }
@@ -357,6 +359,25 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 	{
 		return Prev;
 	}
+
+    if(Token->Kind == TokenKind_Star)
+    {
+        ast_node *Node = StructPush(Parser->Arena, ast_node);
+        Node->Kind = ASTNodeKind_PtrDeref;
+        Node->Token = Token;
+
+        Node->Rhs = StructPush(Parser->Arena, ast_node);
+        Node->Rhs = ParserNextExpression(Parser, 0x0, Delimiter);
+
+        if(Parser->PosNode->Token.Kind != Delimiter)
+        {
+            return ParserNextExpression(Parser, Node, Delimiter);
+        }
+        else
+        {
+            return Node;
+        }
+    }
 
 	if(!Prev)
 	{

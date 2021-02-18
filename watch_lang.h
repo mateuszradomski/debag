@@ -58,6 +58,7 @@ enum
 	ASTNodeKind_IndexExpr,
     ASTNodeKind_DotAccess,
     ASTNodeKind_ArrowAccess,
+    ASTNodeKind_PtrDeref,
 };
 
 typedef u32 ast_node_kind;
