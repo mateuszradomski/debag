@@ -1291,7 +1291,8 @@ DebugerDeallocTransient()
     Gui->FuncRepresentationCount = 0;
     Gui->Variables = 0x0;
     Gui->VariableCnt = 0;
-    Gui->BuildAddress = 0x0;
+    Gui->LocalsBuildAddress = 0x0;
+    Gui->WatchBuildAddress = 0x0;
     
     memset(DI, 0, sizeof(debug_info));
 }

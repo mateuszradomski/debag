@@ -57,14 +57,16 @@ struct gui_data
     function_representation *FuncRepresentation;
     u32 FuncRepresentationCount;
 
+    bool EnterCaptured;
     variable_representation *Variables;
     u32 VariableCnt;
-    size_t BuildAddress;
+    size_t LocalsBuildAddress;
     variable_representation *VariableInEdit;
     char VariableEditBuffer[128];
 
     char WatchBuffer[128];
     variable_representation_list WatchVars;
+    size_t WatchBuildAddress;
 
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;

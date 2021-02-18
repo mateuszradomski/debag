@@ -14,6 +14,8 @@ GuiStartFrame()
     ImGui_ImplOpenGL2_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    Gui->EnterCaptured = false;
 }
 
 static void
@@ -100,9 +102,10 @@ GuiShowVariable(variable_representation *Variable, arena *Arena)
             ImGui::InputText("###input_label", Gui->VariableEditBuffer, sizeof(Gui->VariableEditBuffer), ITFlags);
             ImGui::PopStyleVar();
 
-            if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+            if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
             {
                 size_t ToPoke = 0x0;
+                Gui->EnterCaptured = true;
 
                 u8 *ParsedBytes = (u8 *)&ToPoke;
                 di_underlaying_type *Underlaying = &Variable->Underlaying;
@@ -243,10 +246,10 @@ static void
 GuiShowVariables()
 {
     size_t PC = DebugeeGetProgramCounter();
-    if(Gui->BuildAddress != PC)
+    if(Gui->LocalsBuildAddress != PC)
     {
         ArenaClear(&Gui->RepresentationArena);
-        Gui->BuildAddress = PC;
+        Gui->LocalsBuildAddress = PC;
         
         di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
         di_function *Func = DwarfFindFunctionByAddress(PC);
@@ -337,7 +340,7 @@ GuiShowVariables()
             Gui->Flags.VarShowParams = Options[1];
             Gui->Flags.VarShowLocals = Options[2];
 
-            Gui->BuildAddress = 0x0;
+            Gui->LocalsBuildAddress = 0x0;
         }
 
         ImGui::EndPopup();
@@ -374,11 +377,13 @@ _GuiShowBreakAtFunctionWindow()
         Gui->ModalFuncShow = 0x0;
         return;
     }
-    if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    
+    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
     {
         BreakAtFunctionName(Gui->BreakFuncName);
         memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
         Gui->ModalFuncShow = 0x0;
+        Gui->EnterCaptured = true;
         return;
     }
 
@@ -909,6 +914,20 @@ GuiShowWatch()
 {
     static char *Error = 0x0;
 
+    size_t PC = DebugeeGetProgramCounter();
+    if(PC != Gui->WatchBuildAddress)
+    {
+        for(variable_representation_node *VarNode = Gui->WatchVars.Head;
+            VarNode != 0x0;
+            VarNode = VarNode->Next)
+        {
+            variable_representation *Var = &VarNode->Var;
+            (*Var) = GuiRebuildVariableRepresentation(Var, &Gui->Arena);
+        }
+
+        Gui->WatchBuildAddress = PC;
+    }
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
     ImGui::Columns(3, "tree", true);
     ImGui::Text("Name");
@@ -940,9 +959,10 @@ GuiShowWatch()
     ImGui::Columns(1);
     ImGui::PopStyleVar();
 
-    if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
     {
         char *WatchLangSrc = Gui->WatchBuffer;
+        Gui->EnterCaptured = true;
 
         size_t PC = DebugeeGetProgramCounter();
         scoped_vars Scope = DwarfGetScopedVars(PC);
