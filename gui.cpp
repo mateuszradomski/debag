@@ -130,6 +130,7 @@ GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
 static void
 GuiEditVariableName(variable_representation *Variable, arena *Arena)
 {
+    (void)Arena;
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
     auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
     ImGui::InputText("###input_label", Gui->VarNameEditBuffer, sizeof(Gui->VarNameEditBuffer), ITFlags);
@@ -154,6 +155,8 @@ GuiEditVariableName(variable_representation *Variable, arena *Arena)
             Variable->Name = StringDuplicate(&Gui->Arena, Gui->VarNameEditBuffer);
             memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
         }
+
+        WLangInterpDestroy(&Interp);
     }
 
     if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
@@ -220,11 +223,36 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
         assert(sizeof(di_union_type) == sizeof(di_struct_type));
         assert(sizeof(di_union_member) == sizeof(di_struct_member));
 
-        bool Open = ImGui::TreeNode(Variable->Name); ImGui::NextColumn();
+        bool Open = false;
+        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Name && Gui->VarInEdit == Variable)
+        {
+            GuiEditVariableName(Variable, Arena);
+        }
+        else
+        {
+            Open = ImGui::TreeNode(Variable->Name);
+        } ImGui::NextColumn();
+
+        if(LetEditName &&
+           !Gui->VarInEdit &&
+           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+           ImGui::IsItemClicked())
+        {            
+            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
+            StringCopy(Gui->VarNameEditBuffer, Variable->Name);
+            Gui->VarEditKind = VarEditKind_Name;
+            Gui->VarInEdit = Variable;
+
+            if(Open)
+            {
+                ImGui::TreePop();
+            }
+        }
+        
         ImGui::Text(Variable->ValueString); ImGui::NextColumn();
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
 
-        if(Open)
+        if(Open && Gui->VarInEdit != Variable)
         {
             if(!Variable->Children)
             {
@@ -271,11 +299,36 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
     }
     else if(Variable->Underlaying.Flags.IsArray)
     {
-        bool Open = ImGui::TreeNode(Variable->Name); ImGui::NextColumn();
+        bool Open = false;
+        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Name && Gui->VarInEdit == Variable)
+        {
+            GuiEditVariableName(Variable, Arena);
+        }
+        else
+        {
+            Open = ImGui::TreeNode(Variable->Name);
+        } ImGui::NextColumn();
+
+        if(LetEditName &&
+           !Gui->VarInEdit &&
+           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+           ImGui::IsItemClicked())
+        {            
+            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
+            StringCopy(Gui->VarNameEditBuffer, Variable->Name);
+            Gui->VarEditKind = VarEditKind_Name;
+            Gui->VarInEdit = Variable;
+
+            if(Open)
+            {
+                ImGui::TreePop();
+            }
+        }
+
         ImGui::Text(Variable->ValueString); ImGui::NextColumn();
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
 
-        if(Open)
+        if(Open && Gui->VarInEdit != Variable)
         {
             if(!Variable->Children)
             {
