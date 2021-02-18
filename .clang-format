@@ -5,15 +5,15 @@ AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
 AlignConsecutiveMacros: false
 AlignConsecutiveAssignments: false
-AlignConsecutiveBitFields: false
+#AlignConsecutiveBitFields: false
 AlignConsecutiveDeclarations: false
 AlignEscapedNewlines: Right
-AlignOperands: Align
+AlignOperands: true
 AlignTrailingComments: true
 AllowAllArgumentsOnNextLine: false
 AllowAllConstructorInitializersOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortEnumsOnASingleLine: true
+#AllowShortEnumsOnASingleLine: true
 AllowShortBlocksOnASingleLine: Always
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
@@ -39,8 +39,8 @@ BraceWrapping:
   AfterExternBlock: true
   BeforeCatch:     true
   BeforeElse:      true
-  BeforeLambdaBody: true
-  BeforeWhile:     true
+#  BeforeLambdaBody: true
+#  BeforeWhile:     true
   IndentBraces:    false
   SplitEmptyFunction: true
   SplitEmptyRecord: true
@@ -84,13 +84,13 @@ IncludeCategories:
 IncludeIsMainRegex: '(Test)?$'
 IncludeIsMainSourceRegex: ''
 IndentCaseLabels: false
-IndentCaseBlocks: false
+#IndentCaseBlocks: false
 IndentGotoLabels: true
 IndentPPDirectives: None
-IndentExternBlock: AfterExternBlock
+#IndentExternBlock: AfterExternBlock
 IndentWidth:     4
 IndentWrappedFunctionNames: false
-InsertTrailingCommas: None
+#InsertTrailingCommas: None
 JavaScriptQuotes: Leave
 JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: true
@@ -100,7 +100,7 @@ MaxEmptyLinesToKeep: 1
 NamespaceIndentation: Inner
 ObjCBinPackProtocolList: Auto
 ObjCBlockIndentWidth: 4
-ObjCBreakBeforeNestedBlockParam: true
+#ObjCBreakBeforeNestedBlockParam: true
 ObjCSpaceAfterProperty: true
 ObjCSpaceBeforeProtocolList: true
 PenaltyBreakAssignment: 2
@@ -141,9 +141,9 @@ StatementMacros:
 TabWidth:        8
 UseCRLF:         false
 UseTab:          Never
-WhitespaceSensitiveMacros:
-  - STRINGIZE
-  - PP_STRINGIZE
-  - BOOST_PP_STRINGIZE
-...
+# WhitespaceSensitiveMacros:
+#   - STRINGIZE
+#   - PP_STRINGIZE
+#   - BOOST_PP_STRINGIZE
+#...
 
