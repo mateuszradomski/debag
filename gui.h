@@ -78,6 +78,8 @@ struct gui_data
     variable_representation_list WatchVars;
     size_t WatchBuildAddress;
 
+    bool CloseNextTree;
+
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
     gui_flags Flags;

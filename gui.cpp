@@ -100,8 +100,9 @@ static void
 GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
 {
     GuiShowVarInputText("###valueedit", Gui->VarValueEditBuffer, sizeof(Gui->VarValueEditBuffer));
-    
-    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+
+    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    if(EnterAvaiable)
     {
         size_t ToPoke = 0x0;
         Gui->EnterCaptured = true;
@@ -128,7 +129,7 @@ GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
         Variable[0] = GuiRebuildVariableRepresentation(Variable, Arena);
     }
 
-    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || EnterAvaiable)
     {
         Gui->VarInEdit = 0x0;
         memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
@@ -141,7 +142,8 @@ GuiEditVariableName(variable_representation *Variable, arena *Arena)
     (void)Arena;
     GuiShowVarInputText("###varedit", Gui->VarNameEditBuffer, sizeof(Gui->VarNameEditBuffer));
 
-    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    if(EnterAvaiable)
     {
         Gui->EnterCaptured = true;
 
@@ -164,9 +166,10 @@ GuiEditVariableName(variable_representation *Variable, arena *Arena)
         WLangInterpDestroy(&Interp);
     }
 
-    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || EnterAvaiable)
     {
         Gui->VarInEdit = 0x0;
+        Gui->CloseNextTree = true;
         memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
     }
 }
@@ -235,7 +238,14 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
         }
         else
         {
-            Open = ImGui::TreeNode(Variable->Name);
+            if(Gui->CloseNextTree)
+            {
+                ImGui::SetNextItemOpen(false);
+                Gui->CloseNextTree = false;
+            }
+
+            ImGuiTreeNodeFlags TNFlags = ImGuiTreeNodeFlags_OpenOnArrow;
+            Open = ImGui::TreeNodeEx(Variable->Name, TNFlags);
         } ImGui::NextColumn();
 
         if(LetEditName &&
@@ -247,7 +257,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
             StringCopy(Gui->VarNameEditBuffer, Variable->Name);
             Gui->VarEditKind = VarEditKind_Name;
             Gui->VarInEdit = Variable;
-
+            
             if(Open)
             {
                 ImGui::TreePop();
@@ -311,9 +321,16 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
         }
         else
         {
-            Open = ImGui::TreeNode(Variable->Name);
+            if(Gui->CloseNextTree)
+            {
+                ImGui::SetNextItemOpen(false);
+                Gui->CloseNextTree = false;
+            }
+            
+            ImGuiTreeNodeFlags TNFlags = ImGuiTreeNodeFlags_OpenOnArrow;
+            Open = ImGui::TreeNodeEx(Variable->Name, TNFlags);
         } ImGui::NextColumn();
-
+        
         if(LetEditName &&
            !Gui->VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
@@ -500,8 +517,9 @@ _GuiShowBreakAtFunctionWindow()
         Gui->ModalFuncShow = 0x0;
         return;
     }
-    
-    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+
+    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    if(EnterAvaiable)
     {
         BreakAtFunctionName(Gui->BreakFuncName);
         memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
@@ -1083,7 +1101,8 @@ GuiShowWatch()
     ImGui::Columns(1);
     ImGui::PopStyleVar();
 
-    if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
+    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    if(EnterAvaiable)
     {
         char *WatchLangSrc = Gui->WatchBuffer;
         Gui->EnterCaptured = true;
