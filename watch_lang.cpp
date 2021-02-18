@@ -188,9 +188,12 @@ LexerBuildTokens(lexer *Lexer)
 		}
 		else if(C == '>')
 		{
-            Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof(WATCHLANG_ERRORFMT));
-            sprintf(Lexer->ErrorStr, WATCHLANG_ERRORFMT, C);
-            return;
+            if(!Minus)
+            {
+                Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof(WATCHLANG_ERRORFMT));
+                sprintf(Lexer->ErrorStr, WATCHLANG_ERRORFMT, C);
+                return;
+            }
                 
 			Minus = false;
 
