@@ -86,13 +86,21 @@ GuiShowBreakpoints()
 }
 
 static void
-GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
+GuiShowVarInputText(char *Label, char *Buffer, u32 BufferSize)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
     auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
-    ImGui::InputText("###input_label", Gui->VarValueEditBuffer, sizeof(Gui->VarValueEditBuffer), ITFlags);
+    ImGui::PushItemWidth(0.0f);
+    ImGui::InputText(Label, Buffer, BufferSize, ITFlags);
+    ImGui::PopItemWidth();
     ImGui::PopStyleVar();
+}
 
+static void
+GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
+{
+    GuiShowVarInputText("###valueedit", Gui->VarValueEditBuffer, sizeof(Gui->VarValueEditBuffer));
+    
     if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
     {
         size_t ToPoke = 0x0;
@@ -131,10 +139,7 @@ static void
 GuiEditVariableName(variable_representation *Variable, arena *Arena)
 {
     (void)Arena;
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-    auto ITFlags = ImGuiInputTextFlags_AutoSelectAll;
-    ImGui::InputText("###input_label", Gui->VarNameEditBuffer, sizeof(Gui->VarNameEditBuffer), ITFlags);
-    ImGui::PopStyleVar();
+    GuiShowVarInputText("###varedit", Gui->VarNameEditBuffer, sizeof(Gui->VarNameEditBuffer));
 
     if(!Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed)
     {
@@ -1065,7 +1070,7 @@ GuiShowWatch()
     }
     
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-    ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
+    GuiShowVarInputText("###watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
     ImGui::PopStyleVar();
     ImGui::NextColumn();
 

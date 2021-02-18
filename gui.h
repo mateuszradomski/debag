@@ -114,6 +114,7 @@ static void GuiEndFrame();
 static void GuiShowArrayType(di_underlaying_type Underlaying, size_t VarAddress, char *VarName);
 static void GuiShowBreakAtAddress();
 static void GuiShowBreakAtFunction();
+static void GuiShowVarInputText(char *Label, char *Buffer, u32 BufferSize);
 static void GuiShowRegisters(x64_registers Regs);
 static void GuiStartFrame();
 static void _GuiShowBreakAtAddressModalWindow();
