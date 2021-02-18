@@ -1015,10 +1015,10 @@ AsmInstructionGetType(cs_insn *Instruction)
                 {
                     Result |= INST_TYPE_RET;
                 }break;
-                case X86_GRP_BRANCH_RELATIVE:
-                {
-                    Result |= INST_TYPE_RELATIVE_BRANCH;
-                }break;
+                // case X86_GRP_BRANCH_RELATIVE:
+                // {
+                //     Result |= INST_TYPE_RELATIVE_BRANCH;
+                // }break;
             }
         }
     }

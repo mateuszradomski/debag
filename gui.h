@@ -22,6 +22,19 @@ struct variable_representation
     u32 ChildrenCount;
 };
 
+struct variable_representation_node
+{
+    variable_representation Var;
+    variable_representation_node *Next;
+};
+
+struct variable_representation_list
+{
+    variable_representation_node *Head;
+    variable_representation_node *Tail;
+    u32 Count;
+};
+
 struct gui_flags
 {
     u8 VarShowGlobals : 1;
@@ -51,6 +64,7 @@ struct gui_data
     char VariableEditBuffer[128];
 
     char WatchBuffer[128];
+    variable_representation_list WatchVars;
 
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;

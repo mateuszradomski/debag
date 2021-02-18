@@ -17,7 +17,6 @@ enum
     TokenKind_Star,
     TokenKind_DotDot,
     TokenKind_EOF,
-
 };
 
 typedef u32 token_kind;
@@ -120,8 +119,6 @@ struct wlang_interp
 
 	char *Src;
     scoped_vars Scope;
-	variable_representation *Vars;
-    u32 VarCount;
 
     char *ErrorStr;
 
@@ -164,7 +161,7 @@ static void         EvaluatorDestroy(evaluator *Eval);
 static eval_result	EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
 static void    		EvaluatorRun(evaluator *Eval);
 
-static wlang_interp	WLangInterpCreate(char *Src, scoped_vars Scope, variable_representation *Vars, u32 VarCount);
+static wlang_interp	WLangInterpCreate(char *Src, scoped_vars Scope);
 static void 		WLangInterpDestroy(wlang_interp *Interp);
 static void			WLangInterpRun(wlang_interp *Interp);
 

@@ -907,7 +907,6 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, aren
 static void
 GuiShowWatch()
 {
-    static variable_representation *Showing = 0x0;
     static char *Error = 0x0;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
@@ -920,11 +919,13 @@ GuiShowWatch()
     ImGui::NextColumn();
     ImGui::Separator();
 
-    if(Showing)
+    for(variable_representation_node *VarNode = Gui->WatchVars.Head;
+        VarNode != 0x0; VarNode = VarNode->Next)
     {
-        GuiShowVariable(Showing, &Gui->Arena);
+        variable_representation *Var = &VarNode->Var;
+        GuiShowVariable(Var, &Gui->Arena);
     }
-
+    
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
     ImGui::InputText("##watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
     ImGui::PopStyleVar();
@@ -939,13 +940,13 @@ GuiShowWatch()
     ImGui::Columns(1);
     ImGui::PopStyleVar();
 
-    if(ImGui::Button("Compile!"))
+    if(KeyboardButtons[GLFW_KEY_ENTER].Pressed)
     {
         char *WatchLangSrc = Gui->WatchBuffer;
 
         size_t PC = DebugeeGetProgramCounter();
         scoped_vars Scope = DwarfGetScopedVars(PC);
-        wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Scope, Gui->Variables, Gui->VariableCnt);
+        wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Scope);
 
         WLangInterpRun(&Interp);
         if(Interp.ErrorStr)
@@ -954,7 +955,12 @@ GuiShowWatch()
         }
         else
         {
-            Showing = Interp.Result;
+            variable_representation_node *VarNode = StructPush(&Gui->Arena, variable_representation_node);
+            VarNode->Var = *Interp.Result;
+            SLL_QUEUE_PUSH(Gui->WatchVars.Head, Gui->WatchVars.Tail, VarNode);
+            Gui->WatchVars.Count += 1;
+            memset(Gui->WatchBuffer, 0, sizeof(Gui->WatchBuffer));
+            
             Error = 0x0;
         }
 

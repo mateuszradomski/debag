@@ -868,15 +868,13 @@ EvaluatorRun(evaluator *Eval)
 }
 
 static wlang_interp
-WLangInterpCreate(char *Src, scoped_vars Scope, variable_representation *Vars, u32 VarCount)
+WLangInterpCreate(char *Src, scoped_vars Scope)
 {
 	wlang_interp Result = {};
 
 	Result.Arena = ArenaCreate(Kilobytes(4));
 	Result.Src = StringDuplicate(&Result.Arena, Src);
     Result.Scope = Scope;
-	Result.Vars = Vars;
-	Result.VarCount = VarCount;
 
 	return Result;
 }
