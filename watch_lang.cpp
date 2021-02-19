@@ -829,6 +829,13 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
         if(Expr->Kind == ASTNodeKind_ArrowAccess && (!Underlaying.Flags.IsArray))
         {
+			if(!Underlaying.Flags.IsPointer)
+			{
+				Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+				sprintf(Eval->ErrorStr, "Cannot dereference [%s] variable type with the arrow operator\n", RightSide.Ident);
+
+				return {};
+			}
             VarAddress = DebugeePeekMemory(VarAddress);
         }
 
