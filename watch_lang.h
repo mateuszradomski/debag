@@ -113,7 +113,7 @@ struct evaluator
 
 struct wlang_interp
 {
-	arena Arena;
+	arena *Arena;
 	lexer Lexer;
 	parser Parser;
 	evaluator Eval;
@@ -161,8 +161,10 @@ static void         EvaluatorDestroy(evaluator *Eval);
 static eval_result	EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr);
 static void    		EvaluatorRun(evaluator *Eval);
 
-static wlang_interp	WLangInterpCreate(char *Src, scoped_vars Scope);
+static wlang_interp	WLangInterpCreate(char *Src, scoped_vars Scope, arena *Arena);
 static void 		WLangInterpDestroy(wlang_interp *Interp);
 static void			WLangInterpRun(wlang_interp *Interp);
+
+static bool         WLangEvalSrc(char *Src, variable_representation *Result, char **Error, arena *Arena);
 
 #endif //WATCH_LANG_H

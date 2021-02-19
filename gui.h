@@ -75,11 +75,11 @@ struct gui_data
     char VarValueEditBuffer[128];
     char VarNameEditBuffer[128];
 
+    arena WatchArena;
     char WatchBuffer[128];
     variable_representation_list WatchVars;
     size_t WatchBuildAddress;
     char *WatchInputError;
-    arena WatchArena;
 
     bool CloseNextTree;
 

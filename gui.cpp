@@ -145,25 +145,15 @@ GuiEditVariableName(variable_representation *Variable, arena *Arena)
     bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
     {
+        scratch_arena Scratch;
         Gui->EnterCaptured = true;
-
-        size_t PC = DebugeeGetProgramCounter();
-        scoped_vars Scope = DwarfGetScopedVars(PC);
-        wlang_interp Interp = WLangInterpCreate(Gui->VarNameEditBuffer, Scope);
-
-        WLangInterpRun(&Interp);
-        if(Interp.ErrorStr)
-        {
-            Variable->ValueString = StringDuplicate(&Gui->Arena, Interp.ErrorStr);
-        }
-        else
-        {
-            *(Variable) = *Interp.Result;
-            Variable->Name = StringDuplicate(&Gui->Arena, Gui->VarNameEditBuffer);
-            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
-        }
-
-        WLangInterpDestroy(&Interp);
+        
+        char *Error = 0x0;
+        bool Success = WLangEvalSrc(Gui->VarNameEditBuffer, Variable, &Error, Arena);
+        if(!Success)
+		{
+			Variable->ValueString = Error;
+		}
     }
 
     if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || EnterAvaiable)
@@ -175,7 +165,7 @@ GuiEditVariableName(variable_representation *Variable, arena *Arena)
 }
 
 static void
-GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditName = false)
+GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameEditing = false)
 {
     // I'm taking a gamble here and seeing if i can leave it like this
     assert(!(Variable->Underlaying.Flags.IsArray && Variable->Underlaying.Flags.IsPointer));
@@ -192,7 +182,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
             ImGui::Text(Variable->Name);
         } ImGui::NextColumn();
 
-        if(LetEditName &&
+        if(AllowNameEditing &&
            !Gui->VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
@@ -248,7 +238,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
             Open = ImGui::TreeNodeEx(Variable->Name, TNFlags);
         } ImGui::NextColumn();
 
-        if(LetEditName &&
+        if(AllowNameEditing &&
            !Gui->VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
@@ -331,7 +321,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
             Open = ImGui::TreeNodeEx(Variable->Name, TNFlags);
         } ImGui::NextColumn();
         
-        if(LetEditName &&
+        if(AllowNameEditing &&
            !Gui->VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
@@ -1079,30 +1069,25 @@ GuiShowWatch()
     bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
     {
-        char *WatchLangSrc = Gui->WatchBuffer;
+        scratch_arena Scratch;
         Gui->EnterCaptured = true;
 
-        size_t PC = DebugeeGetProgramCounter();
-        scoped_vars Scope = DwarfGetScopedVars(PC);
-        wlang_interp Interp = WLangInterpCreate(WatchLangSrc, Scope);
+        variable_representation Result = {};
+        char *Error = 0x0;
+        bool Success = WLangEvalSrc(Gui->WatchBuffer, &Result, &Error, &Gui->WatchArena);
 
-        WLangInterpRun(&Interp);
-        if(Interp.ErrorStr)
-        {
-            Gui->WatchInputError = StringDuplicate(&Gui->WatchArena, Interp.ErrorStr);
-        }
-        else
+        if(Success)
         {
             variable_representation_node *VarNode = StructPush(&Gui->WatchArena, variable_representation_node);
-            VarNode->Var = GuiCopyVariableRepresentation(Interp.Result, &Gui->WatchArena);
+            VarNode->Var = Result;
             SLL_QUEUE_PUSH(Gui->WatchVars.Head, Gui->WatchVars.Tail, VarNode);
             Gui->WatchVars.Count += 1;
             memset(Gui->WatchBuffer, 0, sizeof(Gui->WatchBuffer));
-            
-            Gui->WatchInputError = 0x0;
         }
-
-        WLangInterpDestroy(&Interp);
+        else
+        {
+            Gui->WatchInputError = Error;
+        }
     }
 }
 
@@ -1144,6 +1129,3 @@ GuiEndVariableTable()
     ImGui::Columns(1);
     ImGui::PopStyleVar();
 }   
-    
-
- 

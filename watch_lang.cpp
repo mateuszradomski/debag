@@ -963,12 +963,12 @@ EvaluatorRun(evaluator *Eval)
 }
 
 static wlang_interp
-WLangInterpCreate(char *Src, scoped_vars Scope)
+WLangInterpCreate(char *Src, scoped_vars Scope, arena *Arena)
 {
 	wlang_interp Result = {};
 
-	Result.Arena = ArenaCreate(Kilobytes(4));
-	Result.Src = StringDuplicate(&Result.Arena, Src);
+	Result.Arena = Arena;
+	Result.Src = StringDuplicate(Result.Arena, Src);
     Result.Scope = Scope;
 
 	return Result;
@@ -980,14 +980,12 @@ WLangInterpDestroy(wlang_interp *Interp)
 	LexerDestroy(&Interp->Lexer);
 	ParserDestroy(&Interp->Parser);
 	EvaluatorDestroy(&Interp->Eval);
-
-	ArenaDestroy(&Interp->Arena);
 }
 
 static void
 WLangInterpRun(wlang_interp *Interp)
 {
-	Interp->Lexer = LexerCreate(Interp->Src, &Interp->Arena);
+	Interp->Lexer = LexerCreate(Interp->Src, Interp->Arena);
 	LexerBuildTokens(&Interp->Lexer);
     if(Interp->Lexer.ErrorStr)
     {
@@ -998,7 +996,7 @@ WLangInterpRun(wlang_interp *Interp)
 
 	LexerLogTokens(&Interp->Lexer);
 
-	Interp->Parser = ParserCreate(&Interp->Lexer.Tokens, &Interp->Arena);
+	Interp->Parser = ParserCreate(&Interp->Lexer.Tokens, Interp->Arena);
 	ParserBuildAST(&Interp->Parser);
     if(Interp->Parser.ErrorStr)
     {
@@ -1007,7 +1005,7 @@ WLangInterpRun(wlang_interp *Interp)
         return;
     }
 
-	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Scope, &Interp->Arena);
+	Interp->Eval = EvaluatorCreate(Interp->Parser.AST, Interp->Scope, Interp->Arena);
 	EvaluatorRun(&Interp->Eval);
     
     if(Interp->Eval.ErrorStr)
@@ -1018,4 +1016,32 @@ WLangInterpRun(wlang_interp *Interp)
     }
 
 	Interp->Result = Interp->Eval.Result;
+}
+
+static bool
+WLangEvalSrc(char *Src, variable_representation *Result, char **Error, arena *Arena)
+{
+    size_t PC = DebugeeGetProgramCounter();
+    scoped_vars Scope = DwarfGetScopedVars(PC);
+    wlang_interp Interp = WLangInterpCreate(Src, Scope, Arena);
+
+    WLangInterpRun(&Interp);
+
+    bool Success = false;
+    if(Interp.ErrorStr)
+    {
+        *Error = StringDuplicate(Arena, Interp.ErrorStr);
+        Success = false;
+    }
+    else
+    {
+        *Result = GuiCopyVariableRepresentation(Interp.Result, Arena);
+		Result->Name = StringDuplicate(Arena, Src);
+
+        Success = true;
+    }
+	
+    WLangInterpDestroy(&Interp);
+
+    return Success;
 }
