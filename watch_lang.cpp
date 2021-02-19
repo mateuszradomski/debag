@@ -698,7 +698,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
             }
             
             scratch_arena Scratch;
-            variable_representation Repr = GuiBuildVariableRepresentation(Var, Scratch);
+            variable_representation Repr = GuiBuildVariableRepresentation(Var, 0, Scratch);
             if(!(Repr.Underlaying.Flags.IsBase && Repr.Underlaying.Type->Encoding != DW_ATE_float))
             {
                 Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
@@ -726,7 +726,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         // TODO(mateusz): No gui Arena
         Result.Kind = EvalResultKind_Repr;
         Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, VarName, &Gui->Arena);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, VarName, 0, &Gui->Arena);
 
         return Result;
     }
@@ -829,7 +829,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         size_t Address = VarAddress + ByteLocation;
         Result.Kind = EvalResultKind_Repr;
         Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), 0, &Gui->Arena);
 
         return Result;
     }
@@ -892,12 +892,11 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
         TypeOffset = Underlaying.Type->DIEOffset;
         
-        size_t DerefedAddress = DebugeePeekMemory(VarAddress);
-
         eval_result Result = {};
         Result.Kind = EvalResultKind_Repr;
         Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, DerefedAddress, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, VarAddress, StringDuplicate(&Gui->Arena, RightSide.Ident), 1, &Gui->Arena);
+        Result.Repr->DerefCount = 1;
 
         return Result;
     }
@@ -949,7 +948,7 @@ EvaluatorRun(evaluator *Eval)
         }
 
         Eval->Result = StructPush(&Gui->Arena, variable_representation);
-        (*Eval->Result) = GuiBuildVariableRepresentation(Var, &Gui->Arena);
+        (*Eval->Result) = GuiBuildVariableRepresentation(Var, 0, &Gui->Arena);
 
     }
     else if(EvalResult.Kind == EvalResultKind_Repr)

@@ -17,6 +17,7 @@ struct variable_representation
     size_t Address;
     di_underlaying_type Underlaying;
     di_variable *ActualVariable;
+    u32 DerefCount;
     
     variable_representation *Children;
     u32 ChildrenCount;
@@ -125,8 +126,8 @@ static void GuiSetStatusText(char *Str);
 static void GuiClearStatusText();
 static void GuiCreateBreakpointTexture();
 static variable_representation GuiRebuildVariableRepresentation(variable_representation *Var, arena *Arena);
-static variable_representation GuiBuildVariableRepresentation(di_variable *Var, arena *Arena);
-static variable_representation GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, arena *Arena);
+static variable_representation GuiBuildVariableRepresentation(di_variable *Var, u32 DerefCount, arena *Arena);
+static variable_representation GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 DerefCount, arena *Arena);
 static void GuiBuildFunctionRepresentation();
 static void GuiShowBacktrace();
 static void GuiShowWatch();

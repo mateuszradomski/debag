@@ -300,7 +300,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
                         Address = Variable->Address + Member->ByteLocation;
                     }
 
-                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name, Arena);
+                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name, 0, Arena);
                 }
             }
 
@@ -365,7 +365,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
                     size_t TypeOffset = Variable->Underlaying.Type->DIEOffset;
                     size_t Address = Variable->Address + Variable->Underlaying.Type->ByteSize * I;
 
-                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, VarNameWI, Arena);
+                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, VarNameWI, 0, Arena);
                 }
             }
 
@@ -414,7 +414,7 @@ GuiShowVariables()
                 di_variable *Var = &CU->GlobalVariables[I];
                 if(Var->LocationAtom)
                 {
-                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->RepresentationArena);
                 }
             }
         }
@@ -426,7 +426,7 @@ GuiShowVariables()
                 for(u32 I = 0; I < Func->ParamCount; I++)
                 {
                     di_variable *Param = &Func->Params[I];
-                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Param, &Gui->RepresentationArena);
+                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Param, 0, &Gui->RepresentationArena);
                 }
             }
 
@@ -435,7 +435,7 @@ GuiShowVariables()
                 for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
                 {
                     di_variable *Var = &Func->FuncLexScope.Variables[I];
-                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->RepresentationArena);
                 }
 
                 for(u32 LexScopeIndex = 0;
@@ -448,7 +448,7 @@ GuiShowVariables()
                         for(u32 I = 0; I < LexScope->VariablesCount; I++)
                         {
                             di_variable *Var = &LexScope->Variables[I];
-                            Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, &Gui->RepresentationArena);
+                            Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->RepresentationArena);
                         }
                     }
                 }
@@ -838,7 +838,7 @@ GuiShowBacktrace()
 }
 
 static char *
-idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
+idontknowyet(di_underlaying_type *Underlaying, size_t Address, u32 DerefCount, arena *Arena)
 {
     u32 ResultSize = 64;
     char *Result = ArrayPush(Arena, char, ResultSize);
@@ -846,6 +846,12 @@ idontknowyet(di_underlaying_type *Underlaying, size_t Address, arena *Arena)
     if(Underlaying->Flags.IsBase && !Underlaying->Flags.IsArray)
     {
         size_t InMemory = DebugeePeekMemory(Address);
+
+        for(u32 I = 0; I < DerefCount; I++)
+        {
+            InMemory = DebugeePeekMemory(InMemory);
+        }
+        
         union types_ptrs
         {
             void *Void;
@@ -1003,37 +1009,34 @@ GuiRebuildVariableRepresentation(variable_representation *Var, arena *Arena)
 {
     if(Var->ActualVariable)
     {
-        return GuiBuildVariableRepresentation(Var->ActualVariable, Arena);
+        return GuiBuildVariableRepresentation(Var->ActualVariable, Var->DerefCount, Arena);
     }
     else
     {
         size_t TypeOffset = Var->Underlaying.Type->DIEOffset;
         size_t Address = Var->Address;
 
-        return GuiBuildMemberRepresentation(TypeOffset, Address, Var->Name, Arena);
+        return GuiBuildMemberRepresentation(TypeOffset, Address, Var->Name, Var->DerefCount, Arena);
     }
 }
 
 static variable_representation
-GuiBuildVariableRepresentation(di_variable *Var, arena *Arena)
+GuiBuildVariableRepresentation(di_variable *Var, u32 DerefCount, arena *Arena)
 {
     variable_representation Result = {};
 
-    Result.Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
-
-    Result.ActualVariable = Var;
-    Result.Name = Var->Name;
-
-    Result.Address = DwarfGetVariableMemoryAddress(Var);
-    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, Arena);
+    size_t TypeOffset = Var->TypeOffset;
+    size_t Address = DwarfGetVariableMemoryAddress(Var);
+    char *Name = Var->Name;
+    Result = GuiBuildMemberRepresentation(TypeOffset, Address, Name, DerefCount, Arena);
     
-    Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
+    Result.ActualVariable = Var;
 
     return Result;
 }
 
 static variable_representation
-GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, arena *Arena)
+GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 DerefCount, arena *Arena)
 {
     variable_representation Result = {};
 
@@ -1043,7 +1046,8 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, aren
     Result.Name = Name;
 
     Result.Address = Address;
-    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, Arena);
+    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, DerefCount, Arena);
+    Result.DerefCount = DerefCount;
     
     Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
 
