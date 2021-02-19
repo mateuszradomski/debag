@@ -334,6 +334,8 @@ static char *   DumpFile(arena *Arena, char *Path);
  */
 static void     HexDump(void *Ptr, size_t Count);
 static bool     AddressBetween(size_t Address, size_t Lower, size_t Upper);
+static bool		AddressBetween(size_t Address, address_range Range);
+
 
 /*
  * Debugee related functions

@@ -314,6 +314,9 @@ struct debug_info
     
     bool WasStruct = false;
     bool WasUnion = false;
+
+	address_range CFAAddrRange;
+	size_t CachedCFA;
 };
 
 /*
@@ -388,7 +391,7 @@ static bool                 DwarfAddressConfinedByCompileUnit(di_compile_unit *C
  * .debug_frame and .eh_frame functions
  */
 static bool     DwarfAddressInFrame(size_t Address);
-static bool     DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result);
+static bool     DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result, address_range *InRange);
 static size_t   DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers);
 static size_t   DwarfGetCFA(size_t Address);
 

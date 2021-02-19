@@ -710,6 +710,16 @@ AddressBetween(size_t Address, size_t Lower, size_t Upper)
     return Result;
 }
 
+static inline bool
+AddressBetween(size_t Address, address_range Range)
+{
+	bool Result = false;
+
+	Result = AddressBetween(Address, Range.Start, Range.End);
+
+	return Result;
+}
+
 scratch_arena::scratch_arena(size_t Size)
 {
     this->Arena = ArenaCreateZeros(Size);

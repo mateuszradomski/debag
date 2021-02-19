@@ -2575,7 +2575,7 @@ DwarfRead()
 }
 
 static bool
-DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
+DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result, address_range *InRange)
 {
     bool Success = false;
     Address = Debugee.Flags.PIE ? Address - Debugee.LoadAddress : Address;
@@ -2590,6 +2590,12 @@ DwarfEvalFDE(size_t Address, u32 RegsTableSize, Dwarf_Regtable3 *Result)
         
         if(AddressBetween(Address, FDELowPC, FDELowPC + FDEFunctionLength - 1))
         {
+			if(InRange)
+			{
+				InRange->Start = FDELowPC;
+				InRange->End = FDELowPC + FDEFunctionLength - 1;
+			}
+			
             if(RegsTableSize)
             {
                 Result->rt3_reg_table_size = RegsTableSize;
@@ -2630,9 +2636,18 @@ DwarfGetCFA(size_t Address)
 {
     size_t Result = 0x0;
 
-    Dwarf_Regtable3 Table = {};
-    assert(DwarfEvalFDE(Address, 0, &Table));
-    Result = DwarfCalculateCFA(&Table, Debugee.Regs);
+    if(AddressBetween(Address, DI->CFAAddrRange))
+    {
+		Result = DI->CachedCFA;
+    }
+    else
+    {
+        Dwarf_Regtable3 Table = {};
+        assert(DwarfEvalFDE(Address, 0, &Table, &DI->CFAAddrRange));
+
+        Result = DwarfCalculateCFA(&Table, Debugee.Regs);
+        DI->CachedCFA = Result;
+    }
 
     return Result;
 }
@@ -2643,7 +2658,7 @@ DwarfAddressInFrame(size_t Address)
     bool Result = false;
 
     Dwarf_Regtable3 Table = {};
-    Result = DwarfEvalFDE(Address, 0, &Table);
+    Result = DwarfEvalFDE(Address, 0, &Table, 0x0);
 
     return Result;
 }
