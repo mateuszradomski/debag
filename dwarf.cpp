@@ -240,6 +240,25 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
     return Result;
 }
 
+static di_underlaying_type
+DwarfGetVariablesUnderlayingType(di_variable *Var)
+{
+	di_underlaying_type Result = {};
+	
+	if(Var->ValidUnderlayingType)
+	{
+		Result = Var->Underlaying;
+	}
+	else
+	{
+		Var->Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+		Var->ValidUnderlayingType = true;
+		Result = Var->Underlaying;
+	}
+
+	return Result;
+}
+
 static size_t
 DwarfGetVariableMemoryAddress(di_variable *Var)
 {

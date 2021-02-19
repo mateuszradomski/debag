@@ -67,59 +67,12 @@ struct di_exec_src_file_list
     u32 Count;
 };
 
-struct di_variable
-{
-    char *Name;
-    
-    size_t TypeOffset;
-    u8 LocationAtom;
-    ssize_t Offset;
-};
-
-struct scoped_vars
-{
-    di_variable *Global;
-    u32 GlobalCount;
-    di_variable *Param;
-    u32 ParamCount;
-    di_variable *Local;
-    u32 LocalCount;
-};
-
 struct di_frame_info
 {
     Dwarf_Cie *CIEs;
     Dwarf_Signed CIECount;
     Dwarf_Fde *FDEs;
     Dwarf_Signed FDECount;
-};
-
-struct di_lexical_scope
-{
-    // NOTE(mateusz): If RangesCount == 0, then address information is stored
-    // in LowPC and HighPC, otherwise, LowPC and HighPC are zeroed and addresses
-    // are stores in RangesLowPCs and RangesHighPCs and there are RangesCount of them
-    size_t LowPC;
-    size_t HighPC;
-    size_t *RangesLowPCs;
-    size_t *RangesHighPCs;
-    u32 RangesCount = 0;
-    
-    di_variable *Variables;
-    u32 VariablesCount;
-};
-
-struct di_function
-{
-    char *Name;
-    
-    size_t TypeOffset;
-    bool FrameBaseIsCFA;
-    di_variable *Params;
-    u32 ParamCount;
-    di_lexical_scope FuncLexScope;
-    di_lexical_scope *LexScopes;
-    u32 LexScopesCount;
 };
 
 struct type_flags
@@ -227,6 +180,55 @@ struct di_underlaying_type
     size_t ArrayUpperBound;
     u32 PointerCount;
     type_flags Flags;
+};
+
+struct di_variable
+{
+    char *Name;
+    
+    size_t TypeOffset;
+    u8 LocationAtom;
+	bool ValidUnderlayingType;
+    ssize_t Offset;
+	di_underlaying_type Underlaying;
+};
+
+struct scoped_vars
+{
+    di_variable *Global;
+    u32 GlobalCount;
+    di_variable *Param;
+    u32 ParamCount;
+    di_variable *Local;
+    u32 LocalCount;
+};
+
+struct di_lexical_scope
+{
+    // NOTE(mateusz): If RangesCount == 0, then address information is stored
+    // in LowPC and HighPC, otherwise, LowPC and HighPC are zeroed and addresses
+    // are stores in RangesLowPCs and RangesHighPCs and there are RangesCount of them
+    size_t LowPC;
+    size_t HighPC;
+    size_t *RangesLowPCs;
+    size_t *RangesHighPCs;
+    u32 RangesCount = 0;
+    
+    di_variable *Variables;
+    u32 VariablesCount;
+};
+
+struct di_function
+{
+    char *Name;
+    
+    size_t TypeOffset;
+    bool FrameBaseIsCFA;
+    di_variable *Params;
+    u32 ParamCount;
+    di_lexical_scope FuncLexScope;
+    di_lexical_scope *LexScopes;
+    u32 LexScopesCount;
 };
 
 struct di_compile_unit

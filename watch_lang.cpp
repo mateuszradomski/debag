@@ -655,7 +655,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
             
             VarAddress = DwarfGetVariableMemoryAddress(Var);
             VarName = Var->Name;
-            Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+            Underlaying = DwarfGetVariablesUnderlayingType(Var);
         }
         else if(LeftSide.Kind == EvalResultKind_Repr)
         {
@@ -786,7 +786,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
             }
 
             VarAddress = DwarfGetVariableMemoryAddress(Var);
-            Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+			Underlaying = DwarfGetVariablesUnderlayingType(Var);
         }
 
         if(Underlaying.Flags.IsStruct)
@@ -886,7 +886,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
             VarName = Var->Name;
             VarAddress = DwarfGetVariableMemoryAddress(Var);
-            Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+			Underlaying = DwarfGetVariablesUnderlayingType(Var);
         }
 
         if(!Underlaying.Flags.IsPointer)
