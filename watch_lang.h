@@ -127,7 +127,6 @@ struct wlang_interp
 };
 
 #define FILE_WRITE_STR(str, file) (fwrite(str, sizeof(str) - 1, 1, file))
-#define WATCHLANG_ERRORFMT "Unexpected character (%c)\n"
 
 #ifdef DEBUG
 #define LOG_LANG(fmt, ...) if(Debuger.Log.LangLogs) { printf(fmt, ##__VA_ARGS__); }

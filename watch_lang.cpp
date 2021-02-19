@@ -190,8 +190,8 @@ LexerBuildTokens(lexer *Lexer)
 		{
             if(!Minus)
             {
-                Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof(WATCHLANG_ERRORFMT));
-                sprintf(Lexer->ErrorStr, WATCHLANG_ERRORFMT, C);
+                Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof("Unexpected character (%c)\n"));
+                sprintf(Lexer->ErrorStr, "Unexpected character (%c)\n", C);
                 return;
             }
                 
@@ -261,8 +261,8 @@ LexerBuildTokens(lexer *Lexer)
 		}
 		else
 		{
-            Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof(WATCHLANG_ERRORFMT));
-            sprintf(Lexer->ErrorStr, WATCHLANG_ERRORFMT, C);
+            Lexer->ErrorStr = ArrayPush(Lexer->Arena, char, sizeof("Unexpected character (%c)\n"));
+            sprintf(Lexer->ErrorStr, "Unexpected character (%c)\n", C);
             return;
 		}
 	}
@@ -723,10 +723,9 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         eval_result Result = {};
         size_t Address = ResultAddress;
 
-        // TODO(mateusz): No gui Arena
         Result.Kind = EvalResultKind_Repr;
-        Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, VarName, 0, &Gui->Arena);
+        Result.Repr = StructPush(Eval->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildVariableRepresentation(TypeOffset, Address, VarName, 0, Eval->Arena);
 
         return Result;
     }
@@ -828,8 +827,8 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
         size_t Address = VarAddress + ByteLocation;
         Result.Kind = EvalResultKind_Repr;
-        Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), 0, &Gui->Arena);
+        Result.Repr = StructPush(Eval->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildVariableRepresentation(TypeOffset, Address, StringDuplicate(Eval->Arena, RightSide.Ident), 0, Eval->Arena);
 
         return Result;
     }
@@ -894,8 +893,8 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         
         eval_result Result = {};
         Result.Kind = EvalResultKind_Repr;
-        Result.Repr = StructPush(&Gui->Arena, variable_representation);
-        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, VarAddress, StringDuplicate(&Gui->Arena, RightSide.Ident), 1, &Gui->Arena);
+        Result.Repr = StructPush(Eval->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildVariableRepresentation(TypeOffset, VarAddress, StringDuplicate(Eval->Arena, RightSide.Ident), 1, Eval->Arena);
         Result.Repr->DerefCount = 1;
 
         return Result;
@@ -947,9 +946,8 @@ EvaluatorRun(evaluator *Eval)
             return;
         }
 
-        Eval->Result = StructPush(&Gui->Arena, variable_representation);
-        (*Eval->Result) = GuiBuildVariableRepresentation(Var, 0, &Gui->Arena);
-
+        Eval->Result = StructPush(Eval->Arena, variable_representation);
+        (*Eval->Result) = GuiBuildVariableRepresentation(Var, 0, Eval->Arena);
     }
     else if(EvalResult.Kind == EvalResultKind_Repr)
     {

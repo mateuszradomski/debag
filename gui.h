@@ -78,6 +78,8 @@ struct gui_data
     char WatchBuffer[128];
     variable_representation_list WatchVars;
     size_t WatchBuildAddress;
+    char *WatchInputError;
+    arena WatchArena;
 
     bool CloseNextTree;
 
@@ -89,6 +91,7 @@ struct gui_data
     {
         this->Arena = ArenaCreate(Kilobytes(4));
         this->RepresentationArena = ArenaCreate(Kilobytes(32));
+        this->WatchArena = ArenaCreate(Kilobytes(16));
     }
 
 #ifdef DEBAG
@@ -105,6 +108,10 @@ ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 
 gui_data _Gui = {};
 gui_data *Gui = &_Gui;
+
+const u32 TEX_WIDTH =   16;
+const u32 TEX_HEIGHT =  16;
+const u32 PNG_CHANNEL = 4;
 
 #ifdef DEBUG
 #define LOG_GUI(fmt, ...) if(Debuger.Log.FlowLogs) { printf(fmt, ##__VA_ARGS__); }
@@ -125,11 +132,18 @@ static void _GuiShowBreakAtFunctionWindow();
 static void GuiSetStatusText(char *Str);
 static void GuiClearStatusText();
 static void GuiCreateBreakpointTexture();
+static variable_representation GuiCopyVariableRepresentation(variable_representation *Var, arena *Arena);
 static variable_representation GuiRebuildVariableRepresentation(variable_representation *Var, arena *Arena);
 static variable_representation GuiBuildVariableRepresentation(di_variable *Var, u32 DerefCount, arena *Arena);
-static variable_representation GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 DerefCount, arena *Arena);
+static variable_representation GuiBuildVariableRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 DerefCount, arena *Arena);
 static void GuiBuildFunctionRepresentation();
 static void GuiShowBacktrace();
 static void GuiShowWatch();
+
+/*
+ * Gui all the variable related functions
+ */
+static void GuiBeginVariableTable();
+static void GuiEndVariableTable();
 
 #endif //GUI_H

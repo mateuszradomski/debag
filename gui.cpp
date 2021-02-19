@@ -300,7 +300,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
                         Address = Variable->Address + Member->ByteLocation;
                     }
 
-                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, Name, 0, Arena);
+                    Variable->Children[I] = GuiBuildVariableRepresentation(TypeOffset, Address, Name, 0, Arena);
                 }
             }
 
@@ -365,7 +365,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool LetEditNam
                     size_t TypeOffset = Variable->Underlaying.Type->DIEOffset;
                     size_t Address = Variable->Address + Variable->Underlaying.Type->ByteSize * I;
 
-                    Variable->Children[I] = GuiBuildMemberRepresentation(TypeOffset, Address, VarNameWI, 0, Arena);
+                    Variable->Children[I] = GuiBuildVariableRepresentation(TypeOffset, Address, VarNameWI, 0, Arena);
                 }
             }
 
@@ -486,25 +486,14 @@ GuiShowVariables()
         ImGui::EndPopup();
     }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
-    ImGui::Columns(3, "tree", true);
-    ImGui::Text("Name");
-    ImGui::NextColumn();
-    ImGui::Text("Value");
-    ImGui::NextColumn();
-    ImGui::Text("Type");
-    ImGui::NextColumn();
-    ImGui::Separator();
+    GuiBeginVariableTable();
 
     for(u32 I = 0; I < Gui->VariableCnt; I++)
     {
         GuiShowVariable(&Gui->Variables[I], &Gui->RepresentationArena);
     }
 
-    ImGui::Separator();
-
-    ImGui::Columns(1);
-    ImGui::PopStyleVar();
+    GuiEndVariableTable();
 }
 
 static void
@@ -728,19 +717,15 @@ GuiClearStatusText()
 {
     Gui->StatusText = 0x0;
 }
-
-#define TEX_WIDTH 16
-#define TEX_HEIGHT 16
-#define PNG_CHANNEL 4
     
 static void
 GuiCreateBreakpointTexture()
 {
     u8 ImageBuffer[TEX_HEIGHT * TEX_WIDTH * PNG_CHANNEL] = {};
 
-    for(int y = 0; y < TEX_HEIGHT; y++)
+    for(u32 y = 0; y < TEX_HEIGHT; y++)
     {
-        for(int x = 0; x < TEX_WIDTH; x++)
+        for(u32 x = 0; x < TEX_WIDTH; x++)
         {
             u8 Color = 0;
 
@@ -769,9 +754,9 @@ GuiCreateBreakpointTexture()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, ImageBuffer);
 
-    for(int y = 0; y < TEX_HEIGHT; y++)
+    for(u32 y = 0; y < TEX_HEIGHT; y++)
     {
-        for(int x = 0; x < TEX_WIDTH; x++)
+        for(u32 x = 0; x < TEX_WIDTH; x++)
         {
             ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 0] = 0;
             ImageBuffer[y * TEX_WIDTH * PNG_CHANNEL + (x * PNG_CHANNEL) + 1] = 0;
@@ -838,7 +823,7 @@ GuiShowBacktrace()
 }
 
 static char *
-idontknowyet(di_underlaying_type *Underlaying, size_t Address, u32 DerefCount, arena *Arena)
+GuiBuildVarsValueAsString(di_underlaying_type *Underlaying, size_t Address, u32 DerefCount, arena *Arena)
 {
     u32 ResultSize = 64;
     char *Result = ArrayPush(Arena, char, ResultSize);
@@ -1016,7 +1001,7 @@ GuiRebuildVariableRepresentation(variable_representation *Var, arena *Arena)
         size_t TypeOffset = Var->Underlaying.Type->DIEOffset;
         size_t Address = Var->Address;
 
-        return GuiBuildMemberRepresentation(TypeOffset, Address, Var->Name, Var->DerefCount, Arena);
+        return GuiBuildVariableRepresentation(TypeOffset, Address, Var->Name, Var->DerefCount, Arena);
     }
 }
 
@@ -1028,7 +1013,7 @@ GuiBuildVariableRepresentation(di_variable *Var, u32 DerefCount, arena *Arena)
     size_t TypeOffset = Var->TypeOffset;
     size_t Address = DwarfGetVariableMemoryAddress(Var);
     char *Name = Var->Name;
-    Result = GuiBuildMemberRepresentation(TypeOffset, Address, Name, DerefCount, Arena);
+    Result = GuiBuildVariableRepresentation(TypeOffset, Address, Name, DerefCount, Arena);
     
     Result.ActualVariable = Var;
 
@@ -1036,7 +1021,7 @@ GuiBuildVariableRepresentation(di_variable *Var, u32 DerefCount, arena *Arena)
 }
 
 static variable_representation
-GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 DerefCount, arena *Arena)
+GuiBuildVariableRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 DerefCount, arena *Arena)
 {
     variable_representation Result = {};
 
@@ -1046,7 +1031,7 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 
     Result.Name = Name;
 
     Result.Address = Address;
-    Result.ValueString = idontknowyet(&Result.Underlaying, Result.Address, DerefCount, Arena);
+    Result.ValueString = GuiBuildVarsValueAsString(&Result.Underlaying, Result.Address, DerefCount, Arena);
     Result.DerefCount = DerefCount;
     
     Result.TypeString = DwarfGetTypeStringRepresentation(Result.Underlaying, Arena);
@@ -1057,8 +1042,6 @@ GuiBuildMemberRepresentation(size_t TypeOffset, size_t Address, char *Name, u32 
 static void
 GuiShowWatch()
 {
-    static char *Error = 0x0;
-
     size_t PC = DebugeeGetProgramCounter();
     if(PC != Gui->WatchBuildAddress)
     {
@@ -1067,43 +1050,31 @@ GuiShowWatch()
             VarNode = VarNode->Next)
         {
             variable_representation *Var = &VarNode->Var;
-            (*Var) = GuiRebuildVariableRepresentation(Var, &Gui->Arena);
+            (*Var) = GuiRebuildVariableRepresentation(Var, &Gui->WatchArena);
         }
 
         Gui->WatchBuildAddress = PC;
     }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
-    ImGui::Columns(3, "tree", true);
-    ImGui::Text("Name");
-    ImGui::NextColumn();
-    ImGui::Text("Value");
-    ImGui::NextColumn();
-    ImGui::Text("Type");
-    ImGui::NextColumn();
-    ImGui::Separator();
-
+    GuiBeginVariableTable();
+    
     for(variable_representation_node *VarNode = Gui->WatchVars.Head;
-        VarNode != 0x0; VarNode = VarNode->Next)
+        VarNode != 0x0;
+        VarNode = VarNode->Next)
     {
         variable_representation *Var = &VarNode->Var;
         bool AllowNameEditing = true;
-        GuiShowVariable(Var, &Gui->Arena, AllowNameEditing);
+        GuiShowVariable(Var, &Gui->WatchArena, AllowNameEditing);
     }
     
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
     GuiShowVarInputText("###watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
-    ImGui::PopStyleVar();
     ImGui::NextColumn();
 
-    if(Error) { ImGui::Text(Error); }
+    if(Gui->WatchInputError) { ImGui::Text("%s", Gui->WatchInputError); }
     ImGui::NextColumn();
     ImGui::NextColumn();
 
-    ImGui::Separator();
-
-    ImGui::Columns(1);
-    ImGui::PopStyleVar();
+    GuiEndVariableTable();
 
     bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
@@ -1118,20 +1089,61 @@ GuiShowWatch()
         WLangInterpRun(&Interp);
         if(Interp.ErrorStr)
         {
-            Error = StringDuplicate(&Gui->Arena, Interp.ErrorStr);
+            Gui->WatchInputError = StringDuplicate(&Gui->WatchArena, Interp.ErrorStr);
         }
         else
         {
-            variable_representation_node *VarNode = StructPush(&Gui->Arena, variable_representation_node);
-            VarNode->Var = *Interp.Result;
-            VarNode->Var.Name = StringDuplicate(&Gui->Arena, Gui->WatchBuffer);
+            variable_representation_node *VarNode = StructPush(&Gui->WatchArena, variable_representation_node);
+            VarNode->Var = GuiCopyVariableRepresentation(Interp.Result, &Gui->WatchArena);
             SLL_QUEUE_PUSH(Gui->WatchVars.Head, Gui->WatchVars.Tail, VarNode);
             Gui->WatchVars.Count += 1;
             memset(Gui->WatchBuffer, 0, sizeof(Gui->WatchBuffer));
             
-            Error = 0x0;
+            Gui->WatchInputError = 0x0;
         }
 
         WLangInterpDestroy(&Interp);
     }
 }
+
+static variable_representation
+GuiCopyVariableRepresentation(variable_representation *Var, arena *Arena)
+{
+    variable_representation Result = {};
+
+    Result = *Var;
+    Result.Name = StringDuplicate(Arena, Var->Name);
+    Result.ValueString = StringDuplicate(Arena, Var->ValueString);
+    Result.TypeString = StringDuplicate(Arena, Var->TypeString);
+
+    Result.Children = ArrayPush(Arena, variable_representation, Var->ChildrenCount);
+    for(u32 I = 0; I < Var->ChildrenCount; I++)
+    {
+        Result.Children[I] = GuiCopyVariableRepresentation(&Var->Children[I], Arena);
+    }
+
+    return Result;
+}
+
+static void
+GuiBeginVariableTable()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
+    ImGui::Columns(3, "tree", true);
+    ImGui::Text("Name"); ImGui::NextColumn();
+    ImGui::Text("Value"); ImGui::NextColumn();
+    ImGui::Text("Type"); ImGui::NextColumn();
+    ImGui::Separator();
+}
+
+static void
+GuiEndVariableTable()
+{
+    ImGui::Separator();
+
+    ImGui::Columns(1);
+    ImGui::PopStyleVar();
+}   
+    
+
+ 
