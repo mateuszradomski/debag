@@ -819,8 +819,15 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         }
 
         eval_result Result = {};
+		if(Expr->Kind == ASTNodeKind_DotAccess && Underlaying.Flags.IsArray)
+		{
+			Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+			sprintf(Eval->ErrorStr, "Cannot access [%s] member inside a non-struct type\n", RightSide.Ident);
 
-        if(Expr->Kind == ASTNodeKind_ArrowAccess)
+			return {};
+		}
+
+        if(Expr->Kind == ASTNodeKind_ArrowAccess && (!Underlaying.Flags.IsArray))
         {
             VarAddress = DebugeePeekMemory(VarAddress);
         }
