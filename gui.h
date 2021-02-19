@@ -51,19 +51,11 @@ enum
 
 typedef u8 var_edit_kind;
 
-struct gui_data
+struct gui_transient
 {
-    arena Arena;
-    arena RepresentationArena;
-    char *StatusText;
-    char BreakFuncName[128];
-    char BreakAddress[32];
-    void (* ModalFuncShow)();
-    ImTextureID BreakpointTextureActive;
-    ImTextureID BreakpointTextureBlank;
-
-    char *SpacesArray[10];
-    function_representation *FuncRepresentation;
+	arena RepresentationArena;
+	
+	function_representation *FuncRepresentation;
     u32 FuncRepresentationCount;
 
     bool EnterCaptured;
@@ -82,7 +74,21 @@ struct gui_data
     char *WatchInputError;
 
     bool CloseNextTree;
+};
 
+struct gui_data
+{
+    arena Arena;
+    char *StatusText;
+    char BreakFuncName[128];
+    char BreakAddress[32];
+    void (* ModalFuncShow)();
+    ImTextureID BreakpointTextureActive;
+    ImTextureID BreakpointTextureBlank;
+
+	gui_transient Transient;
+
+    char *SpacesArray[10];
     u32 WindowWidth = 1024;
     u32 WindowHeight = 768;
     gui_flags Flags;
@@ -90,8 +96,8 @@ struct gui_data
     gui_data()
     {
         this->Arena = ArenaCreate(Kilobytes(4));
-        this->RepresentationArena = ArenaCreate(Kilobytes(32));
-        this->WatchArena = ArenaCreate(Kilobytes(16));
+        this->Transient.RepresentationArena = ArenaCreate(Kilobytes(32));
+        this->Transient.WatchArena = ArenaCreate(Kilobytes(16));
     }
 
 #ifdef DEBAG
@@ -102,6 +108,7 @@ struct gui_data
     }
 #endif
 };
+
 
 ImVec4 CurrentLineColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 ImVec4 BreakpointLineColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);

@@ -15,7 +15,7 @@ GuiStartFrame()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    Gui->EnterCaptured = false;
+    Gui->Transient.EnterCaptured = false;
 }
 
 static void
@@ -99,17 +99,17 @@ GuiShowVarInputText(char *Label, char *Buffer, u32 BufferSize)
 static void
 GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
 {
-    GuiShowVarInputText("###valueedit", Gui->VarValueEditBuffer, sizeof(Gui->VarValueEditBuffer));
+    GuiShowVarInputText("###valueedit", Gui->Transient.VarValueEditBuffer, sizeof(Gui->Transient.VarValueEditBuffer));
 
-    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    bool EnterAvaiable = !Gui->Transient.EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
     {
         size_t ToPoke = 0x0;
-        Gui->EnterCaptured = true;
+        Gui->Transient.EnterCaptured = true;
 
         u8 *ParsedBytes = (u8 *)&ToPoke;
         di_underlaying_type *Underlaying = &Variable->Underlaying;
-        char *String = Gui->VarValueEditBuffer;
+        char *String = Gui->Transient.VarValueEditBuffer;
 
         u32 TypeBytesCnt = DwarfParseTypeStringToBytes(Underlaying, String, ParsedBytes);
 
@@ -131,8 +131,8 @@ GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
 
     if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || EnterAvaiable)
     {
-        Gui->VarInEdit = 0x0;
-        memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
+        Gui->Transient.VarInEdit = 0x0;
+        memset(Gui->Transient.VarValueEditBuffer, 0, sizeof(Gui->Transient.VarValueEditBuffer));
     }
 }
 
@@ -140,16 +140,16 @@ static void
 GuiEditVariableName(variable_representation *Variable, arena *Arena)
 {
     (void)Arena;
-    GuiShowVarInputText("###varedit", Gui->VarNameEditBuffer, sizeof(Gui->VarNameEditBuffer));
+    GuiShowVarInputText("###varedit", Gui->Transient.VarNameEditBuffer, sizeof(Gui->Transient.VarNameEditBuffer));
 
-    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    bool EnterAvaiable = !Gui->Transient.EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
     {
         scratch_arena Scratch;
-        Gui->EnterCaptured = true;
+        Gui->Transient.EnterCaptured = true;
         
         char *Error = 0x0;
-        bool Success = WLangEvalSrc(Gui->VarNameEditBuffer, Variable, &Error, Arena);
+        bool Success = WLangEvalSrc(Gui->Transient.VarNameEditBuffer, Variable, &Error, Arena);
         if(!Success)
 		{
 			Variable->ValueString = Error;
@@ -158,9 +158,9 @@ GuiEditVariableName(variable_representation *Variable, arena *Arena)
 
     if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed || EnterAvaiable)
     {
-        Gui->VarInEdit = 0x0;
-        Gui->CloseNextTree = true;
-        memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
+        Gui->Transient.VarInEdit = 0x0;
+        Gui->Transient.CloseNextTree = true;
+        memset(Gui->Transient.VarValueEditBuffer, 0, sizeof(Gui->Transient.VarValueEditBuffer));
     }
 }
 
@@ -173,7 +173,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
     if(Variable->Underlaying.Flags.IsBase && !Variable->Underlaying.Flags.IsArray)
     {
         // Watch variables src/name editing
-        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Name && Gui->VarInEdit == Variable)
+        if(Gui->Transient.VarInEdit && Gui->Transient.VarEditKind == VarEditKind_Name && Gui->Transient.VarInEdit == Variable)
         {
             GuiEditVariableName(Variable, Arena);
         }
@@ -183,18 +183,18 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
         } ImGui::NextColumn();
 
         if(AllowNameEditing &&
-           !Gui->VarInEdit &&
+           !Gui->Transient.VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
         {
-            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
-            StringCopy(Gui->VarNameEditBuffer, Variable->Name);
-            Gui->VarEditKind = VarEditKind_Name;
-            Gui->VarInEdit = Variable;
+            memset(Gui->Transient.VarNameEditBuffer, 0, sizeof(Gui->Transient.VarNameEditBuffer));
+            StringCopy(Gui->Transient.VarNameEditBuffer, Variable->Name);
+            Gui->Transient.VarEditKind = VarEditKind_Name;
+            Gui->Transient.VarInEdit = Variable;
         }
 
         // Variables value editing
-        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Value && Gui->VarInEdit == Variable)
+        if(Gui->Transient.VarInEdit && Gui->Transient.VarEditKind == VarEditKind_Value && Gui->Transient.VarInEdit == Variable)
         {
             GuiEditBaseVariableValue(Variable, Arena);
         }
@@ -203,14 +203,14 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
             ImGui::Text(Variable->ValueString);
         } ImGui::NextColumn();
 
-        if(!Gui->VarInEdit &&
+        if(!Gui->Transient.VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
         {            
-            memset(Gui->VarValueEditBuffer, 0, sizeof(Gui->VarValueEditBuffer));
-            StringCopy(Gui->VarValueEditBuffer, Variable->ValueString);
-            Gui->VarEditKind = VarEditKind_Value;
-            Gui->VarInEdit = Variable;
+            memset(Gui->Transient.VarValueEditBuffer, 0, sizeof(Gui->Transient.VarValueEditBuffer));
+            StringCopy(Gui->Transient.VarValueEditBuffer, Variable->ValueString);
+            Gui->Transient.VarEditKind = VarEditKind_Value;
+            Gui->Transient.VarInEdit = Variable;
         }
 
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
@@ -222,16 +222,16 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
         assert(sizeof(di_union_member) == sizeof(di_struct_member));
 
         bool Open = false;
-        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Name && Gui->VarInEdit == Variable)
+        if(Gui->Transient.VarInEdit && Gui->Transient.VarEditKind == VarEditKind_Name && Gui->Transient.VarInEdit == Variable)
         {
             GuiEditVariableName(Variable, Arena);
         }
         else
         {
-            if(Gui->CloseNextTree)
+            if(Gui->Transient.CloseNextTree)
             {
                 ImGui::SetNextItemOpen(false);
-                Gui->CloseNextTree = false;
+                Gui->Transient.CloseNextTree = false;
             }
 
             ImGuiTreeNodeFlags TNFlags = ImGuiTreeNodeFlags_OpenOnArrow;
@@ -239,14 +239,14 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
         } ImGui::NextColumn();
 
         if(AllowNameEditing &&
-           !Gui->VarInEdit &&
+           !Gui->Transient.VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
         {            
-            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
-            StringCopy(Gui->VarNameEditBuffer, Variable->Name);
-            Gui->VarEditKind = VarEditKind_Name;
-            Gui->VarInEdit = Variable;
+            memset(Gui->Transient.VarNameEditBuffer, 0, sizeof(Gui->Transient.VarNameEditBuffer));
+            StringCopy(Gui->Transient.VarNameEditBuffer, Variable->Name);
+            Gui->Transient.VarEditKind = VarEditKind_Name;
+            Gui->Transient.VarInEdit = Variable;
             
             if(Open)
             {
@@ -257,7 +257,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
         ImGui::Text(Variable->ValueString); ImGui::NextColumn();
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
 
-        if(Open && Gui->VarInEdit != Variable)
+        if(Open && Gui->Transient.VarInEdit != Variable)
         {
             if(!Variable->Children)
             {
@@ -305,16 +305,16 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
     else if(Variable->Underlaying.Flags.IsArray)
     {
         bool Open = false;
-        if(Gui->VarInEdit && Gui->VarEditKind == VarEditKind_Name && Gui->VarInEdit == Variable)
+        if(Gui->Transient.VarInEdit && Gui->Transient.VarEditKind == VarEditKind_Name && Gui->Transient.VarInEdit == Variable)
         {
             GuiEditVariableName(Variable, Arena);
         }
         else
         {
-            if(Gui->CloseNextTree)
+            if(Gui->Transient.CloseNextTree)
             {
                 ImGui::SetNextItemOpen(false);
-                Gui->CloseNextTree = false;
+                Gui->Transient.CloseNextTree = false;
             }
             
             ImGuiTreeNodeFlags TNFlags = ImGuiTreeNodeFlags_OpenOnArrow;
@@ -322,14 +322,14 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
         } ImGui::NextColumn();
         
         if(AllowNameEditing &&
-           !Gui->VarInEdit &&
+           !Gui->Transient.VarInEdit &&
            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
            ImGui::IsItemClicked())
         {            
-            memset(Gui->VarNameEditBuffer, 0, sizeof(Gui->VarNameEditBuffer));
-            StringCopy(Gui->VarNameEditBuffer, Variable->Name);
-            Gui->VarEditKind = VarEditKind_Name;
-            Gui->VarInEdit = Variable;
+            memset(Gui->Transient.VarNameEditBuffer, 0, sizeof(Gui->Transient.VarNameEditBuffer));
+            StringCopy(Gui->Transient.VarNameEditBuffer, Variable->Name);
+            Gui->Transient.VarEditKind = VarEditKind_Name;
+            Gui->Transient.VarInEdit = Variable;
 
             if(Open)
             {
@@ -340,7 +340,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
         ImGui::Text(Variable->ValueString); ImGui::NextColumn();
         ImGui::Text(Variable->TypeString); ImGui::NextColumn();
 
-        if(Open && Gui->VarInEdit != Variable)
+        if(Open && Gui->Transient.VarInEdit != Variable)
         {
             if(!Variable->Children)
             {
@@ -376,10 +376,10 @@ static void
 GuiShowVariables()
 {
     size_t PC = DebugeeGetProgramCounter();
-    if(Gui->LocalsBuildAddress != PC)
+    if(Gui->Transient.LocalsBuildAddress != PC)
     {
-        ArenaClear(&Gui->RepresentationArena);
-        Gui->LocalsBuildAddress = PC;
+        ArenaClear(&Gui->Transient.RepresentationArena);
+        Gui->Transient.LocalsBuildAddress = PC;
         
         di_compile_unit *CU = DwarfFindCompileUnitByAddress(PC);
         di_function *Func = DwarfFindFunctionByAddress(PC);
@@ -394,8 +394,8 @@ GuiShowVariables()
             }
         }
 
-        Gui->Variables = ArrayPush(&Gui->RepresentationArena, variable_representation, ToAllocate);
-        Gui->VariableCnt = 0;
+        Gui->Transient.Variables = ArrayPush(&Gui->Transient.RepresentationArena, variable_representation, ToAllocate);
+        Gui->Transient.VariableCnt = 0;
 
         if(Gui->Flags.VarShowGlobals)
         {
@@ -404,7 +404,7 @@ GuiShowVariables()
                 di_variable *Var = &CU->GlobalVariables[I];
                 if(Var->LocationAtom)
                 {
-                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->RepresentationArena);
+                    Gui->Transient.Variables[Gui->Transient.VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->Transient.RepresentationArena);
                 }
             }
         }
@@ -416,7 +416,7 @@ GuiShowVariables()
                 for(u32 I = 0; I < Func->ParamCount; I++)
                 {
                     di_variable *Param = &Func->Params[I];
-                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Param, 0, &Gui->RepresentationArena);
+                    Gui->Transient.Variables[Gui->Transient.VariableCnt++] = GuiBuildVariableRepresentation(Param, 0, &Gui->Transient.RepresentationArena);
                 }
             }
 
@@ -425,7 +425,7 @@ GuiShowVariables()
                 for(u32 I = 0; I < Func->FuncLexScope.VariablesCount; I++)
                 {
                     di_variable *Var = &Func->FuncLexScope.Variables[I];
-                    Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->RepresentationArena);
+                    Gui->Transient.Variables[Gui->Transient.VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->Transient.RepresentationArena);
                 }
 
                 for(u32 LexScopeIndex = 0;
@@ -438,7 +438,7 @@ GuiShowVariables()
                         for(u32 I = 0; I < LexScope->VariablesCount; I++)
                         {
                             di_variable *Var = &LexScope->Variables[I];
-                            Gui->Variables[Gui->VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->RepresentationArena);
+                            Gui->Transient.Variables[Gui->Transient.VariableCnt++] = GuiBuildVariableRepresentation(Var, 0, &Gui->Transient.RepresentationArena);
                         }
                     }
                 }
@@ -470,7 +470,7 @@ GuiShowVariables()
             Gui->Flags.VarShowParams = Options[1];
             Gui->Flags.VarShowLocals = Options[2];
 
-            Gui->LocalsBuildAddress = 0x0;
+            Gui->Transient.LocalsBuildAddress = 0x0;
         }
 
         ImGui::EndPopup();
@@ -478,9 +478,9 @@ GuiShowVariables()
 
     GuiBeginVariableTable();
 
-    for(u32 I = 0; I < Gui->VariableCnt; I++)
+    for(u32 I = 0; I < Gui->Transient.VariableCnt; I++)
     {
-        GuiShowVariable(&Gui->Variables[I], &Gui->RepresentationArena);
+        GuiShowVariable(&Gui->Transient.Variables[I], &Gui->Transient.RepresentationArena);
     }
 
     GuiEndVariableTable();
@@ -497,17 +497,17 @@ _GuiShowBreakAtFunctionWindow()
         return;
     }
 
-    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    bool EnterAvaiable = !Gui->Transient.EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
     {
         BreakAtFunctionName(Gui->BreakFuncName);
         memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
         Gui->ModalFuncShow = 0x0;
-        Gui->EnterCaptured = true;
+        Gui->Transient.EnterCaptured = true;
         return;
     }
 
-    if(!Gui->FuncRepresentation)
+    if(!Gui->Transient.FuncRepresentation)
     {
         GuiBuildFunctionRepresentation();
     }
@@ -531,9 +531,9 @@ _GuiShowBreakAtFunctionWindow()
     
     ImGui::BeginChild("func_list");
     
-    for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
+    for(u32 I = 0; I < Gui->Transient.FuncRepresentationCount; I++)
     {
-        function_representation *Repr = &Gui->FuncRepresentation[I];
+        function_representation *Repr = &Gui->Transient.FuncRepresentation[I];
         bool FuncHasName = Repr->ActualFunction->Name != 0x0;
         if(FuncHasName)
         {
@@ -771,10 +771,10 @@ GuiCreateBreakpointTexture()
 static void
 GuiBuildFunctionRepresentation()
 {
-    assert(Gui->FuncRepresentation == 0x0);
+    assert(Gui->Transient.FuncRepresentation == 0x0);
 
-    Gui->FuncRepresentation = ArrayPush(&Gui->Arena, function_representation, DI->FunctionsCount);
-    Gui->FuncRepresentationCount = 0;
+    Gui->Transient.FuncRepresentation = ArrayPush(&Gui->Arena, function_representation, DI->FunctionsCount);
+    Gui->Transient.FuncRepresentationCount = 0;
     
     for(u32 I = 0; I < DI->FunctionsCount; I++)
     {
@@ -782,7 +782,7 @@ GuiBuildFunctionRepresentation()
         function_representation Repr = {};
         Repr.Label = DwarfGetFunctionStringRepresentation(Func, &Gui->Arena);
         Repr.ActualFunction = Func;
-        Gui->FuncRepresentation[Gui->FuncRepresentationCount++] = Repr;
+        Gui->Transient.FuncRepresentation[Gui->Transient.FuncRepresentationCount++] = Repr;
     }
 }
 
@@ -1033,60 +1033,60 @@ static void
 GuiShowWatch()
 {
     size_t PC = DebugeeGetProgramCounter();
-    if(PC != Gui->WatchBuildAddress)
+    if(PC != Gui->Transient.WatchBuildAddress)
     {
-        for(variable_representation_node *VarNode = Gui->WatchVars.Head;
+        for(variable_representation_node *VarNode = Gui->Transient.WatchVars.Head;
             VarNode != 0x0;
             VarNode = VarNode->Next)
         {
             variable_representation *Var = &VarNode->Var;
-            (*Var) = GuiRebuildVariableRepresentation(Var, &Gui->WatchArena);
+            (*Var) = GuiRebuildVariableRepresentation(Var, &Gui->Transient.WatchArena);
         }
 
-        Gui->WatchBuildAddress = PC;
+        Gui->Transient.WatchBuildAddress = PC;
     }
 
     GuiBeginVariableTable();
     
-    for(variable_representation_node *VarNode = Gui->WatchVars.Head;
+    for(variable_representation_node *VarNode = Gui->Transient.WatchVars.Head;
         VarNode != 0x0;
         VarNode = VarNode->Next)
     {
         variable_representation *Var = &VarNode->Var;
         bool AllowNameEditing = true;
-        GuiShowVariable(Var, &Gui->WatchArena, AllowNameEditing);
+        GuiShowVariable(Var, &Gui->Transient.WatchArena, AllowNameEditing);
     }
     
-    GuiShowVarInputText("###watch_input", Gui->WatchBuffer, sizeof(Gui->WatchBuffer));
+    GuiShowVarInputText("###watch_input", Gui->Transient.WatchBuffer, sizeof(Gui->Transient.WatchBuffer));
     ImGui::NextColumn();
 
-    if(Gui->WatchInputError) { ImGui::Text("%s", Gui->WatchInputError); }
+    if(Gui->Transient.WatchInputError) { ImGui::Text("%s", Gui->Transient.WatchInputError); }
     ImGui::NextColumn();
     ImGui::NextColumn();
 
     GuiEndVariableTable();
 
-    bool EnterAvaiable = !Gui->EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
+    bool EnterAvaiable = !Gui->Transient.EnterCaptured && KeyboardButtons[GLFW_KEY_ENTER].Pressed;
     if(EnterAvaiable)
     {
         scratch_arena Scratch;
-        Gui->EnterCaptured = true;
+        Gui->Transient.EnterCaptured = true;
 
         variable_representation Result = {};
         char *Error = 0x0;
-        bool Success = WLangEvalSrc(Gui->WatchBuffer, &Result, &Error, &Gui->WatchArena);
+        bool Success = WLangEvalSrc(Gui->Transient.WatchBuffer, &Result, &Error, &Gui->Transient.WatchArena);
 
         if(Success)
         {
-            variable_representation_node *VarNode = StructPush(&Gui->WatchArena, variable_representation_node);
+            variable_representation_node *VarNode = StructPush(&Gui->Transient.WatchArena, variable_representation_node);
             VarNode->Var = Result;
-            SLL_QUEUE_PUSH(Gui->WatchVars.Head, Gui->WatchVars.Tail, VarNode);
-            Gui->WatchVars.Count += 1;
-            memset(Gui->WatchBuffer, 0, sizeof(Gui->WatchBuffer));
+            SLL_QUEUE_PUSH(Gui->Transient.WatchVars.Head, Gui->Transient.WatchVars.Tail, VarNode);
+            Gui->Transient.WatchVars.Count += 1;
+            memset(Gui->Transient.WatchBuffer, 0, sizeof(Gui->Transient.WatchBuffer));
         }
         else
         {
-            Gui->WatchInputError = Error;
+            Gui->Transient.WatchInputError = Error;
         }
     }
 }

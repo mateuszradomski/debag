@@ -1296,13 +1296,13 @@ DebugerDeallocTransient()
     _UPT_destroy(Debuger.UnwindRemoteArg);
     
     ArenaDestroy(&DI->Arena);
-    
-    Gui->FuncRepresentation = 0x0;
-    Gui->FuncRepresentationCount = 0;
-    Gui->Variables = 0x0;
-    Gui->VariableCnt = 0;
-    Gui->LocalsBuildAddress = 0x0;
-    Gui->WatchBuildAddress = 0x0;
+
+	ArenaDestroy(&Gui->Transient.RepresentationArena);
+	ArenaDestroy(&Gui->Transient.WatchArena);
+	Gui->Transient = {};
+	Gui->Transient.RepresentationArena = ArenaCreate(Kilobytes(4));
+	Gui->Transient.WatchArena = ArenaCreate(Kilobytes(4));
+
     
     memset(DI, 0, sizeof(debug_info));
 }
@@ -1351,17 +1351,17 @@ DebugeeBuildBacktrace()
 
     unwind_functions_bucket *Bucket = (unwind_functions_bucket *)calloc(1, sizeof(unwind_functions_bucket));
 
-    if(!Gui->FuncRepresentation)
+    if(!Gui->Transient.FuncRepresentation)
     {
         GuiBuildFunctionRepresentation();
     }
     
     unwind_function UnwoundFunction = 0x0;
-    for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
+    for(u32 I = 0; I < Gui->Transient.FuncRepresentationCount; I++)
     {
-        if(Gui->FuncRepresentation[I].ActualFunction == Func)
+        if(Gui->Transient.FuncRepresentation[I].ActualFunction == Func)
         {
-            UnwoundFunction = &Gui->FuncRepresentation[I];
+            UnwoundFunction = &Gui->Transient.FuncRepresentation[I];
         }
     }
     assert(UnwoundFunction);
@@ -1377,11 +1377,11 @@ DebugeeBuildBacktrace()
         if(!Func) { break; }
 
         unwind_function UnwoundFunction = 0x0;
-        for(u32 I = 0; I < Gui->FuncRepresentationCount; I++)
+        for(u32 I = 0; I < Gui->Transient.FuncRepresentationCount; I++)
         {
-            if(Gui->FuncRepresentation[I].ActualFunction == Func)
+            if(Gui->Transient.FuncRepresentation[I].ActualFunction == Func)
             {
-                UnwoundFunction = &Gui->FuncRepresentation[I];
+                UnwoundFunction = &Gui->Transient.FuncRepresentation[I];
             }
         }
         assert(UnwoundFunction);
