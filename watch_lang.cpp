@@ -347,71 +347,71 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
     {
         return 0x0;
     }
-    
-	lex_token *Token = ParserConsumeToken(Parser);
-	if(!Token)
+
+    lex_token *Token = ParserConsumeToken(Parser);
+    if(!Token)
     {
         Parser->ErrorStr = "Unexpected end of file.";
         return 0x0;
     }
-    
-	if(Token->Kind == Delimiter)
-	{
-		return Prev;
-	}
 
-    if(Token->Kind == TokenKind_Star)
+    if(Token->Kind == Delimiter)
     {
-        ast_node *Node = StructPush(Parser->Arena, ast_node);
-        Node->Kind = ASTNodeKind_PtrDeref;
-        Node->Token = Token;
-
-        Node->Rhs = StructPush(Parser->Arena, ast_node);
-        Node->Rhs = ParserNextExpression(Parser, 0x0, Delimiter);
-
-        if(Parser->PosNode->Token.Kind != Delimiter)
-        {
-            return ParserNextExpression(Parser, Node, Delimiter);
-        }
-        else
-        {
-            return Node;
-        }
+        return Prev;
     }
 
-	if(!Prev)
-	{
-		if(Token->Kind == TokenKind_Symbol)
-		{
-			ast_node *Node = StructPush(Parser->Arena, ast_node);
-			Node->Kind = ASTNodeKind_Ident;
-			Node->Token = Token;
+    if(!Prev)
+    {
+        if(Token->Kind == TokenKind_Symbol)
+        {
+            ast_node *Node = StructPush(Parser->Arena, ast_node);
+            Node->Kind = ASTNodeKind_Ident;
+            Node->Token = Token;
 
-			return ParserNextExpression(Parser, Node, Delimiter);
-		}
-		else if(Token->Kind == TokenKind_ImmInt)
-		{
-			ast_node *Node = StructPush(Parser->Arena, ast_node);
-			Node->Kind = ASTNodeKind_IntLit;
-			Node->Token = Token;
+            return ParserNextExpression(Parser, Node, Delimiter);
+        }
+        else if(Token->Kind == TokenKind_ImmInt)
+        {
+            ast_node *Node = StructPush(Parser->Arena, ast_node);
+            Node->Kind = ASTNodeKind_IntLit;
+            Node->Token = Token;
 
-			return ParserNextExpression(Parser, Node, Delimiter);
-		}
+            return ParserNextExpression(Parser, Node, Delimiter);
+        }
+        else if(Token->Kind == TokenKind_Star)
+        {
+            ast_node *Node = StructPush(Parser->Arena, ast_node);
+            Node->Kind = ASTNodeKind_PtrDeref;
+            Node->Token = Token;
+
+            Node->Rhs = StructPush(Parser->Arena, ast_node);
+            Node->Rhs = ParserNextExpression(Parser, 0x0, Delimiter);
+
+            if(Parser->PosNode->Token.Kind != Delimiter)
+            {
+                return ParserNextExpression(Parser, Node, Delimiter);
+            }
+            else
+            {
+                return Node;
+            }
+        }
+
         else
         {
             Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
-			sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
+            sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
             return 0x0;
         }
-	}
-	else
-	{
-		if(Token->Kind == TokenKind_BracketOp)
-		{
-			ast_node *IndexingExpr = ParserNextExpression(Parser, 0x0, TokenKind_BracketCl);
+    }
+    else
+    {
+        if(Token->Kind == TokenKind_BracketOp)
+        {
+            ast_node *IndexingExpr = ParserNextExpression(Parser, 0x0, TokenKind_BracketCl);
 
-			ast_node *Node = StructPush(Parser->Arena, ast_node);
-			Node->Kind = ASTNodeKind_IndexExpr;
+            ast_node *Node = StructPush(Parser->Arena, ast_node);
+            Node->Kind = ASTNodeKind_IndexExpr;
 
             Node->Lhs = StructPush(Parser->Arena, ast_node);
             Node->Rhs = StructPush(Parser->Arena, ast_node);
@@ -419,12 +419,12 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
             Node->Lhs = Prev;
             Node->Rhs = IndexingExpr;
 
-			return ParserNextExpression(Parser, Node, Delimiter);		
-		}
+            return ParserNextExpression(Parser, Node, Delimiter);
+        }
         else if(Token->Kind == TokenKind_Dot)
         {
             lex_token *Token2 = ParserConsumeToken(Parser);
-            
+
             if(Token2->Kind != TokenKind_Symbol)
             {
                 Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
@@ -472,15 +472,15 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
 
             return ParserNextExpression(Parser, Node, Delimiter);
         }
-		else
-		{
+        else
+        {
             Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
             sprintf(Parser->ErrorStr, "Unexpected token %s %s\n", LexerTokenKindToString(Token->Kind), Token->Content);
             return 0x0;
-		}
-	}
+        }
+    }
 
-	return 0x0;
+    return 0x0;
 }
 
 static void
@@ -824,6 +824,74 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
         Result.Kind = EvalResultKind_Repr;
         Result.Repr = StructPush(&Gui->Arena, variable_representation);
         (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, Address, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
+
+        return Result;
+    }
+    else if(Expr->Kind == ASTNodeKind_PtrDeref)
+    {
+        if(!Expr->Rhs)
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Unexpected lack of right node child in pointer deref\n");
+
+            return {};
+        }
+
+        eval_result RightSide = EvaluatorEvalExpression(Eval, Expr->Rhs);
+        if(RightSide.Kind != EvalResultKind_Ident && RightSide.Kind != EvalResultKind_Repr)
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            char *KindStr = ExpressionResultKindToString(RightSide.Kind);
+            sprintf(Eval->ErrorStr, "Cannot dereference [%s] eval kind result\n", KindStr);
+
+            return {};
+        }
+
+        size_t VarAddress = 0x0;
+        size_t TypeOffset = 0x0;
+        di_underlaying_type Underlaying = {};
+        char *VarName = 0x0;
+
+        if(RightSide.Kind == EvalResultKind_Repr)
+        {
+            auto VarRepr = RightSide.Repr;
+            assert(VarRepr);
+
+            VarName = VarRepr->Name;
+            VarAddress = VarRepr->Address;
+            Underlaying = VarRepr->Underlaying;
+        }
+        else if(RightSide.Kind == EvalResultKind_Ident)
+        {
+            di_variable *Var = DwarfFindVariableByNameInScope(Eval->Scope, RightSide.Ident);
+            if(!Var)
+            {
+                Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+                sprintf(Eval->ErrorStr, "Variable [%s] not found in current scope\n", RightSide.Ident);
+
+                return {};
+            }
+
+            VarName = Var->Name;
+            VarAddress = DwarfGetVariableMemoryAddress(Var);
+            Underlaying = DwarfFindUnderlayingType(Var->TypeOffset);
+        }
+
+        if(!Underlaying.Flags.IsPointer)
+        {
+            Eval->ErrorStr = ArrayPush(Eval->Arena, char, 256);
+            sprintf(Eval->ErrorStr, "Variable [%s] is not a pointer type.", VarName);
+            return {};
+        }
+
+        TypeOffset = Underlaying.Type->DIEOffset;
+        
+        size_t DerefedAddress = DebugeePeekMemory(VarAddress);
+
+        eval_result Result = {};
+        Result.Kind = EvalResultKind_Repr;
+        Result.Repr = StructPush(&Gui->Arena, variable_representation);
+        (*Result.Repr) = GuiBuildMemberRepresentation(TypeOffset, DerefedAddress, StringDuplicate(&Gui->Arena, RightSide.Ident), &Gui->Arena);
 
         return Result;
     }

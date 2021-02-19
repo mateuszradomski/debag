@@ -1995,7 +1995,7 @@ main(i32 ArgCount, char **Args)
         if(StringMatches(Args[1], "-wl"))
         {
             scratch_arena Scratch;
-            char *WatchLangSrc = (char *)"myArray[*myPtr]->x";
+            char *WatchLangSrc = (char *)"*myArray[*myPtr]->x";
 
             lexer Lexer = LexerCreate(WatchLangSrc, Scratch);
             LexerBuildTokens(&Lexer);
