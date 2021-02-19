@@ -179,7 +179,7 @@ LexerBuildTokens(lexer *Lexer)
 		else if(C == ')')
 		{
 			lex_token Token = {};
-			Token.Kind = TokenKind_ParenOp;
+			Token.Kind = TokenKind_ParenCl;
 			LexerPushToken(Lexer, Token);	
 		}
 		else if(C == '-')
@@ -396,7 +396,13 @@ ParserNextExpression(parser *Parser, ast_node *Prev, token_kind Delimiter)
                 return Node;
             }
         }
+        else if(Token->Kind == TokenKind_ParenOp)
+        {
+            token_kind NewDelimiter = TokenKind_ParenCl;
+            ast_node *InsideParens = ParserNextExpression(Parser, 0x0, NewDelimiter);
 
+            return ParserNextExpression(Parser, InsideParens, Delimiter);
+        }
         else
         {
             Parser->ErrorStr = ArrayPush(Parser->Arena, char, 256);
