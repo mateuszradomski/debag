@@ -36,13 +36,25 @@ struct variable_representation_list
     u32 Count;
 };
 
+enum
+{
+    COMBO_REG_SHOW_AS_DEFAULT = 0,
+    COMBO_REG_SHOW_AS_FLOAT = 1,
+    COMBO_REG_SHOW_AS_DOUBLE = 2,
+    COMBO_REG_SHOW_AS_INT8 = 3,
+    COMBO_REG_SHOW_AS_INT16 = 4,
+    COMBO_REG_SHOW_AS_INT32 = 5,
+    COMBO_REG_SHOW_AS_INT64 = 6,
+};
+
+typedef u8 ShowRegisterAsState;
+
 struct gui_flags
 {
     u8 RegsShowMMX : 1;
     u8 RegsShowSSE : 1;
     u8 RegsShowAVX : 1;
-    u8 RegsShowAsF32 : 1;
-    u8 RegsShowAsF64 : 1;
+    u8 RegsShowAs : 4;
     u8 VarShowGlobals : 1;
     u8 VarShowParams : 1;
     u8 VarShowLocals : 1;
