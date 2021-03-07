@@ -32,6 +32,32 @@ GuiShowRegisters(x64_registers Regs)
     ImGui::Text("RIP: %lX", Regs.RIP);
     ImGui::PopStyleVar();
 
+    char *PUID = "###varscontextmenu";
+    if(ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+    {
+        ImGui::OpenPopup(PUID);
+    }
+
+    bool Options[] = { (bool)Gui->Flags.RegsShowMMX, (bool)Gui->Flags.RegsShowSSE, (bool)Gui->Flags.RegsShowAVX };
+    if(ImGui::BeginPopup(PUID))
+    {
+        bool Change = false;
+        Change = ImGui::Checkbox("Show MMX registers", &Options[0]) || Change;
+        Change = ImGui::Checkbox("Show SSE registers", &Options[1]) || Change;
+        Change = ImGui::Checkbox("Show AVX registers", &Options[2]) || Change;
+
+        if(Change)
+        {
+            Gui->Flags.RegsShowMMX = Options[0];
+            Gui->Flags.RegsShowSSE = Options[1];
+            Gui->Flags.RegsShowAVX = Options[2];
+
+            Gui->Transient.LocalsBuildAddress = 0x0;
+        }
+
+        ImGui::EndPopup();
+    }
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 0));
     ImGui::Separator();
     
@@ -44,6 +70,24 @@ GuiShowRegisters(x64_registers Regs)
     {
         ImGui::Text("%s: %lX", RegisterGetNameByUnionIndex(I), Regs.Array[I]);
         ImGui::NextColumn();
+    }
+
+    if(Gui->Flags.RegsShowMMX)
+    {
+	ImGui::Separator();	
+	// TODO: Fill out
+    }
+    
+    if(Gui->Flags.RegsShowSSE)
+    {
+	ImGui::Separator();
+	// TODO: Fill out
+    }
+
+    if(Gui->Flags.RegsShowAVX)
+    {
+	ImGui::Separator();
+	// TODO: Fill out
     }
 
     ImGui::Columns(1);

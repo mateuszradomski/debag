@@ -38,6 +38,9 @@ struct variable_representation_list
 
 struct gui_flags
 {
+    u8 RegsShowMMX : 1;
+    u8 RegsShowSSE : 1;
+    u8 RegsShowAVX : 1;
     u8 VarShowGlobals : 1;
     u8 VarShowParams : 1;
     u8 VarShowLocals : 1;
