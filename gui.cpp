@@ -74,20 +74,56 @@ GuiShowRegisters(x64_registers Regs)
 
     if(Gui->Flags.RegsShowMMX)
     {
-	ImGui::Separator();	
-	// TODO: Fill out
+	ImGui::Separator();
+
+	// TODO(mateusz): Finish this
+	// const u32 StartOffset = 32;
+	// const u32 RegisterSize = 8;
+	// const u32 RegisterCount = 8;
+	// const u32 Offset = 0;
+	
+	// u64 *ReadHead = (u64 *)(&Debugee.XSaveBuffer[StartOffset]);
+	// for(u32 I = 0; I < RegisterCount; I++)
+	// {
+	//     ImGui::Text("MM%d: %lX", I);
+	//     ImGui::NextColumn();
+	    
+	//     ReadHead += RegisterSize / sizeof(ReadHead[0]);
+	// } 
     }
     
     if(Gui->Flags.RegsShowSSE)
     {
 	ImGui::Separator();
-	// TODO: Fill out
+	const u32 StartOffset = 160;
+	const u32 RegisterSize = 16;
+	const u32 RegisterCount = 8;
+	
+	u64 *ReadHead = (u64 *)(&Debugee.XSaveBuffer[StartOffset]);
+	for(u32 I = 0; I < RegisterCount; I++)
+	{
+	    ImGui::Text("XMM%d: %016lX%016lX", I, ReadHead[0], ReadHead[1]);
+	    ImGui::NextColumn();
+	    
+	    ReadHead += RegisterSize / sizeof(ReadHead[0]);
+	} 
     }
 
     if(Gui->Flags.RegsShowAVX)
     {
 	ImGui::Separator();
-	// TODO: Fill out
+	const u32 StartOffset = Debugee.AVXOffset;
+	const u32 RegisterSize = 16;
+	const u32 RegisterCount = 8;
+	
+	u64 *ReadHead = (u64 *)(&Debugee.XSaveBuffer[StartOffset]);
+	for(u32 I = 0; I < RegisterCount; I++)
+	{
+	    ImGui::Text("YMM_Hi%d: %016lX%016lX", I, ReadHead[0], ReadHead[1]);
+	    ImGui::NextColumn();
+	    
+	    ReadHead += RegisterSize / sizeof(ReadHead[0]);
+	} 
     }
 
     ImGui::Columns(1);

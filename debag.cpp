@@ -893,7 +893,6 @@ DebugeePeekXSave()
 {
     struct iovec IO = { Debugee.XSaveBuffer, Debugee.XSaveSize };
     ptrace(PTRACE_GETREGSET, Debugee.PID, NT_X86_XSTATE, &IO);
-    assert(res == 0);
 
     u64 XStateBV = *((u64 *)(&Debugee.XSaveBuffer[512]));
 
