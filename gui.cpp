@@ -38,19 +38,43 @@ GuiShowRegisters(x64_registers Regs)
         ImGui::OpenPopup(PUID);
     }
 
-    bool Options[] = { (bool)Gui->Flags.RegsShowMMX, (bool)Gui->Flags.RegsShowSSE, (bool)Gui->Flags.RegsShowAVX };
+    bool Options[] = { (bool)Gui->Flags.RegsShowMMX, (bool)Gui->Flags.RegsShowSSE, (bool)Gui->Flags.RegsShowAVX,
+		       (bool)Gui->Flags.RegsShowAsF32, (bool)Gui->Flags.RegsShowAsF64};
+    
     if(ImGui::BeginPopup(PUID))
     {
         bool Change = false;
         Change = ImGui::Checkbox("Show MMX registers", &Options[0]) || Change;
         Change = ImGui::Checkbox("Show SSE registers", &Options[1]) || Change;
         Change = ImGui::Checkbox("Show AVX registers", &Options[2]) || Change;
+	ImGui::Separator();
+        bool AtomicState = ImGui::Checkbox("Show registers as floats", &Options[3]);
+
+	if(AtomicState)
+	{
+	    if(Options[4])
+	    {
+		Options[4] = false;
+	    }
+	}
+	else
+	{
+	    AtomicState = ImGui::Checkbox("Show registers as doubles", &Options[4]);
+	    if(AtomicState && Options[3])
+	    {
+		Options[3] = false;
+	    }
+	}
+
+	Change = AtomicState || Change;
 
         if(Change)
         {
             Gui->Flags.RegsShowMMX = Options[0];
             Gui->Flags.RegsShowSSE = Options[1];
             Gui->Flags.RegsShowAVX = Options[2];
+            Gui->Flags.RegsShowAsF32 = Options[3];
+            Gui->Flags.RegsShowAsF64 = Options[4];
 
             Gui->Transient.LocalsBuildAddress = 0x0;
         }
@@ -102,7 +126,21 @@ GuiShowRegisters(x64_registers Regs)
 	u64 *ReadHead = (u64 *)(&Debugee.XSaveBuffer[StartOffset]);
 	for(u32 I = 0; I < RegisterCount; I++)
 	{
-	    ImGui::Text("XMM%d: %016lX%016lX", I, ReadHead[0], ReadHead[1]);
+	    if(Gui->Flags.RegsShowAsF32)
+	    {
+		float *FloatHead = (float *)ReadHead;
+		ImGui::Text("XMM%d: (%f, %f, %f, %f)", I, FloatHead[0], FloatHead[1], FloatHead[2], FloatHead[3]);
+	    }
+	    else if(Gui->Flags.RegsShowAsF64)
+	    {
+		double *DoubleHead = (double *)ReadHead;
+		ImGui::Text("XMM%d: (%f, %f)", I, DoubleHead[0], DoubleHead[1]);
+	    }
+	    else
+	    {
+		ImGui::Text("XMM%d: %016lX%016lX", I, ReadHead[0], ReadHead[1]);
+	    }
+	    
 	    ImGui::NextColumn();
 	    
 	    ReadHead += RegisterSize / sizeof(ReadHead[0]);
@@ -119,7 +157,21 @@ GuiShowRegisters(x64_registers Regs)
 	u64 *ReadHead = (u64 *)(&Debugee.XSaveBuffer[StartOffset]);
 	for(u32 I = 0; I < RegisterCount; I++)
 	{
-	    ImGui::Text("YMM_Hi%d: %016lX%016lX", I, ReadHead[0], ReadHead[1]);
+	    if(Gui->Flags.RegsShowAsF32)
+	    {
+		float *FloatHead = (float *)ReadHead;
+		ImGui::Text("YMM_Hi%d: (%f, %f, %f, %f)", I, FloatHead[0], FloatHead[1], FloatHead[2], FloatHead[3]);
+	    }
+	    else if(Gui->Flags.RegsShowAsF64)
+	    {
+		double *DoubleHead = (double *)ReadHead;
+		ImGui::Text("YMM_Hi%d: (%f, %f)", I, DoubleHead[0], DoubleHead[1]);
+	    }
+	    else
+	    {
+		ImGui::Text("YMM_Hi%d: %016lX%016lX", I, ReadHead[0], ReadHead[1]);
+	    }
+
 	    ImGui::NextColumn();
 	    
 	    ReadHead += RegisterSize / sizeof(ReadHead[0]);

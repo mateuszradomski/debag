@@ -41,6 +41,8 @@ struct gui_flags
     u8 RegsShowMMX : 1;
     u8 RegsShowSSE : 1;
     u8 RegsShowAVX : 1;
+    u8 RegsShowAsF32 : 1;
+    u8 RegsShowAsF64 : 1;
     u8 VarShowGlobals : 1;
     u8 VarShowParams : 1;
     u8 VarShowLocals : 1;
