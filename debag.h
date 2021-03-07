@@ -174,16 +174,6 @@ struct debugee_flags
     u8 PIE      : 1;
 };
 
-struct debugee
-{
-    debugee_flags Flags;
-    i32 PID;
-    char ProgramPath[256];
-    size_t LoadAddress;
-
-    x64_registers Regs;
-};
-
 struct logging_switches
 {
     bool DwarfLogs;
@@ -203,18 +193,13 @@ struct cpu_registers_flags
     // u8 HasAVX512 : 1;
 };
 
-struct dbg
+struct cpu_registers_enabled_flags
 {
-    bool InputChange;
-    char ProgramArgs[128];
-    char PathToRunIn[256];
-
-    void *UnwindRemoteArg;
-    unwind_info Unwind;
-
-    cpu_registers_flags RegsFlags;
-
-    logging_switches Log;
+    u8 EnabledMMX : 1;
+    u8 EnabledSSE : 1;
+    u8 EnabledAVX : 1;
+    // TODO(mateusz): To be supported
+    // u8 EnabledAVX512 : 1;
 };
 
 struct memory_cursor
@@ -245,6 +230,35 @@ struct scratch_arena
     scratch_arena();
     operator arena*();
     ~scratch_arena();
+};
+
+struct debugee
+{
+    arena Arena;
+    debugee_flags Flags;
+    i32 PID;
+    char ProgramPath[256];
+    size_t LoadAddress;
+
+    x64_registers Regs;
+    u8 *XSaveBuffer;
+    u32 XSaveSize;
+    u32 AVXOffset;
+    cpu_registers_enabled_flags RegsFlags;
+};
+
+struct dbg
+{
+    bool InputChange;
+    char ProgramArgs[128];
+    char PathToRunIn[256];
+
+    void *UnwindRemoteArg;
+    unwind_info Unwind;
+
+    cpu_registers_flags RegsFlags;
+
+    logging_switches Log;
 };
 
 #define MAX_BREAKPOINT_COUNT 8

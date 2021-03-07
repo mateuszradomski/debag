@@ -889,6 +889,19 @@ DebugeePeekRegisters()
 }
 
 static void
+DebugeePeekXSave()
+{
+    struct iovec IO = { Debugee.XSaveBuffer, Debugee.XSaveSize };
+    ptrace(PTRACE_GETREGSET, Debugee.PID, NT_X86_XSTATE, &IO);
+    assert(res == 0);
+
+    u64 XStateBV = *((u64 *)(&Debugee.XSaveBuffer[512]));
+
+    Debugee.RegsFlags.EnabledSSE = (XStateBV & (1 << 1)) ? 1 : 0;
+    Debugee.RegsFlags.EnabledAVX = (XStateBV & (1 << 2)) ? 1 : 0;
+}
+
+static void
 DebugeeSetRegisters(x64_registers Regs)
 {
     user_regs_struct USR = RegistersToUSR(Regs);
@@ -1132,6 +1145,7 @@ static void
 DebugerUpdateTransient()
 {
     Debugee.Regs = DebugeePeekRegisters();
+    DebugeePeekXSave();
     
     di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
     if(Func)
@@ -1298,6 +1312,7 @@ DebugerDeallocTransient()
     _UPT_destroy(Debuger.UnwindRemoteArg);
     
     ArenaDestroy(&DI->Arena);
+    ArenaDestroy(&Debugee.Arena);
 
 	ArenaDestroy(&Gui->Transient.RepresentationArena);
 	ArenaDestroy(&Gui->Transient.WatchArena);
@@ -1407,6 +1422,7 @@ DebugerMain()
     DI = &_DI;
     GuiInit();
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
+    Debugee.Arena = ArenaCreate(Kilobytes(4));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     TempBreakpoints = (breakpoint *)calloc(MAX_TEMP_BREAKPOINT_COUNT, sizeof(breakpoint));
     
@@ -1452,6 +1468,13 @@ DebugerMain()
     Debuger.RegsFlags.HasMMX = EDX & bit_MMX ? 1 : 0;
     Debuger.RegsFlags.HasSSE = ECX & bit_SSE ? 1 : 0;
     Debuger.RegsFlags.HasAVX = ECX & bit_AVX ? 1 : 0;
+
+    assert(__get_cpuid_count(0x0d, 0x00, &EAX, &EBX, &ECX, &EDX));
+    Debugee.XSaveSize = EBX;
+    Debugee.XSaveBuffer = ArrayPush(&Debugee.Arena, u8, Debugee.XSaveSize);
+    
+    assert(__get_cpuid_count(0x0d, 0x02, &EAX, &EBX, &ECX, &EDX));
+    Debugee.AVXOffset = EBX;
     
     Debugee.Regs = DebugeePeekRegisters();
     
