@@ -14,6 +14,8 @@
 #include <err.h>
 #include <cctype>
 
+#include <cpuid.h>
+
 #include <GLFW/glfw3.h>
 #include <capstone/capstone.h>
 #include <libdwarf/dwarf.h>
@@ -1442,6 +1444,14 @@ DebugerMain()
     Gui->SpacesArray[9] = "         ";
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+
+    // Check if we have scalar register on the running processor
+    u32 EAX, EBX, ECX, EDX;
+    assert(__get_cpuid(0x01, &EAX, &EBX, &ECX, &EDX));
+
+    Debuger.RegsFlags.HasMMX = EDX & bit_MMX ? 1 : 0;
+    Debuger.RegsFlags.HasSSE = ECX & bit_SSE ? 1 : 0;
+    Debuger.RegsFlags.HasAVX = ECX & bit_AVX ? 1 : 0;
     
     Debugee.Regs = DebugeePeekRegisters();
     

@@ -194,6 +194,15 @@ struct logging_switches
     bool LangLogs;
 };
 
+struct cpu_registers_flags
+{
+    u8 HasMMX : 1;
+    u8 HasSSE : 1;
+    u8 HasAVX : 1;
+    // TODO(mateusz): To be supported
+    // u8 HasAVX512 : 1;
+};
+
 struct dbg
 {
     bool InputChange;
@@ -202,6 +211,8 @@ struct dbg
 
     void *UnwindRemoteArg;
     unwind_info Unwind;
+
+    cpu_registers_flags RegsFlags;
 
     logging_switches Log;
 };
