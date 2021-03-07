@@ -84,20 +84,19 @@ GuiShowRegisters(x64_registers Regs)
     {
 	ImGui::Separator();
 
-	// TODO(mateusz): Finish this
-	// const u32 StartOffset = 32;
-	// const u32 RegisterSize = 8;
-	// const u32 RegisterCount = 8;
-	// const u32 Offset = 0;
+	const u32 StartOffset = 32;
+	const u32 RegisterSize = 8;
+	const u32 RegisterCount = 8;
+	const u32 Offset = 48;
 	
-	// u64 *ReadHead = (u64 *)(&Debugee.XSaveBuffer[StartOffset]);
-	// for(u32 I = 0; I < RegisterCount; I++)
-	// {
-	//     ImGui::Text("MM%d: %lX", I);
-	//     ImGui::NextColumn();
+	long double *ReadHead = (long double *)(&Debugee.XSaveBuffer[StartOffset]);
+	for(u32 I = 0; I < RegisterCount; I++)
+	{
+	    ImGui::Text("MM%d: %Lf", I, ReadHead[80]);
+	    ImGui::NextColumn();
 	    
-	//     ReadHead += RegisterSize / sizeof(ReadHead[0]);
-	// } 
+	    ReadHead += (RegisterSize / sizeof(ReadHead[0])) + Offset;
+	} 
     }
     
     if(Gui->Flags.RegsShowSSE)
