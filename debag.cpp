@@ -1438,10 +1438,17 @@ DebugerMain()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& IO = ImGui::GetIO(); (void)IO;
-    ImGui::StyleColorsDark();
-    
+
     ImGui_ImplGlfw_InitForOpenGL(Window, true);
     ImGui_ImplOpenGL2_Init();
+
+    ImFontConfig FontConfig = {};
+    FontConfig.SizePixels = 16;
+    FontConfig.OversampleH = FontConfig.OversampleV = 1;
+    FontConfig.PixelSnapH = true;
+    Gui->BiggerFont = IO.Fonts->AddFontDefault(&FontConfig);
+
+    ImGui::StyleColorsDark();
     
     // Make windows square not round
     ImGuiStyle& style = ImGui::GetStyle();

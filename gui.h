@@ -70,9 +70,9 @@ typedef u8 var_edit_kind;
 
 struct gui_transient
 {
-	arena RepresentationArena;
+    arena RepresentationArena;
 	
-	function_representation *FuncRepresentation;
+    function_representation *FuncRepresentation;
     u32 FuncRepresentationCount;
 
     bool EnterCaptured;
@@ -102,8 +102,9 @@ struct gui_data
     void (* ModalFuncShow)();
     ImTextureID BreakpointTextureActive;
     ImTextureID BreakpointTextureBlank;
+    ImFont *BiggerFont;
 
-	gui_transient Transient;
+    gui_transient Transient;
 
     char *SpacesArray[10];
     u32 WindowWidth = 1024;
