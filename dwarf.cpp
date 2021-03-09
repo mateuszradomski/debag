@@ -117,10 +117,10 @@ This function recursivley adds "decorator" types to the flags, and ultimately re
 
 */
 
-static ordering_type
+static OrderingType
 DIEOffsetPredicate(void *Cmp, void *Search)
 {
-    ordering_type Result = 0;
+    OrderingType Result = 0;
     
     size_t CmpVal = *(size_t *)Cmp;
     size_t SearchVal = *(size_t *)Search;
@@ -146,7 +146,7 @@ DwarfFindUnderlayingType(size_t BTDIEOffset)
 {
     di_underlaying_type Result = {};
 
-    bin_search_res SearchResult = BinarySearch(DI->Typedefs, DI->TypedefsCount, offsetof(di_typedef, DIEOffset),
+    BinSearchRes SearchResult = BinarySearch(DI->Typedefs, DI->TypedefsCount, offsetof(di_typedef, DIEOffset),
                                                sizeof(di_typedef), DIEOffsetPredicate, (void *)&BTDIEOffset);
 
     if(SearchResult.Found)

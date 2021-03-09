@@ -74,10 +74,10 @@ TableInsert(TableU32U32 *Table, u32 Key, u32 Value)
     return false;
 }
 
-static bin_search_res
-BinarySearch(void *Array, u32 Cnt, u32 Stride, u32 AtomSize, ordering_type (* Predicate)(void *, void *), void *UserPtr)
+static BinSearchRes
+BinarySearch(void *Array, u32 Cnt, u32 Stride, u32 AtomSize, OrderingType (* Predicate)(void *, void *), void *UserPtr)
 {
-    bin_search_res Result = {};
+    BinSearchRes Result = {};
 
     if(Cnt > 0)
     {
@@ -87,7 +87,7 @@ BinarySearch(void *Array, u32 Cnt, u32 Stride, u32 AtomSize, ordering_type (* Pr
 
         while(First <= Last)
         {
-            ordering_type Order = Predicate((u8 *)Array + Stride + (Middle * AtomSize), UserPtr);
+            OrderingType Order = Predicate((u8 *)Array + Stride + (Middle * AtomSize), UserPtr);
 
             if(Order == ORD_EQ)
             {

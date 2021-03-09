@@ -11,13 +11,13 @@ struct TableU32U32
     u32 Size;
 };
 
-struct bin_search_res
+struct BinSearchRes
 {
     u32 Index : 31;
     u32 Found : 1;
 };
 
-enum ordering
+enum
 {
     ORD_NONE,
     ORD_LT,
@@ -25,8 +25,8 @@ enum ordering
     ORD_GT,
 };
 
-typedef i32 ordering_type;
+typedef i32 OrderingType;
 
-static bin_search_res BinarySearch(void *Array, u32 Cnt, u32 Stride, u32 AtomSize, ordering_type (* Predicate)(void *, void *), void *UserPtr);
+static BinSearchRes BinarySearch(void *Array, u32 Cnt, u32 Stride, u32 AtomSize, OrderingType (* Predicate)(void *, void *), void *UserPtr);
 
 #endif //UTILS_H
