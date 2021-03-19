@@ -803,7 +803,7 @@ GuiShowBreakAtAddress()
 }
 
 static void
-_ImGuiShowOpenFileModalWindow()
+_GuiShowOpenFileModalWindow()
 {
     if(KeyboardButtons[GLFW_KEY_ESCAPE].Pressed)
     {
@@ -853,7 +853,7 @@ _ImGuiShowOpenFileModalWindow()
 static void
 GuiShowOpenFile()
 {
-    Gui->ModalFuncShow = _ImGuiShowOpenFileModalWindow;
+    Gui->ModalFuncShow = _GuiShowOpenFileModalWindow;
 }
 
 static void
