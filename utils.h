@@ -3,6 +3,12 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+struct Data
+{
+    u8 *Ptr;
+    u32 Len;
+};
+
 struct TableU32U32
 {
     u32 *Keys;
