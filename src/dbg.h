@@ -103,7 +103,7 @@ struct debugee
     arena Arena;
     debugee_flags Flags;
     i32 PID;
-    char ProgramPath[256];
+    char ProgramPath[PATH_MAX];
     size_t LoadAddress;
 
     x64_registers Regs;
@@ -117,7 +117,7 @@ struct dbg
 {
     bool InputChange;
     char ProgramArgs[128];
-    char PathToRunIn[256];
+    char PathToRunIn[PATH_MAX];
 
     void *UnwindRemoteArg;
     unwind_info Unwind;

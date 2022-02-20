@@ -850,7 +850,7 @@ DwarfLoadSourceFileFromCU(di_compile_unit *CU, di_exec_src_file *File)
         
         u32 LinesMatching = DwarfCountSourceFileLines(LineBuffer, LineCount, File->DwarfIndex);
 
-        char FileName[256] = {};
+        char FileName[NAME_MAX] = {};
         sprintf(FileName, "%s/%s", File->Dir, File->Name);
         LOG_DWARF("Source path is [%s]\n", FileName);
 

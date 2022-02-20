@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <err.h>
 #include <cctype>
+#include <linux/limits.h>
 
 #include <cpuid.h>
 
@@ -1015,7 +1016,7 @@ DebugeeKill()
 static size_t
 DebugeeGetLoadAddress(i32 DebugeePID)
 {
-    char Path[64] = {};
+    char Path[PATH_MAX] = {};
     sprintf(Path, "/proc/%d/maps", DebugeePID);
     LOG_DWARF("Load Path is %s\n", Path);
     
@@ -1079,7 +1080,7 @@ DebugeeContinueOrStart()
         }
         else
         {
-            char Buff[384] = {};
+            char Buff[2*PATH_MAX] = {};
 
             sprintf(Buff, "File at [%s] does not exist", Debugee.ProgramPath);
 
