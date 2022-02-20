@@ -1,4 +1,5 @@
-debug_info *DI = 0x0;
+debug_info _DI = { };
+debug_info *DI = &_DI;
 
 static bool
 DwarfOpenSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)

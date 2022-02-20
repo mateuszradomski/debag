@@ -11,11 +11,12 @@ mkdir -p bin
 for src_file in src/*.c
 do
     bin_name=$(basename -s .c $src_file)
-    gcc $src_file -o bin/$bin_name
+    gcc $optim $src_file -o bin/$bin_name
 done
 
+optim='-g -fsanitize=address -DDEBUG'
 opts=$optim' -Wall -Wextra -Wno-write-strings -Wno-unused-function -Wno-class-memaccess -Wno-format-security'
 libs='-lGL -ldl -pthread -lX11 -lelf -lz -lcapstone -lglfw -ldwarf -lunwind -lunwind-generic -lunwind-ptrace'
-#static_libs='libs/libimgui_static.a'
+static_libs='../libs/libimgui_static.a'
 
-g++ $opts $optim test.cpp -o test $libs $static_libs
+g++ $opts $optim -I./ -I../src/ -I../ test.cpp -o test $libs $static_libs

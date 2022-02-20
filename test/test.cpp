@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <debag.cpp>
 
 typedef unsigned int u32;
 
@@ -46,25 +46,8 @@ TEST(DummyHead) { return 0; }
 
 TEST(FirstTest)
 {
-
-    return 0;
-}
-
-TEST(SecondTestThatFails)
-{
-
-    return 1;
-}
-
-TEST(ThirdTestThatFailsOnExpectEq)
-{
-    EXPECT_EQ(2+2, 5);
-    return 0;
-}
-
-TEST(FourthTestThatPassesOnExpectEq)
-{
-    EXPECT_EQ(2+2, 4);
+    StringCopy(Debugee.ProgramPath, "./bin/variables");
+    DebugeeContinueOrStart();
     return 0;
 }
 
