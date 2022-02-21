@@ -128,39 +128,39 @@ struct dbg
 };
 
 dbg Debuger;
-debugee Debugee;
 
 /*
  * Flow Control for Debugee
  */
-static void DebugeeStart();
-static void DebugeeKill();
-static void DebugeeContinueOrStart();
-static void DebugeeRestart();
-static void DebugeeWaitForSignal();
-static void DebugeeToNextLine(bool StepIntoFunctions);
-static void DebugeeStepInstruction();
-static void DebugeeToNextInstruction(bool StepIntoFunctions);
-static void DebugeeContinueProgram();
-static void DebugeeStepOutOfFunction();
+static debugee          DebugeeCreate(debugee *Debugee);
+static void             DebugeeStart(debugee *Debugee);
+static void             DebugeeKill(debugee *Debugee);
+static void             DebugeeContinueOrStart(debugee *Debugee);
+static void             DebugeeRestart(debugee *Debugee);
+static void             DebugeeWaitForSignal(debugee *Debugee);
+static void             DebugeeToNextLine(debugee *Debugee, bool StepIntoFunctions);
+static void             DebugeeStepInstruction(debugee *Debugee);
+static void             DebugeeToNextInstruction(debugee *Debugee, bool StepIntoFunctions);
+static void             DebugeeContinueProgram(debugee *Debugee);
+static void             DebugeeStepOutOfFunction(debugee *Debugee);
 
 /*
  * I/O with Debugee
  */
-static x64_registers    DebugeePeekRegisters();
-static void             DebugeePeekXSave();
-static void             DebugeeSetRegisters(x64_registers Regs);
-static size_t           DebugeeGetProgramCounter();
-static size_t           DebugeeGetReturnAddress(size_t Address);
-static void             DebugeePokeMemory(size_t Address, size_t MachineWord);
-static size_t           DebugeePeekMemory(size_t Address);
-static void             DebugeePeekMemoryArray(size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead);
-static size_t           DebugeeGetLoadAddress(i32 DebugeePID);
+static x64_registers    DebugeePeekRegisters(debugee *Debugee);
+static void             DebugeePeekXSave(debugee *Debugee);
+static void             DebugeeSetRegisters(debugee *Debugee, x64_registers Regs);
+static size_t           DebugeeGetProgramCounter(debugee *Debugee);
+static size_t           DebugeeGetReturnAddress(debugee *Debugee, size_t Address);
+static void             DebugeePokeMemory(debugee *Debugee, size_t Address, size_t MachineWord);
+static size_t           DebugeePeekMemory(debugee *Debugee, size_t Address);
+static void             DebugeePeekMemoryArray(debugee *Debugee, size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead);
+static size_t           DebugeeGetLoadAddress(debugee *Debugee, i32 DebugeePID);
 
 /*
  * Caching Debugee information
  */
-static void             DebugeeBuildBacktrace();
+static void             DebugeeBuildBacktrace(debugee *Debugee);
 
 /*
  * Debuger related functions

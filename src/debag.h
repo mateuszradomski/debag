@@ -75,6 +75,8 @@ struct disasm_inst
     char *Operation;
 };
 
+debugee Debugee;
+
 #define MAX_BREAKPOINT_COUNT 8
 breakpoint *Breakpoints = 0x0;
 u32 BreakpointCount = 0;

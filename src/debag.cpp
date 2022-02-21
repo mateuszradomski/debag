@@ -902,9 +902,10 @@ DebugerMain()
 {
     GuiInit();
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
-    Debugee.Arena = ArenaCreate(Kilobytes(4));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     TempBreakpoints = (breakpoint *)calloc(MAX_TEMP_BREAKPOINT_COUNT, sizeof(breakpoint));
+
+    Debugee = DebugeeCreate();
     
     glfwInit();
     GLFWwindow *Window = glfwCreateWindow(Gui->WindowWidth, Gui->WindowHeight, "debag", NULL, NULL);
@@ -956,15 +957,6 @@ DebugerMain()
     Debuger.RegsFlags.HasSSE = ECX & bit_SSE ? 1 : 0;
     Debuger.RegsFlags.HasAVX = ECX & bit_AVX ? 1 : 0;
 
-    assert(__get_cpuid_count(0x0d, 0x00, &EAX, &EBX, &ECX, &EDX));
-    Debugee.XSaveSize = EBX;
-    Debugee.XSaveBuffer = ArrayPush(&Debugee.Arena, u8, Debugee.XSaveSize);
-    
-    assert(__get_cpuid_count(0x0d, 0x02, &EAX, &EBX, &ECX, &EDX));
-    Debugee.AVXOffset = EBX;
-    
-    Debugee.Regs = DebugeePeekRegisters();
-    
     ImGuiInputTextFlags ITFlags = 0;
     ITFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
     
