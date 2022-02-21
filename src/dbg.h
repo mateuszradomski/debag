@@ -148,6 +148,7 @@ static void DebugeeStepOutOfFunction();
  * I/O with Debugee
  */
 static x64_registers    DebugeePeekRegisters();
+static void             DebugeePeekXSave();
 static void             DebugeeSetRegisters(x64_registers Regs);
 static size_t           DebugeeGetProgramCounter();
 static size_t           DebugeeGetReturnAddress(size_t Address);
@@ -159,7 +160,6 @@ static size_t           DebugeeGetLoadAddress(i32 DebugeePID);
 /*
  * Caching Debugee information
  */
-static void             DebugeeDisassembleAroundAddress(address_range AddrRange);
 static void             DebugeeBuildBacktrace();
 
 /*

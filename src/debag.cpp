@@ -35,6 +35,7 @@
 #include "gui.h"
 #include "watch_lang.h"
 #include "utils.cpp"
+#include "dbg.cpp"
 #include "dwarf.cpp"
 #include "flow.cpp"
 #include "gui.cpp"
@@ -668,37 +669,6 @@ RegistersToUSR(x64_registers Regs)
     return Result;
 }
 
-static x64_registers
-DebugeePeekRegisters()
-{
-    x64_registers Result = {};
-    
-    user_regs_struct USR = {};
-    ptrace(PTRACE_GETREGS, Debugee.PID, 0x0, &USR);
-    
-    Result = RegistersFromUSR(USR);
-    return Result;
-}
-
-static void
-DebugeePeekXSave()
-{
-    struct iovec IO = { Debugee.XSaveBuffer, Debugee.XSaveSize };
-    ptrace(PTRACE_GETREGSET, Debugee.PID, NT_X86_XSTATE, &IO);
-
-    u64 XStateBV = *((u64 *)(&Debugee.XSaveBuffer[512]));
-
-    Debugee.RegsFlags.EnabledSSE = (XStateBV & (1 << 1)) ? 1 : 0;
-    Debugee.RegsFlags.EnabledAVX = (XStateBV & (1 << 2)) ? 1 : 0;
-}
-
-static void
-DebugeeSetRegisters(x64_registers Regs)
-{
-    user_regs_struct USR = RegistersToUSR(Regs);
-    ptrace(PTRACE_SETREGS, Debugee.PID, 0x0, &USR);
-}
-
 static size_t
 RegisterGetByABINumber(x64_registers Registers, u32 Number)
 {
@@ -754,56 +724,6 @@ RegisterGetNameByUnionIndex(u32 Index)
     };
     
     return Names[Index];
-}
-
-static inline size_t
-DebugeeGetProgramCounter()
-{
-    return Debugee.Regs.RIP;
-}
-
-static inline size_t
-DebugeeGetReturnAddress(size_t Address)
-{
-    size_t CFA = DwarfGetCFA(Address);
-    size_t MachineWord = DebugeePeekMemory(CFA - 8);
-
-    return MachineWord;
-}
-
-static size_t
-DebugeePeekMemory(size_t Address)
-{
-    size_t MachineWord = 0;
-
-    MachineWord = ptrace(PTRACE_PEEKDATA, Debugee.PID, Address, 0x0);
-    
-    return MachineWord;
-}
-
-static void
-DebugeePokeMemory(size_t Address, size_t MachineWord)
-{
-    ptrace(PTRACE_POKEDATA, Debugee.PID, Address, MachineWord);
-}
-
-// Out array has be a multiple of 8 sized 
-static void
-DebugeePeekMemoryArray(size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead)
-{
-    size_t *MemoryPtr = (size_t *)OutArray;
-    
-    size_t TempAddress = StartAddress;
-    for(u32 I = 0; I < BytesToRead / sizeof(size_t); I++)
-    {
-        *MemoryPtr = DebugeePeekMemory(TempAddress);
-        MemoryPtr += 1;
-        TempAddress += 8;
-        if(TempAddress >= EndAddress)
-        {
-            break;
-        }
-    }
 }
 
 static inst_type
@@ -952,144 +872,6 @@ DebugerUpdateTransient()
 }
 
 static void
-DebugeeStart()
-{
-    char BaseDir[128] = {};
-    getcwd(BaseDir, sizeof(BaseDir));
-
-    i32 ProcessID = fork();
-    
-    // Child process
-    if(ProcessID == 0)
-    {
-        char *ProgramArgs[16] = {};
-        u32 ArgsLen = 0;
-        ProgramArgs[0] = Debugee.ProgramPath;
-        StringToArgv(Debuger.ProgramArgs, &ProgramArgs[1], &ArgsLen);
-        
-        if(Debuger.PathToRunIn && strlen(Debuger.PathToRunIn) != 0)
-        {
-            i32 Result = chdir(Debuger.PathToRunIn);
-            assert(Result == 0);
-            
-//            char CWDStr[128] = {};
-//            LOG_MAIN("child getcwd() = [%s]\n", getcwd(CWDStr, sizeof(CWDStr)));
-        }
-        
-        personality(ADDR_NO_RANDOMIZE);
-        ptrace(PTRACE_TRACEME, 0, 0x0, 0x0);
-        prctl(PR_SET_PDEATHSIG, SIGHUP);
-
-        char *AbsolutePath = 0x0;
-        if(Debugee.ProgramPath[0] == '/' || Debugee.ProgramPath[0] == '~')
-        {
-            AbsolutePath = Debugee.ProgramPath;
-        }
-        else
-        {
-            u32 Len1 = StringLength(Debugee.ProgramPath);
-            u32 Len2 = StringLength(BaseDir);
-            AbsolutePath = (char *)malloc(Len1 + Len2 + 16);
-
-            sprintf(AbsolutePath, "%s/%s", BaseDir, Debugee.ProgramPath);
-        }
-
-        execv(AbsolutePath, ProgramArgs);
-        free(AbsolutePath);
-    }
-    else
-    {
-        Debugee.PID = ProcessID;
-        Debugee.Flags.Running = true;
-        DebugeeWaitForSignal();
-        assert(chdir(BaseDir) == 0);
-    }
-}
-
-static void
-DebugeeKill()
-{
-    ptrace(PTRACE_KILL, Debugee.PID, 0x0, 0x0);
-    Debugee.Flags.Running = !Debugee.Flags.Running;
-}
-
-static size_t
-DebugeeGetLoadAddress(i32 DebugeePID)
-{
-    char Path[PATH_MAX] = {};
-    sprintf(Path, "/proc/%d/maps", DebugeePID);
-    LOG_DWARF("Load Path is %s\n", Path);
-    
-    char AddrStr[16] = {};
-    FILE *FileHandle = fopen(Path, "r");
-    assert(FileHandle);
-    fread(AddrStr, sizeof(AddrStr), 1, FileHandle);
-    
-    u32 Length = sizeof(AddrStr);
-    for(u32 I = 0; I < sizeof(AddrStr); I++)
-    {
-        if(AddrStr[I] == '-')
-        {
-            Length = I;
-            break;
-        }
-    }
-    
-    size_t Result = 0x0;
-    
-    for(u32 I = 0; I < Length; I++)
-    {
-        size_t HexToDec = (AddrStr[I] - '0') > 10 ? (AddrStr[I] - 'a') + 10 : (AddrStr[I] - '0');
-        Result += HexToDec << (4 * (Length - I - 1));
-    }
-    
-    return Result;
-}
-
-static void
-DebugeeContinueOrStart()
-{
-    if(IsFile(Debugee.ProgramPath))
-    {
-        GuiClearStatusText();
-        
-        //Continue or start program
-        if(!Debugee.Flags.Running)
-        {
-            DebugeeStart();
-            
-            Debugee.LoadAddress = DebugeeGetLoadAddress(Debugee.PID);
-            LOG_MAIN("LoadAddress = %lx\n", Debugee.LoadAddress);
-            Debugee.Flags.PIE = DwarfIsExectuablePIE();
-            
-            DwarfRead();
-            
-            Debuger.UnwindRemoteArg = _UPT_create(Debugee.PID);
-
-            BreakAtMain();
-        }
-    
-        DebugeeContinueProgram();
-        DebugerUpdateTransient();
-    }
-    else
-    {
-        if(StringEmpty(Debugee.ProgramPath))
-        {
-            GuiSetStatusText("No program path given");
-        }
-        else
-        {
-            char Buff[2*PATH_MAX] = {};
-
-            sprintf(Buff, "File at [%s] does not exist", Debugee.ProgramPath);
-
-            GuiSetStatusText(Buff);
-        }
-    }
-}
-
-static void
 DebugerDeallocTransient()
 {
     DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
@@ -1113,97 +895,6 @@ DebugerDeallocTransient()
 
     
     memset(DI, 0, sizeof(debug_info));
-}
-
-static void
-DebugeeRestart()
-{
-    if(Debugee.Flags.Running)
-    {
-        DebugeeKill();
-        DebugerDeallocTransient();
-
-        DebugeeContinueOrStart();
-    }
-}
-
-static void
-DebugeeBuildBacktrace()
-{
-    if(Debuger.Unwind.FuncList.Head)
-    {
-        unwind_functions_bucket *Bucket = Debuger.Unwind.FuncList.Head;
-
-        while(Bucket)
-        {
-            unwind_functions_bucket *ToDelete = Bucket;
-            Bucket = Bucket->Next;
-
-            free(ToDelete);
-        }
-        Debuger.Unwind.FuncList.Head = 0x0;
-    }
-    
-    unw_context_t UnwindCtx = {};
-    unw_getcontext(&UnwindCtx);
-    unw_addr_space_t UnwindAddressSpace = unw_create_addr_space(&_UPT_accessors, __LITTLE_ENDIAN);
-    assert(UnwindAddressSpace);
-    
-    unw_cursor_t UnwindCursor = {};
-    assert(unw_init_remote(&UnwindCursor, UnwindAddressSpace, Debuger.UnwindRemoteArg) == 0);
-
-    Debuger.Unwind.Address = DebugeeGetProgramCounter();
-    
-    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
-    if(!Func) { return; }
-
-    unwind_functions_bucket *Bucket = (unwind_functions_bucket *)calloc(1, sizeof(unwind_functions_bucket));
-
-    if(!Gui->Transient.FuncRepresentation)
-    {
-        GuiBuildFunctionRepresentation();
-    }
-    
-    unwind_function UnwoundFunction = 0x0;
-    for(u32 I = 0; I < Gui->Transient.FuncRepresentationCount; I++)
-    {
-        if(Gui->Transient.FuncRepresentation[I].ActualFunction == Func)
-        {
-            UnwoundFunction = &Gui->Transient.FuncRepresentation[I];
-        }
-    }
-    assert(UnwoundFunction);
-    Bucket->Functions[Bucket->Count++] = UnwoundFunction;
-    
-    while(unw_step(&UnwindCursor) > 0)
-    {
-        unw_word_t StackPointer = 0x0;
-        unw_get_reg(&UnwindCursor, UNW_REG_SP, &StackPointer);
-        size_t ReturnAddress = DebugeePeekMemory(StackPointer - 8);
-
-        di_function *Func = DwarfFindFunctionByAddress(ReturnAddress);
-        if(!Func) { break; }
-
-        unwind_function UnwoundFunction = 0x0;
-        for(u32 I = 0; I < Gui->Transient.FuncRepresentationCount; I++)
-        {
-            if(Gui->Transient.FuncRepresentation[I].ActualFunction == Func)
-            {
-                UnwoundFunction = &Gui->Transient.FuncRepresentation[I];
-            }
-        }
-        assert(UnwoundFunction);
-
-        if(Bucket->Count >= ARRAY_LENGTH(Bucket->Functions))
-        {
-            SLL_QUEUE_PUSH(Debuger.Unwind.FuncList.Head, Debuger.Unwind.FuncList.Tail, Bucket);
-            Bucket = (unwind_functions_bucket *)calloc(1, sizeof(unwind_functions_bucket));
-        }
-        
-        Bucket->Functions[Bucket->Count++] = UnwoundFunction;
-    } 
-
-    SLL_QUEUE_PUSH(Debuger.Unwind.FuncList.Head, Debuger.Unwind.FuncList.Tail, Bucket);
 }
 
 static void

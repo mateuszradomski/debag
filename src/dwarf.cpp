@@ -266,7 +266,7 @@ DwarfGetVariableMemoryAddress(di_variable *Var)
     size_t Address = 0x0;
     if(Var->LocationAtom == DW_OP_fbreg)
     {
-        size_t CFA = DwarfGetCFA(DebugeeGetProgramCounter());
+        size_t CFA = DwarfGetCanonicalFrameAddress(DebugeeGetProgramCounter());
         Address = CFA + Var->Offset;
     }
     else if(Var->LocationAtom == DW_OP_addr)
@@ -2652,7 +2652,7 @@ DwarfCalculateCFA(Dwarf_Regtable3 *Table, x64_registers Registers)
 }
     
 static size_t
-DwarfGetCFA(size_t Address)
+DwarfGetCanonicalFrameAddress(size_t Address)
 {
     size_t Result = 0x0;
 
