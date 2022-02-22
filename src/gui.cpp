@@ -275,7 +275,7 @@ GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
 
         if(TypeBytesCnt < sizeof(size_t))
         {
-            size_t InMemoryAlready = DebugeePeekMemory(Variable->Address);
+            size_t InMemoryAlready = DebugeePeekMemory(&Debugee, Variable->Address);
             u8 *MemoryBytes = (u8 *)&InMemoryAlready;
 
             for(u32 I = TypeBytesCnt; I < sizeof(size_t); I++)
@@ -284,7 +284,7 @@ GuiEditBaseVariableValue(variable_representation *Variable, arena *Arena)
             }
         }
 
-        DebugeePokeMemory(Variable->Address, ToPoke);
+        DebugeePokeMemory(&Debugee, Variable->Address, ToPoke);
 
         Variable[0] = GuiRebuildVariableRepresentation(Variable, Arena);
     }
@@ -437,10 +437,10 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
                     // TODO(mateusz): I would love to move it somewhere else
                     if(Variable->Underlaying.Flags.IsPointer)
                     {
-                        Address = DebugeePeekMemory(Variable->Address);
+                        Address = DebugeePeekMemory(&Debugee, Variable->Address);
                         for(u32 I = 0; I < Variable->Underlaying.PointerCount; I++)
                         {
-                            Address = DebugeePeekMemory(Variable->Address);
+                            Address = DebugeePeekMemory(&Debugee, Variable->Address);
                         }
 
                         Address += Member->ByteLocation;
@@ -535,7 +535,7 @@ GuiShowVariable(variable_representation *Variable, arena *Arena, bool AllowNameE
 static void
 GuiShowVariables()
 {
-    size_t PC = DebugeeGetProgramCounter();
+    size_t PC = DebugeeGetProgramCounter(&Debugee);
     if(Gui->Transient.LocalsBuildAddress != PC)
     {
         ArenaClear(&Gui->Transient.RepresentationArena);
@@ -593,7 +593,7 @@ GuiShowVariables()
                     LexScopeIndex++)
                 {
                     di_lexical_scope *LexScope = &Func->LexScopes[LexScopeIndex];
-                    if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter()))
+                    if(DwarfAddressConfinedByLexicalScope(LexScope, DebugeeGetProgramCounter(&Debugee)))
                     {
                         for(u32 I = 0; I < LexScope->VariablesCount; I++)
                         {
@@ -951,12 +951,12 @@ GuiShowBacktrace()
 {
     if(Debugee.Flags.Running)
     {
-        size_t PC = DebugeeGetProgramCounter();
+        size_t PC = DebugeeGetProgramCounter(&Debugee);
 
         // We know our cache is stale
         if(Debuger.Unwind.Address != PC)
         {
-            DebugeeBuildBacktrace();
+            DebugeeBuildBacktrace(&Debugee);
         }
 
         u32 Cnt = 1;
@@ -980,11 +980,11 @@ GuiBuildVarsValueAsString(di_underlaying_type *Underlaying, size_t Address, u32 
 
     if(Underlaying->Flags.IsBase && !Underlaying->Flags.IsArray)
     {
-        size_t InMemory = DebugeePeekMemory(Address);
+        size_t InMemory = DebugeePeekMemory(&Debugee, Address);
 
         for(u32 I = 0; I < DerefCount; I++)
         {
-            InMemory = DebugeePeekMemory(InMemory);
+            InMemory = DebugeePeekMemory(&Debugee, InMemory);
         }
         
         union types_ptrs
@@ -1006,7 +1006,7 @@ GuiBuildVarsValueAsString(di_underlaying_type *Underlaying, size_t Address, u32 
             {
                 if(InMemory)
                 {
-                    size_t StringPart = DebugeePeekMemory(InMemory);
+                    size_t StringPart = DebugeePeekMemory(&Debugee, InMemory);
                     char *CharHead = (char *)&StringPart;
                     
                     u32 WrittenToString = 0;
@@ -1032,7 +1032,7 @@ GuiBuildVarsValueAsString(di_underlaying_type *Underlaying, size_t Address, u32 
                             RemainingBytes = sizeof(StringPart);
                             InMemory += sizeof(StringPart);
                 
-                            StringPart = DebugeePeekMemory(InMemory);
+                            StringPart = DebugeePeekMemory(&Debugee, InMemory);
                             CharHead = (char *)&StringPart;
                         }
                     }
@@ -1117,7 +1117,7 @@ GuiBuildVarsValueAsString(di_underlaying_type *Underlaying, size_t Address, u32 
     {
         if(Underlaying->Flags.IsPointer)
         {
-            size_t InMemory = DebugeePeekMemory(Address);
+            size_t InMemory = DebugeePeekMemory(&Debugee, Address);
             void *Ptr = (void *)InMemory;
 
             sprintf(Result, "%p", Ptr);
@@ -1192,7 +1192,7 @@ GuiBuildVariableRepresentation(size_t TypeOffset, size_t Address, char *Name, u3
 static void
 GuiShowWatch()
 {
-    size_t PC = DebugeeGetProgramCounter();
+    size_t PC = DebugeeGetProgramCounter(&Debugee);
     if(PC != Gui->Transient.WatchBuildAddress)
     {
         for(variable_representation_node *VarNode = Gui->Transient.WatchVars.Head;

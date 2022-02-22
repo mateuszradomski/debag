@@ -29,8 +29,8 @@
 #include <libs/imgui/imgui_impl_opengl2.h>
 
 #include "utils.h"
-#include "debag.h"
 #include "dbg.h"
+#include "debag.h"
 #include "dwarf.h"
 #include "gui.h"
 #include "watch_lang.h"
@@ -774,7 +774,7 @@ DisassembleAroundAddress(address_range AddrRange)
     while(InstructionAddress < AddrRange.End)
     {
         u8 InstrInMemory[16] = {};
-        DebugeePeekMemoryArray(InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
+        DebugeePeekMemoryArray(&Debugee, InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
         
         {
             breakpoint *BP = 0x0; ;
@@ -804,7 +804,7 @@ DisassembleAroundAddress(address_range AddrRange)
     for(u32 I = 0; I < InstCount; I++)
     {
         u8 InstrInMemory[16] = {};
-        DebugeePeekMemoryArray(InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
+        DebugeePeekMemoryArray(&Debugee, InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
         
         {
             breakpoint *BP = 0x0; ;
@@ -855,10 +855,10 @@ DumpFile(arena *Arena, char *Path)
 static void
 DebugerUpdateTransient()
 {
-    Debugee.Regs = DebugeePeekRegisters();
-    DebugeePeekXSave();
+    Debugee.Regs = DebugeePeekRegisters(&Debugee);
+    DebugeePeekXSave(&Debugee);
     
-    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter());
+    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter(&Debugee));
     if(Func)
     {
         assert(Func->FuncLexScope.RangesCount == 0);
@@ -1024,42 +1024,42 @@ DebugerMain()
             {
                 if(ImGui::MenuItem("Start process", "F5", false, !IsRunning))
                 {
-                    DebugeeContinueOrStart();
+                    DebugeeContinueOrStart(&Debugee);
                 }
                 if(ImGui::MenuItem("Restart process", "Shift+F5", false, IsRunning))
                 {
-                    DebugeeRestart();
+                    DebugeeRestart(&Debugee);
                 }
                 
                 ImGui::Separator();
                 
                 if(ImGui::MenuItem("Continue", "F5", false, IsRunning))
                 {
-                    DebugeeContinueOrStart();
+                    DebugeeContinueOrStart(&Debugee);
                 }
                 if(ImGui::MenuItem("Step out", "F9", false, IsRunning))
                 {
-                    DebugeeStepOutOfFunction();
+                    DebugeeStepOutOfFunction(&Debugee);
                     DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step next", "F10", false, IsRunning))
                 {
-                    DebugeeToNextLine(false);
+                    DebugeeToNextLine(&Debugee, false);
                     DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step in", "F11", false, IsRunning))
                 {
-                    DebugeeToNextLine(true);
+                    DebugeeToNextLine(&Debugee, true);
                     DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
                 {
-                    DebugeeToNextInstruction(false);
+                    DebugeeToNextInstruction(&Debugee, false);
                     DebugerUpdateTransient();
                 }
                 if(ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
                 {
-                    DebugeeToNextInstruction(true);
+                    DebugeeToNextInstruction(&Debugee, true);
                     DebugerUpdateTransient();
                 }
                 
@@ -1129,11 +1129,11 @@ DebugerMain()
         {
             if(KeyMods.Shift)
             {
-                DebugeeRestart();
+                DebugeeRestart(&Debugee);
             }
             else
             {
-                DebugeeContinueOrStart();
+                DebugeeContinueOrStart(&Debugee);
             }
         }
 
@@ -1143,7 +1143,7 @@ DebugerMain()
             
             if(F9)
             {
-                DebugeeStepOutOfFunction();
+                DebugeeStepOutOfFunction(&Debugee);
                 DebugerUpdateTransient();
             }
         }
@@ -1157,12 +1157,12 @@ DebugerMain()
             {
                 if(F10)
                 {
-                    DebugeeToNextInstruction(false);
+                    DebugeeToNextInstruction(&Debugee, false);
                     DebugerUpdateTransient();
                 }
                 if(F11)
                 {
-                    DebugeeToNextInstruction(true);
+                    DebugeeToNextInstruction(&Debugee, true);
                     DebugerUpdateTransient();
                 }
             }
@@ -1170,12 +1170,12 @@ DebugerMain()
             {
                 if(F10)
                 {
-                    DebugeeToNextLine(false);
+                    DebugeeToNextLine(&Debugee, false);
                     DebugerUpdateTransient();
                 }
                 if(F11)
                 {
-                    DebugeeToNextLine(true);
+                    DebugeeToNextLine(&Debugee, true);
                     DebugerUpdateTransient();
                 }
             }
@@ -1226,7 +1226,7 @@ DebugerMain()
         {
             ImGuiListClipper Clipper = {};
             Clipper.Begin(DisasmInstCount);
-            size_t PC = DebugeeGetProgramCounter();
+            size_t PC = DebugeeGetProgramCounter(&Debugee);
 
             // @Speed: Binary search will like this one!
             i32 PCItemIndex = -1;
@@ -1290,7 +1290,7 @@ DebugerMain()
         if(Debugee.Flags.Running &&
            ImGui::BeginTabBar("Source lines", TBFlags | ImGuiTabBarFlags_AutoSelectNewTabs))
         {
-            di_src_line *Line = DwarfFindLineByAddress(DebugeeGetProgramCounter());
+            di_src_line *Line = DwarfFindLineByAddress(DebugeeGetProgramCounter(&Debugee));
 
             for(u32 SrcFileIndex = 0; SrcFileIndex < DI->SourceFilesCount; SrcFileIndex++)
             {

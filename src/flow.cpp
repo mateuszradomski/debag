@@ -80,7 +80,7 @@ static void
 BreakpointDisable(breakpoint *BP)
 {
     BP->State.Enabled = false;
-    size_t MachineWord = DebugeePeekMemory(BP->Address);
+    size_t MachineWord = DebugeePeekMemory(&Debugee, BP->Address);
 
     size_t PokeData = (MachineWord & (~0xff)) | (BP->SavedOpCodes & 0xff);
     
@@ -203,7 +203,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
     for(size_t CurrentAddress = Range.Start; CurrentAddress < Range.End;)
     {
         u8 InstrInMemory[16] = {};
-        DebugeePeekMemoryArray(CurrentAddress, Range.End, InstrInMemory, sizeof(InstrInMemory));
+        DebugeePeekMemoryArray(&Debugee, CurrentAddress, Range.End, InstrInMemory, sizeof(InstrInMemory));
 
         {
             breakpoint *BP = 0x0; ;
@@ -254,7 +254,7 @@ BreakAtCurcialInstrsInRange(address_range Range, bool BreakCalls, breakpoint *Br
         
         if(Type & INST_TYPE_RET)
         {
-            size_t ReturnAddress = DebugeeGetReturnAddress(DebugeeGetProgramCounter());
+            size_t ReturnAddress = DebugeeGetReturnAddress(&Debugee, DebugeeGetProgramCounter(&Debugee));
 
             bool AddressInAnyCompileUnit = DwarfFindCompileUnitByAddress(ReturnAddress) != 0x0;
             if(AddressInAnyCompileUnit && !BreakpointFind(ReturnAddress, Breakpoints, (*BreakpointsCount)))

@@ -671,7 +671,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
                       (offsetof(di_base_type, ByteSize) == offsetof(di_union_type, ByteSize)),
                       "ByteSize arguments need to have the same offset between the checked types");
         // This is true only if the above assert passes 
-        VarAddress = Underlaying.Flags.IsPointer ? DebugeePeekMemory(VarAddress) : VarAddress;
+        VarAddress = Underlaying.Flags.IsPointer ? DebugeePeekMemory(&Debugee, VarAddress) : VarAddress;
         TypeSize = Underlaying.Type->ByteSize;
         TypeOffset = Underlaying.Type->DIEOffset;
 
@@ -836,7 +836,7 @@ EvaluatorEvalExpression(evaluator *Eval, ast_node *Expr)
 
 				return {};
 			}
-            VarAddress = DebugeePeekMemory(VarAddress);
+            VarAddress = DebugeePeekMemory(&Debugee, VarAddress);
         }
 
         size_t Address = VarAddress + ByteLocation;
@@ -1035,7 +1035,7 @@ WLangInterpRun(wlang_interp *Interp)
 static bool
 WLangEvalSrc(char *Src, variable_representation *Result, char **Error, arena *Arena)
 {
-    size_t PC = DebugeeGetProgramCounter();
+    size_t PC = DebugeeGetProgramCounter(&Debugee);
     scoped_vars Scope = DwarfGetScopedVars(PC);
     wlang_interp Interp = WLangInterpCreate(Src, Scope, Arena);
 

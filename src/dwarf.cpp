@@ -266,7 +266,7 @@ DwarfGetVariableMemoryAddress(di_variable *Var)
     size_t Address = 0x0;
     if(Var->LocationAtom == DW_OP_fbreg)
     {
-        size_t CFA = DwarfGetCanonicalFrameAddress(DebugeeGetProgramCounter());
+        size_t CFA = DwarfGetCanonicalFrameAddress(DebugeeGetProgramCounter(&Debugee));
         Address = CFA + Var->Offset;
     }
     else if(Var->LocationAtom == DW_OP_addr)
@@ -2748,7 +2748,7 @@ DwarfGetFunctionStringRepresentation(di_function *Func, arena *Arena)
 static bool
 DwarfIsAddressInDifferentSourceLine(size_t Address)
 {
-    di_src_line *Current = DwarfFindLineByAddress(DebugeeGetProgramCounter());
+    di_src_line *Current = DwarfFindLineByAddress(DebugeeGetProgramCounter(&Debugee));
     di_src_line *Diff = DwarfFindLineByAddress(Address);
     assert(Current);
     assert(Diff);

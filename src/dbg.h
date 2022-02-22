@@ -155,7 +155,7 @@ static size_t           DebugeeGetReturnAddress(debugee *Debugee, size_t Address
 static void             DebugeePokeMemory(debugee *Debugee, size_t Address, size_t MachineWord);
 static size_t           DebugeePeekMemory(debugee *Debugee, size_t Address);
 static void             DebugeePeekMemoryArray(debugee *Debugee, size_t StartAddress, u32 EndAddress, u8 *OutArray, u32 BytesToRead);
-static size_t           DebugeeGetLoadAddress(debugee *Debugee, i32 DebugeePID);
+static size_t           DebugeeGetLoadAddress(debugee *Debugee);
 
 /*
  * Caching Debugee information
@@ -178,10 +178,5 @@ static size_t           RegisterGetByABINumber(x64_registers Registers, u32 Numb
 static char *           RegisterGetNameByUnionIndex(u32 Index);
 static x64_registers    RegistersFromUSR(user_regs_struct URS);
 static user_regs_struct RegistersToUSR(x64_registers Regs);
-
-/*
- * Disassembly related functions
- */
-static inst_type        AsmInstructionGetType(cs_insn *Instruction);
 
 #endif

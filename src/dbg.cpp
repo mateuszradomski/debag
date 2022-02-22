@@ -94,7 +94,7 @@ DebugeeContinueOrStart(debugee *Debugee)
         {
             DebugeeStart(Debugee);
             
-            Debugee->LoadAddress = DebugeeGetLoadAddress(Debugee, Debugee->PID);
+            Debugee->LoadAddress = DebugeeGetLoadAddress(Debugee);
             LOG_MAIN("LoadAddress = %lx\n", Debugee->LoadAddress);
             Debugee->Flags.PIE = DwarfIsExectuablePIE();
             
@@ -509,10 +509,12 @@ DebugeePeekMemoryArray(debugee *Debugee, size_t StartAddress, u32 EndAddress, u8
 }
 
 static size_t
-DebugeeGetLoadAddress(debugee *Debugee, i32 DebugeePID)
+DebugeeGetLoadAddress(debugee *Debugee)
 {
+    i32 PID = Debugee->PID;
+
     char Path[PATH_MAX] = {};
-    sprintf(Path, "/proc/%d/maps", DebugeePID);
+    sprintf(Path, "/proc/%d/maps", PID);
     LOG_DWARF("Load Path is %s\n", Path);
     
     char AddrStr[16] = {};
