@@ -5,36 +5,10 @@ union x64_registers
 {
     struct
     {
-        size_t RAX;
-        size_t RBX;
-        size_t RCX;
-        size_t RDX;
-        size_t RDI;
-        size_t RSI;
-        
-        size_t R8;
-        size_t R9;
-        size_t R10;
-        size_t R11;
-        size_t R12;
-        size_t R13;
-        size_t R14;
-        size_t R15;
-        
-        size_t RBP;
-        size_t RSP;
-        
-        size_t OrigRax;
-        size_t Cs;
-        size_t Eflags;
-        size_t Ss;
-        size_t FsBase;
-        size_t GsBase;
-        size_t Ds;
-        size_t Es;
-        size_t Fs;
-        size_t Gs;
-        
+        size_t RAX, RBX, RCX, RDX, RDI, RSI;
+        size_t R8, R9, R10, R11, R12, R13, R14, R15;
+        size_t RBP, RSP;
+        size_t OrigRax, Cs, Eflags, Ss, FsBase, GsBase, Ds, Es, Fs, Gs;
         size_t RIP;
     };
     size_t Array[27];
@@ -62,8 +36,7 @@ struct unwind_functions_bucket
 
 struct unwind_functions_list
 {
-    unwind_functions_bucket *Head;
-    unwind_functions_bucket *Tail;
+    unwind_functions_bucket *Head, *Tail;
     u32 Count;
 };
 
