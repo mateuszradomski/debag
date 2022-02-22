@@ -1,6 +1,17 @@
 debug_info _DI = { };
 debug_info *DI = &_DI;
 
+static void
+DwarfClearAll()
+{
+    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
+    DwarfCloseSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
+
+    ArenaDestroy(&DI->Arena);
+
+    memset(DI, 0, sizeof(debug_info));
+}
+
 static bool
 DwarfOpenSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug)
 {

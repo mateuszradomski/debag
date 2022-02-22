@@ -324,6 +324,7 @@ struct debug_info
 /*
  * Dwarf functions prototypes
  */
+static void     DwarfClearAll();
 static bool     DwarfOpenSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
 static void     DwarfCloseSymbolsHandle(i32 *Fd, Dwarf_Debug *Debug);
 static void     DwarfReadDIE(Dwarf_Debug Debug, Dwarf_Die DIE);

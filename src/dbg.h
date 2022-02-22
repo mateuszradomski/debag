@@ -136,12 +136,17 @@ static size_t           DebugeeGetLoadAddress(debugee *Debugee);
 static void             DebugeeBuildBacktrace(debugee *Debugee);
 
 /*
+ * Caching Debugee information
+ */
+static void DisassembleAroundAddress(address_range AddrRange);
+
+/*
  * Debuger related functions
  */
 
-static void DebugerUpdateTransient();
-static void DebugerDeallocTransient();
-static void DebugerMain();
+static dbg  DebugerCreate();
+static void DebugerUpdateTransient(dbg *Debuger);
+static void DebugerDeallocTransient(dbg *Debuger);
 
 /*
  * Register related functions

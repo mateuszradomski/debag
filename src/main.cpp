@@ -45,7 +45,7 @@ main(i32 ArgCount, char **Args)
         StringCopy(Debugee.ProgramPath, Args[1]);
     }
     
-    DebugerMain();
+    DebagMain();
     
     return 0;
 }

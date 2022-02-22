@@ -705,7 +705,7 @@ _GuiShowBreakAtFunctionWindow()
                     Gui->ModalFuncShow = 0x0;
                     memset(Gui->BreakFuncName, 0, sizeof(Gui->BreakFuncName));
                     BreakAtAddress(Repr->ActualFunction->FuncLexScope.LowPC);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
 
                     goto END;
                     return;
@@ -772,7 +772,7 @@ _GuiShowBreakAtAddressModalWindow()
         if(ImGui::Button("OK", ImVec2(120, 0)))
         {
             BreakAtAddress(Gui->BreakAddress);
-            DebugerUpdateTransient();
+            DebugerUpdateTransient(&Debuger);
             
             ImGui::CloseCurrentPopup(); 
             memset(Gui->BreakAddress, 0, sizeof(Gui->BreakAddress));

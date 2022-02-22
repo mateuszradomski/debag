@@ -9,7 +9,9 @@
 #define TIMER_END(id) clock_gettime(CLOCK_REALTIME, &TPoints[(id)].end); printf("Timer %d finished in %ld us\n", (id), (TPoints[(id)].end.tv_nsec - TPoints[(id)].start.tv_nsec) / 1000);
 
 #ifdef DEBUG
-#define LOG_MAIN(fmt, ...) if(Debuger.Log.MainLogs) { printf(fmt, ##__VA_ARGS__); }
+// TODO(radomski): When global variables are in order
+// #define LOG_MAIN(fmt, ...) if(Debuger.Log.MainLogs) { printf(fmt, ##__VA_ARGS__); }
+#define LOG_MAIN(...) do { } while (0)
 #else
 #define LOG_MAIN(...) do { } while (0)
 #endif
@@ -148,11 +150,6 @@ static bool     IsFile(char *Path);
 static char *   DumpFile(arena *Arena, char *Path);
 
 /*
- * Debugee related functions
- */
-
-
-/*
  * Breakpoints related functions
  */
 static breakpoint * BreakpointFind(size_t Address, breakpoint *BPs, u32 Count);
@@ -178,5 +175,7 @@ static void         BreakAtCurcialInstrsInRange(address_range Range, bool BreakC
  * Disassembly related functions
  */
 static inst_type        AsmInstructionGetType(cs_insn *Instruction);
+
+static void DebagMain();
 
 #endif //DEBAG_H

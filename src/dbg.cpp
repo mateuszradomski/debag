@@ -106,7 +106,7 @@ DebugeeContinueOrStart(debugee *Debugee)
         }
     
         DebugeeContinueProgram(Debugee);
-        DebugerUpdateTransient();
+        DebugerUpdateTransient(&Debuger);
     }
     else
     {
@@ -131,7 +131,7 @@ DebugeeRestart(debugee *Debugee)
     if(Debugee->Flags.Running)
     {
         DebugeeKill(Debugee);
-        DebugerDeallocTransient();
+        DebugerDeallocTransient(&Debuger);
 
         DebugeeContinueOrStart(Debugee);
     }
@@ -149,7 +149,7 @@ DebugeeWaitForSignal(debugee *Debugee)
     {
         GuiSetStatusText("Program finished it's execution");
         Debugee->Flags.Running = !Debugee->Flags.Running;
-        DebugerDeallocTransient();
+        DebugerDeallocTransient(&Debuger);
     }
     
     siginfo_t SigInfo;
@@ -179,13 +179,13 @@ DebugeeWaitForSignal(debugee *Debugee)
     {
         GuiSetStatusText("Program seg faulted");
         DebugeeKill(Debugee);
-        DebugerDeallocTransient();
+        DebugerDeallocTransient(&Debuger);
     }
     else if(SigInfo.si_signo == SIGABRT)
     {
         DebugeeKill(Debugee);
         GuiSetStatusText("Program aborted");
-        DebugerDeallocTransient();
+        DebugerDeallocTransient(&Debuger);
     }
     else
     {
@@ -400,7 +400,7 @@ DebugeeStepOutOfFunction(debugee *Debugee)
     di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter(Debugee));
 
     DebugeeToNextLine(Debugee, false);
-    DebugerUpdateTransient();
+    DebugerUpdateTransient(&Debuger);
 
     size_t PC = DebugeeGetProgramCounter(Debugee);
     if(DwarfAddressConfinedByFunction(Func, PC))
@@ -620,4 +620,129 @@ DebugeeBuildBacktrace(debugee *Debugee)
     } 
 
     SLL_QUEUE_PUSH(Debuger.Unwind.FuncList.Head, Debuger.Unwind.FuncList.Tail, Bucket);
+}
+
+static void
+DisassembleAroundAddress(address_range AddrRange)
+{
+    LOG_MAIN("AddrRange = %lx - %lx\n", AddrRange.Start, AddrRange.End);
+    u32 InstCount = 0;
+    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_OFF); 
+
+    cs_insn *Instruction = {};
+    size_t InstructionAddress = AddrRange.Start;
+    while(InstructionAddress < AddrRange.End)
+    {
+        u8 InstrInMemory[16] = {};
+        DebugeePeekMemoryArray(&Debugee, InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
+        
+        {
+            breakpoint *BP = 0x0; ;
+            if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
+            {
+                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
+            }
+        }
+        
+        int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
+                              InstructionAddress, 1, &Instruction);
+        
+        if(Count == 0) { break; }
+
+        InstCount++;
+        InstructionAddress += Instruction->size;
+        
+        cs_free(Instruction, 1);
+    }
+    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
+
+    DisasmInstCount = 0;
+    
+    InstructionAddress = AddrRange.Start;
+    ArenaClear(&DisasmArena);
+    DisasmInst = ArrayPush(&DisasmArena, disasm_inst, InstCount);
+    for(u32 I = 0; I < InstCount; I++)
+    {
+        u8 InstrInMemory[16] = {};
+        DebugeePeekMemoryArray(&Debugee, InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
+        
+        {
+            breakpoint *BP = 0x0; ;
+            if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
+            {
+                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
+            }
+        }
+        
+        int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
+                              InstructionAddress, 1, &Instruction);
+        
+        if(Count == 0) { break; }
+        
+        DisasmInst[I].Address = InstructionAddress;
+        InstructionAddress += Instruction->size;
+        
+        DisasmInst[I].Mnemonic = StringDuplicate(&DisasmArena, Instruction->mnemonic);
+        DisasmInst[I].Operation = StringDuplicate(&DisasmArena, Instruction->op_str);
+        DisasmInstCount++;
+        
+        cs_free(Instruction, 1);
+    }
+}
+
+static dbg
+DebugerCreate()
+{
+    dbg Result = { };
+
+    // Check if we have scalar register on the running processor
+    u32 EAX, EBX, ECX, EDX;
+    assert(__get_cpuid(0x01, &EAX, &EBX, &ECX, &EDX));
+
+    Result.RegsFlags.HasMMX = EDX & bit_MMX ? 1 : 0;
+    Result.RegsFlags.HasSSE = ECX & bit_SSE ? 1 : 0;
+    Result.RegsFlags.HasAVX = ECX & bit_AVX ? 1 : 0;
+
+    return Result;
+}
+
+static void
+DebugerUpdateTransient(dbg *Debuger)
+{
+    (void)(Debuger);
+    Debugee.Regs = DebugeePeekRegisters(&Debugee);
+    DebugeePeekXSave(&Debugee);
+    
+    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter(&Debugee));
+    if(Func)
+    {
+        assert(Func->FuncLexScope.RangesCount == 0);
+        address_range LexScopeRange = {};
+        LexScopeRange.Start = Func->FuncLexScope.LowPC;
+        LexScopeRange.End = Func->FuncLexScope.HighPC;
+        LOG_MAIN("LexScope of %s is %lx-%lx\n", Func->Name, LexScopeRange.Start, LexScopeRange.End);
+        
+        DisassembleAroundAddress(LexScopeRange);
+    }
+}
+
+static void
+DebugerDeallocTransient(dbg *Debuger)
+{
+    DwarfClearAll();
+
+#if CLEAR_BREAKPOINTS
+    memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
+    BreakpointCount = 0;
+#endif
+
+    _UPT_destroy(Debuger->UnwindRemoteArg);
+    
+    ArenaDestroy(&Debugee.Arena);
+
+	ArenaDestroy(&Gui->Transient.RepresentationArena);
+	ArenaDestroy(&Gui->Transient.WatchArena);
+	Gui->Transient = {};
+	Gui->Transient.RepresentationArena = ArenaCreate(Kilobytes(4));
+	Gui->Transient.WatchArena = ArenaCreate(Kilobytes(4));
 }

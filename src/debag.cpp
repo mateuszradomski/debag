@@ -52,6 +52,7 @@
  * - hamster_debug
  *   - While in a class/struct/union method you cannot see the variables, because they have no names
  *     the entry for the subprogram is heavily fragmented around the DWARF info
+ * - Remove dependency on GLFW
  */
 
 static void
@@ -762,74 +763,6 @@ AsmInstructionGetType(cs_insn *Instruction)
     return Result;
 }
 
-static void
-DisassembleAroundAddress(address_range AddrRange)
-{
-    LOG_MAIN("AddrRange = %lx - %lx\n", AddrRange.Start, AddrRange.End);
-    u32 InstCount = 0;
-    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_OFF); 
-
-    cs_insn *Instruction = {};
-    size_t InstructionAddress = AddrRange.Start;
-    while(InstructionAddress < AddrRange.End)
-    {
-        u8 InstrInMemory[16] = {};
-        DebugeePeekMemoryArray(&Debugee, InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
-        
-        {
-            breakpoint *BP = 0x0; ;
-            if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
-            {
-                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
-            }
-        }
-        
-        int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
-                              InstructionAddress, 1, &Instruction);
-        
-        if(Count == 0) { break; }
-
-        InstCount++;
-        InstructionAddress += Instruction->size;
-        
-        cs_free(Instruction, 1);
-    }
-    cs_option(DisAsmHandle, CS_OPT_DETAIL, CS_OPT_ON);
-
-    DisasmInstCount = 0;
-    
-    InstructionAddress = AddrRange.Start;
-    ArenaClear(&DisasmArena);
-    DisasmInst = ArrayPush(&DisasmArena, disasm_inst, InstCount);
-    for(u32 I = 0; I < InstCount; I++)
-    {
-        u8 InstrInMemory[16] = {};
-        DebugeePeekMemoryArray(&Debugee, InstructionAddress, AddrRange.End, InstrInMemory, sizeof(InstrInMemory));
-        
-        {
-            breakpoint *BP = 0x0; ;
-            if((BP = BreakpointFind(InstructionAddress)) && BreakpointEnabled(BP))
-            {
-                InstrInMemory[0] = (u8)(BP->SavedOpCodes & 0xff);
-            }
-        }
-        
-        int Count = cs_disasm(DisAsmHandle, InstrInMemory, sizeof(InstrInMemory),
-                              InstructionAddress, 1, &Instruction);
-        
-        if(Count == 0) { break; }
-        
-        DisasmInst[I].Address = InstructionAddress;
-        InstructionAddress += Instruction->size;
-        
-        DisasmInst[I].Mnemonic = StringDuplicate(&DisasmArena, Instruction->mnemonic);
-        DisasmInst[I].Operation = StringDuplicate(&DisasmArena, Instruction->op_str);
-        DisasmInstCount++;
-        
-        cs_free(Instruction, 1);
-    }
-}
-
 static bool
 IsFile(char *Path)
 {
@@ -853,58 +786,14 @@ DumpFile(arena *Arena, char *Path)
 }
 
 static void
-DebugerUpdateTransient()
-{
-    Debugee.Regs = DebugeePeekRegisters(&Debugee);
-    DebugeePeekXSave(&Debugee);
-    
-    di_function *Func = DwarfFindFunctionByAddress(DebugeeGetProgramCounter(&Debugee));
-    if(Func)
-    {
-        assert(Func->FuncLexScope.RangesCount == 0);
-        address_range LexScopeRange = {};
-        LexScopeRange.Start = Func->FuncLexScope.LowPC;
-        LexScopeRange.End = Func->FuncLexScope.HighPC;
-        LOG_MAIN("LexScope of %s is %lx-%lx\n", Func->Name, LexScopeRange.Start, LexScopeRange.End);
-        
-        DisassembleAroundAddress(LexScopeRange);
-    }
-}
-
-static void
-DebugerDeallocTransient()
-{
-    DwarfCloseSymbolsHandle(&DI->DwarfFd, &DI->Debug);
-    DwarfCloseSymbolsHandle(&DI->CFAFd, &DI->CFADebug);
-    
-#if CLEAR_BREAKPOINTS
-    memset(Breakpoints, 0, sizeof(breakpoint) * BreakpointCount);
-    BreakpointCount = 0;
-#endif
-
-    _UPT_destroy(Debuger.UnwindRemoteArg);
-    
-    ArenaDestroy(&DI->Arena);
-    ArenaDestroy(&Debugee.Arena);
-
-	ArenaDestroy(&Gui->Transient.RepresentationArena);
-	ArenaDestroy(&Gui->Transient.WatchArena);
-	Gui->Transient = {};
-	Gui->Transient.RepresentationArena = ArenaCreate(Kilobytes(4));
-	Gui->Transient.WatchArena = ArenaCreate(Kilobytes(4));
-
-    
-    memset(DI, 0, sizeof(debug_info));
-}
-
-static void
-DebugerMain()
+DebagMain()
 {
     GuiInit();
     DisasmArena = ArenaCreateZeros(Kilobytes(256));
     Breakpoints = (breakpoint *)calloc(MAX_BREAKPOINT_COUNT, sizeof(breakpoint));
     TempBreakpoints = (breakpoint *)calloc(MAX_TEMP_BREAKPOINT_COUNT, sizeof(breakpoint));
 
+    Debuger = DebugerCreate();
     Debugee = DebugeeCreate();
     
     glfwInit();
@@ -948,14 +837,6 @@ DebugerMain()
     Gui->SpacesArray[9] = "         ";
     
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
-
-    // Check if we have scalar register on the running processor
-    u32 EAX, EBX, ECX, EDX;
-    assert(__get_cpuid(0x01, &EAX, &EBX, &ECX, &EDX));
-
-    Debuger.RegsFlags.HasMMX = EDX & bit_MMX ? 1 : 0;
-    Debuger.RegsFlags.HasSSE = ECX & bit_SSE ? 1 : 0;
-    Debuger.RegsFlags.HasAVX = ECX & bit_AVX ? 1 : 0;
 
     ImGuiInputTextFlags ITFlags = 0;
     ITFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
@@ -1040,27 +921,27 @@ DebugerMain()
                 if(ImGui::MenuItem("Step out", "F9", false, IsRunning))
                 {
                     DebugeeStepOutOfFunction(&Debugee);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 if(ImGui::MenuItem("Step next", "F10", false, IsRunning))
                 {
                     DebugeeToNextLine(&Debugee, false);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 if(ImGui::MenuItem("Step in", "F11", false, IsRunning))
                 {
                     DebugeeToNextLine(&Debugee, true);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 if(ImGui::MenuItem("Next instruction", "Shift+F10", false, IsRunning))
                 {
                     DebugeeToNextInstruction(&Debugee, false);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 if(ImGui::MenuItem("Step instruction", "Shift+F11", false, IsRunning))
                 {
                     DebugeeToNextInstruction(&Debugee, true);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 
                 ImGui::Separator();
@@ -1144,7 +1025,7 @@ DebugerMain()
             if(F9)
             {
                 DebugeeStepOutOfFunction(&Debugee);
-                DebugerUpdateTransient();
+                DebugerUpdateTransient(&Debuger);
             }
         }
         
@@ -1158,12 +1039,12 @@ DebugerMain()
                 if(F10)
                 {
                     DebugeeToNextInstruction(&Debugee, false);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 if(F11)
                 {
                     DebugeeToNextInstruction(&Debugee, true);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
             }
             else
@@ -1171,12 +1052,12 @@ DebugerMain()
                 if(F10)
                 {
                     DebugeeToNextLine(&Debugee, false);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
                 if(F11)
                 {
                     DebugeeToNextLine(&Debugee, true);
-                    DebugerUpdateTransient();
+                    DebugerUpdateTransient(&Debuger);
                 }
             }
             
@@ -1508,3 +1389,4 @@ DebugerMain()
     ImGui::DestroyContext();
     glfwTerminate();
 }
+
